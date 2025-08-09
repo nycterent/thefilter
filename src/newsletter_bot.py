@@ -1,9 +1,10 @@
 """Command line interface for newsletter bot."""
 
 import asyncio
-
 import logging
+
 import click
+
 from src.core.newsletter import NewsletterGenerator
 from src.models.settings import Settings
 

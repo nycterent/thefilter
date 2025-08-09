@@ -141,8 +141,9 @@ class NewsletterGenerator:
                         )
                 if not created_at:
                     logger.info(
-                        f"Highlight {highlight.get('id')} missing or invalid created_at, using now() as fallback."
+                        f"Highlight {highlight.get('id')} missing or invalid date."
                     )
+                    logger.info("Using now() as fallback.")
                     created_at = datetime.utcnow()
                 try:
                     item = ContentItem(
