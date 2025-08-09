@@ -19,6 +19,9 @@ class ContentItem(BaseModel):
     )
     tags: List[str] = Field(default_factory=list, description="Tags")
     is_paywalled: bool = Field(False, description="Behind paywall")
+    source_title: Optional[str] = Field(
+        None, description="Source title (e.g., book/article)"
+    )
 
 
 class NewsletterDraft(BaseModel):
