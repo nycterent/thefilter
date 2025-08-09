@@ -30,7 +30,9 @@ class NewsletterGenerator:
                     except Exception:
                         created_at = datetime.utcnow()
                 if not created_at:
-                    created_at = datetime.utcnow()
+                    created_at = datetime.now(datetime.timezone.utc)
+                if created_at.tzinfo is None:
+                    created_at = created_at.replace(tzinfo=datetime.timezone.utc)
                 item = ContentItem(
                     id=f"glasp_{highlight.get('id', '')}",
                     title=highlight.get("title", ""),
@@ -193,7 +195,9 @@ class NewsletterGenerator:
                         f"Highlight {highlight.get('id')} missing or invalid date."
                     )
                     logger.info("Using now() as fallback.")
-                    created_at = datetime.utcnow()
+                    created_at = datetime.now(datetime.timezone.utc)
+                if created_at.tzinfo is None:
+                    created_at = created_at.replace(tzinfo=datetime.timezone.utc)
                 try:
                     item = ContentItem(
                         id=f"readwise_{highlight['id']}",
@@ -234,6 +238,19 @@ class NewsletterGenerator:
 
             content_items = []
             for article in articles:
+                published_at = article.get("published_at")
+                created_at = None
+                if published_at:
+                    try:
+                        created_at = datetime.fromisoformat(
+                            published_at.replace("Z", "+00:00")
+                        )
+                    except Exception:
+                        created_at = datetime.now(datetime.timezone.utc)
+                if not created_at:
+                    created_at = datetime.now(datetime.timezone.utc)
+                if created_at.tzinfo is None:
+                    created_at = created_at.replace(tzinfo=datetime.timezone.utc)
                 item = ContentItem(
                     id=f"rss_{hash(article['id'])}",
                     title=article["title"],
@@ -243,7 +260,7 @@ class NewsletterGenerator:
                     author=article.get("author"),
                     source_title=article.get("source_title"),
                     tags=article.get("tags", []),
-                    created_at=article.get("published_at"),
+                    created_at=created_at,
                     metadata={
                         "source_url": article.get("source_url"),
                         "full_content": article.get("content"),
