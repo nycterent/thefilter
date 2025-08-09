@@ -326,13 +326,8 @@ class NewsletterGenerator:
         return NewsletterDraft(
             title=title,
             content=newsletter_content,
-            content_items=content_items,
-            generated_at=datetime.utcnow().isoformat(),
-            metadata={
-                "total_items": len(content_items),
-                "readwise_items": len(readwise_items),
-                "rss_items": len(rss_items),
-            },
+            items=content_items,
+            created_at=datetime.utcnow(),
         )
 
     def _create_readwise_section(self, items: List[ContentItem]) -> str:
