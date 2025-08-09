@@ -14,6 +14,45 @@ logger = logging.getLogger(__name__)
 
 
 class NewsletterGenerator:
+    async def _get_glasp_content(self) -> List[ContentItem]:
+        """Get content from Glasp."""
+        try:
+            highlights = await self.glasp_client.get_highlights(days=7)
+            content_items = []
+            for highlight in highlights:
+                created_at_raw = highlight.get("created_at")
+                created_at = None
+                if created_at_raw:
+                    try:
+                        created_at = datetime.fromisoformat(
+                            created_at_raw.replace("Z", "+00:00")
+                        )
+                    except Exception:
+                        created_at = datetime.utcnow()
+                if not created_at:
+                    created_at = datetime.utcnow()
+                item = ContentItem(
+                    id=f"glasp_{highlight.get('id', '')}",
+                    title=highlight.get("title", ""),
+                    content=highlight.get("text", ""),
+                    source="glasp",
+                    url=highlight.get("url"),
+                    author=highlight.get("author"),
+                    source_title=highlight.get("source_title"),
+                    tags=highlight.get("tags", []),
+                    created_at=created_at,
+                    metadata={
+                        "note": highlight.get("note"),
+                        "location": highlight.get("location"),
+                        "location_type": highlight.get("location_type"),
+                    },
+                )
+                content_items.append(item)
+            logger.info(f"Retrieved {len(content_items)} items from Glasp")
+            return content_items
+        except Exception as e:
+            logger.error(f"Error getting Glasp content: {e}")
+            return []
     """Main newsletter generation orchestrator."""
 
     def __init__(self, settings: Settings):
@@ -26,6 +65,13 @@ class NewsletterGenerator:
         self.readwise_client = (
             ReadwiseClient(settings.readwise_api_key)
             if settings.readwise_api_key
+            else None
+        )
+
+        self.glasp_client = (
+            __import__("src.clients.glasp", fromlist=["GlaspClient"])
+            .GlaspClient(settings.glasp_api_key)
+            if getattr(settings, "glasp_api_key", None)
             else None
         )
 
@@ -92,6 +138,9 @@ class NewsletterGenerator:
 
         if self.readwise_client:
             tasks.append(self._get_readwise_content())
+
+        if self.glasp_client:
+            tasks.append(self._get_glasp_content())
 
         if self.rss_client:
             tasks.append(self._get_rss_content())
