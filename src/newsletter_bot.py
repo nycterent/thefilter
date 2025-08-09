@@ -1,15 +1,12 @@
 """Command line interface for newsletter bot."""
 
 import asyncio
+
 import logging
-
 import click
-
 from src.core.newsletter import NewsletterGenerator
 from src.models.settings import Settings
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -24,9 +21,10 @@ def cli(ctx: click.Context, debug: bool) -> None:
     """
     ctx.ensure_object(dict)
     ctx.obj["debug"] = debug
-    if debug:
-        logging.getLogger().setLevel(logging.DEBUG)
-        logger.debug("Debug mode enabled")
+    # Set up logging before any other logging calls
+    log_level = logging.DEBUG if debug else logging.INFO
+    logging.basicConfig(level=log_level, force=True)
+    logger.debug("Debug mode enabled")
 
 
 @cli.command()
@@ -37,7 +35,7 @@ def generate(ctx: click.Context, dry_run: bool) -> None:
 
     async def _generate():
         try:
-            settings = Settings()
+            settings = Settings(debug=ctx.obj.get("debug", False))
             logger.info("Starting newsletter generation...")
 
             # Validate that we have the required API keys

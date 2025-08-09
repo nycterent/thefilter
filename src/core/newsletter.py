@@ -140,11 +140,10 @@ class NewsletterGenerator:
                             f"{created_at_raw} ({dt_err})"
                         )
                 if not created_at:
-                    logger.warning(
-                        f"Skipping highlight {highlight.get('id')} due to missing or "
-                        f"invalid created_at"
+                    logger.info(
+                        f"Highlight {highlight.get('id')} missing or invalid created_at, using now() as fallback."
                     )
-                    continue
+                    created_at = datetime.utcnow()
                 try:
                     item = ContentItem(
                         id=f"readwise_{highlight['id']}",

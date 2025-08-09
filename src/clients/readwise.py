@@ -35,6 +35,9 @@ class ReadwiseClient:
         Returns:
             List of highlight dictionaries
         """
+        if not self.api_key:
+            logger.error("No Readwise API key provided. Cannot connect to Readwise.")
+            return []
         try:
             # Calculate date threshold
             threshold_date = datetime.utcnow() - timedelta(days=days)
@@ -54,13 +57,22 @@ class ReadwiseClient:
                         url, headers=self.headers, params=params
                     ) as response:
                         if response.status != 200:
-                            logger.error(f"Readwise API error: {response.status}")
+                            logger.error(
+                                f"Readwise API error: {response.status}. "
+                                f"URL: {url} Params: {params}"
+                            )
+                            try:
+                                error_detail = await response.text()
+                                logger.error(f"Readwise error detail: {error_detail}")
+                            except Exception:
+                                pass
                             break
 
                         data = await response.json()
                         page_highlights = data.get("results", [])
 
                         if not page_highlights:
+                            logger.info("No highlights returned from Readwise.")
                             break
 
                         # Process highlights
@@ -99,7 +111,7 @@ class ReadwiseClient:
             return highlights
 
         except Exception as e:
-            logger.error(f"Error fetching Readwise highlights: {e}")
+            logger.error(f"Error fetching Readwise highlights: {e}", exc_info=True)
             return []
 
     async def get_books(self, days: int = 30) -> List[Dict[str, Any]]:
