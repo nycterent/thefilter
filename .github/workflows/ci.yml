@@ -42,6 +42,14 @@ jobs:
     
     - name: Test with pytest
       run: pytest tests/ -v
+      env:
+        # Use synced secrets from Infisical via GitHub
+        READWISE_API_KEY: ${{ secrets.READWISE_API_KEY }}
+        GLASP_API_KEY: ${{ secrets.GLASP_API_KEY }}
+        RSS_FEEDS: ${{ secrets.RSS_FEEDS }}
+        BUTTONDOWN_API_KEY: ${{ secrets.BUTTONDOWN_API_KEY }}
+        OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        UNSPLASH_API_KEY: ${{ secrets.UNSPLASH_API_KEY }}
     
     - name: Build Docker image
       run: docker build -t newsletter-bot:test .
@@ -70,3 +78,31 @@ jobs:
       if: always()
       with:
         sarif_file: 'trivy-results.sarif'
+
+  deploy:
+    needs: [test, security]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: production
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Build production Docker image
+      run: |
+        docker build -t newsletter-bot:${{ github.sha }} .
+        docker tag newsletter-bot:${{ github.sha }} newsletter-bot:latest
+    
+    - name: Deploy application (placeholder)
+      run: |
+        echo "Deploying with synced secrets from Infisical..."
+        echo "Available secrets (without values):"
+        env | grep -E "(READWISE|GLASP|RSS|BUTTONDOWN|OPENROUTER|UNSPLASH)" | sed 's/=.*/=***/' || echo "No matching secrets found"
+      env:
+        # Production secrets synced from Infisical
+        READWISE_API_KEY: ${{ secrets.READWISE_API_KEY }}
+        GLASP_API_KEY: ${{ secrets.GLASP_API_KEY }}
+        RSS_FEEDS: ${{ secrets.RSS_FEEDS }}
+        BUTTONDOWN_API_KEY: ${{ secrets.BUTTONDOWN_API_KEY }}
+        OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        UNSPLASH_API_KEY: ${{ secrets.UNSPLASH_API_KEY }}

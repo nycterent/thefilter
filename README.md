@@ -9,13 +9,14 @@ Transform your newsletter creation from a 4-6 hour manual process into a 15-30 m
 
 ## ✨ Features
 
-- 🔄 **Multi-source content aggregation**: Readwise, Glasp, Feedbin, Snipd
+- 🔄 **Multi-source content aggregation**: Readwise, Glasp, RSS feeds
 - 🧠 **AI-powered processing**: OpenRouter integration for summaries and commentary  
 - 🖼️ **Automatic image sourcing**: Unsplash integration for relevant images
 - 🔒 **Paywall detection**: Identifies paywalled content (extensible for alternatives)
 - ⏰ **Scheduled automation**: Weekly Saturday generation + manual triggers
 - 🌐 **Web interface**: Manual control and status monitoring
 - 🐳 **Docker deployment**: Easy containerized setup
+- 🔐 **Infisical secrets management**: Self-hosted secrets with GitHub Actions integration
 - 📊 **Monitoring tools**: Health checks and log management
 
 ## 🚀 Quick Start
@@ -23,7 +24,8 @@ Transform your newsletter creation from a 4-6 hour manual process into a 15-30 m
 ### Prerequisites
 
 - Docker & Docker Compose
-- API keys from: Readwise, Glasp, Feedbin, Buttondown, OpenRouter, Unsplash
+- API keys from: Readwise, Glasp, Buttondown, OpenRouter, Unsplash
+- RSS feed URLs for content aggregation
 
 ### Installation
 
@@ -58,6 +60,7 @@ curl -X POST http://localhost:8000/api/generate
 ## 📚 Documentation
 
 - [API Setup Guide](docs/api-setup.md) - Getting your API keys
+- [GitHub + Infisical Setup](docs/github-infisical-setup.md) - CI/CD secrets management
 - [Deployment Guide](docs/deployment.md) - Detailed deployment instructions
 - [Customization Guide](docs/customization.md) - Customizing templates and behavior
 - [Troubleshooting](docs/troubleshooting.md) - Common issues and solutions
@@ -72,8 +75,7 @@ graph LR
     
     A1[Readwise] --> A
     A2[Glasp] --> A
-    A3[Feedbin] --> A
-    A4[Snipd] --> A
+    A3[RSS Feeds] --> A
     
     B1[Summarization] --> B
     B2[Commentary] --> B
@@ -89,8 +91,7 @@ graph LR
 # Content Sources
 READWISE_API_KEY=your_readwise_token
 GLASP_API_KEY=your_glasp_token
-FEEDBIN_USERNAME=your_feedbin_email
-FEEDBIN_PASSWORD=your_feedbin_password
+RSS_FEEDS=https://feed1.com/rss,https://feed2.com/rss
 
 # Newsletter Platform  
 BUTTONDOWN_API_KEY=your_buttondown_token
