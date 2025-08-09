@@ -213,9 +213,13 @@ class TestSettingsWithInfisical:
     @patch('src.core.secrets.InfisicalConfig')
     @patch('src.core.secrets.InfisicalSecretManager')
     def test_settings_with_infisical_success(
-        self, mock_manager_class, mock_config_class
+        self, mock_manager_class, mock_config_class, monkeypatch
     ):
         """Test settings load secrets from Infisical successfully."""
+        # Clear environment variables to test Infisical loading
+        monkeypatch.delenv("READWISE_API_KEY", raising=False)
+        monkeypatch.delenv("GLASP_API_KEY", raising=False)
+        
         # Setup mocks
         mock_config = Mock()
         mock_config_class.return_value = mock_config
@@ -236,9 +240,12 @@ class TestSettingsWithInfisical:
     @patch('src.core.secrets.InfisicalConfig')
     @patch('src.core.secrets.InfisicalSecretManager')
     def test_settings_infisical_partial_override(
-        self, mock_manager_class, mock_config_class
+        self, mock_manager_class, mock_config_class, monkeypatch
     ):
         """Test that Infisical only overrides unset values."""
+        # Clear GLASP but keep a mock READWISE in env to test partial override
+        monkeypatch.delenv("GLASP_API_KEY", raising=False)
+        
         # Setup mocks
         mock_config = Mock()
         mock_config_class.return_value = mock_config

@@ -5,8 +5,16 @@ import os
 from src.models.settings import Settings
 
 
-def test_settings_defaults():
+def test_settings_defaults(monkeypatch):
     """Test that settings have proper default values."""
+    # Clear all API key environment variables
+    monkeypatch.delenv("READWISE_API_KEY", raising=False)
+    monkeypatch.delenv("GLASP_API_KEY", raising=False)
+    monkeypatch.delenv("BUTTONDOWN_API_KEY", raising=False)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.delenv("UNSPLASH_API_KEY", raising=False)
+    monkeypatch.delenv("RSS_FEEDS", raising=False)
+    
     settings = Settings()
     assert settings.debug is False
     assert settings.log_level == "INFO"
