@@ -438,10 +438,30 @@ class NewsletterGenerator:
         # Remove duplicates based on content similarity
         unique_content = self._deduplicate_content(all_content)
 
+        # Fallback: ensure at least 7 items
+        if len(unique_content) < 7:
+            logger.warning(
+                f"Only {len(unique_content)} items found, attempting to fetch more from RSS."
+            )
+            if self.rss_client:
+                try:
+                    extra_articles = await self._get_rss_content()
+                    for item in extra_articles:
+                        if item not in unique_content:
+                            unique_content.append(item)
+                except Exception as e:
+                    logger.error(f"Failed to fetch extra RSS articles: {e}")
+
         logger.info(
             f"Collected {len(all_content)} items, "
             f"{len(unique_content)} after deduplication"
         )
+
+        # Do not send newsletter if fewer than 7 items
+        if len(unique_content) < 7:
+            logger.warning("Not enough new items to send newsletter. Aborting.")
+            return []
+
         return unique_content
 
     async def _get_readwise_content(self) -> List[ContentItem]:

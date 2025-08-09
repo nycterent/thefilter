@@ -32,8 +32,9 @@ class GlaspClient:
                     url, headers=self.headers, params=params
                 ) as response:
                     if response.status != 200:
+                        error_detail = await response.text()
                         logger.error(
-                            f"Glasp API error: {response.status}"
+                            f"Glasp API error: {response.status} - {error_detail}"
                         )
                         return []
                     data = await response.json()
