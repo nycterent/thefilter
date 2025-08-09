@@ -14,263 +14,299 @@ logger = logging.getLogger(__name__)
 
 class RSSClient:
     """Client for fetching and parsing RSS feeds."""
-    
+
     def __init__(self, feed_urls: List[str]):
         """Initialize RSS client.
-        
+
         Args:
             feed_urls: List of RSS feed URLs to monitor
         """
         self.feed_urls = feed_urls if feed_urls else []
-        
+
     async def get_recent_articles(self, days: int = 7) -> List[Dict[str, Any]]:
         """Get recent articles from all RSS feeds.
-        
+
         Args:
             days: Number of days back to fetch articles
-            
+
         Returns:
             List of article dictionaries
         """
         if not self.feed_urls:
             logger.warning("No RSS feed URLs configured")
             return []
-            
+
         all_articles = []
         threshold_date = datetime.utcnow() - timedelta(days=days)
-        
+
         async with aiohttp.ClientSession() as session:
             tasks = []
             for feed_url in self.feed_urls:
                 task = self._fetch_feed(session, feed_url.strip(), threshold_date)
                 tasks.append(task)
-            
+
             feed_results = await asyncio.gather(*tasks, return_exceptions=True)
-            
+
             for i, result in enumerate(feed_results):
                 if isinstance(result, Exception):
                     logger.error(f"Error fetching feed {self.feed_urls[i]}: {result}")
                 else:
                     all_articles.extend(result)
-        
+
         # Sort by publication date (newest first)
-        all_articles.sort(key=lambda x: x.get('published_at', ''), reverse=True)
-        
-        logger.info(f"Retrieved {len(all_articles)} articles from {len(self.feed_urls)} RSS feeds")
+        all_articles.sort(key=lambda x: x.get("published_at", ""), reverse=True)
+
+        logger.info(
+            f"Retrieved {len(all_articles)} articles from {len(self.feed_urls)} RSS feeds"
+        )
         return all_articles
-    
-    async def _fetch_feed(self, session: aiohttp.ClientSession, feed_url: str, threshold_date: datetime) -> List[Dict[str, Any]]:
+
+    async def _fetch_feed(
+        self, session: aiohttp.ClientSession, feed_url: str, threshold_date: datetime
+    ) -> List[Dict[str, Any]]:
         """Fetch and parse a single RSS feed.
-        
+
         Args:
             session: HTTP session
             feed_url: RSS feed URL
             threshold_date: Only include articles published after this date
-            
+
         Returns:
             List of articles from this feed
         """
         try:
-            headers = {
-                'User-Agent': 'Newsletter-Bot/1.0 (RSS Reader)'
-            }
-            
+            headers = {"User-Agent": "Newsletter-Bot/1.0 (RSS Reader)"}
+
             timeout = aiohttp.ClientTimeout(total=30)
-            async with session.get(feed_url, headers=headers, timeout=timeout) as response:
+            async with session.get(
+                feed_url, headers=headers, timeout=timeout
+            ) as response:
                 if response.status != 200:
-                    logger.error(f"Failed to fetch RSS feed {feed_url}: HTTP {response.status}")
+                    logger.error(
+                        f"Failed to fetch RSS feed {feed_url}: HTTP {response.status}"
+                    )
                     return []
-                
+
                 content = await response.text()
                 return self._parse_rss(content, feed_url, threshold_date)
-                
+
         except asyncio.TimeoutError:
             logger.error(f"Timeout fetching RSS feed: {feed_url}")
             return []
         except Exception as e:
             logger.error(f"Error fetching RSS feed {feed_url}: {e}")
             return []
-    
-    def _parse_rss(self, xml_content: str, feed_url: str, threshold_date: datetime) -> List[Dict[str, Any]]:
+
+    def _parse_rss(
+        self, xml_content: str, feed_url: str, threshold_date: datetime
+    ) -> List[Dict[str, Any]]:
         """Parse RSS XML content.
-        
+
         Args:
             xml_content: RSS XML string
             feed_url: Original feed URL
             threshold_date: Only include articles after this date
-            
+
         Returns:
             List of parsed articles
         """
         try:
             root = ET.fromstring(xml_content)
             articles = []
-            
+
             # Handle both RSS and Atom formats
-            if root.tag == 'rss':
-                items = root.findall('.//item')
-                feed_title = self._get_text(root.find('.//channel/title'), 'Unknown Feed')
-                feed_description = self._get_text(root.find('.//channel/description'), '')
-            elif root.tag == '{http://www.w3.org/2005/Atom}feed':
+            if root.tag == "rss":
+                items = root.findall(".//item")
+                feed_title = self._get_text(
+                    root.find(".//channel/title"), "Unknown Feed"
+                )
+                feed_description = self._get_text(
+                    root.find(".//channel/description"), ""
+                )
+            elif root.tag == "{http://www.w3.org/2005/Atom}feed":
                 # Atom feed
-                items = root.findall('.//{http://www.w3.org/2005/Atom}entry')
-                feed_title = self._get_text(root.find('.//{http://www.w3.org/2005/Atom}title'), 'Unknown Feed')
-                feed_description = self._get_text(root.find('.//{http://www.w3.org/2005/Atom}subtitle'), '')
+                items = root.findall(".//{http://www.w3.org/2005/Atom}entry")
+                feed_title = self._get_text(
+                    root.find(".//{http://www.w3.org/2005/Atom}title"), "Unknown Feed"
+                )
+                feed_description = self._get_text(
+                    root.find(".//{http://www.w3.org/2005/Atom}subtitle"), ""
+                )
             else:
                 logger.warning(f"Unrecognized feed format for {feed_url}")
                 return []
-            
+
             for item in items:
                 try:
                     article = self._parse_item(item, feed_url, feed_title, root.tag)
-                    
+
                     # Filter by date if we can parse it
-                    if article.get('published_at'):
+                    if article.get("published_at"):
                         try:
-                            pub_date = datetime.fromisoformat(article['published_at'].replace('Z', '+00:00'))
+                            pub_date = datetime.fromisoformat(
+                                article["published_at"].replace("Z", "+00:00")
+                            )
                             if pub_date < threshold_date:
                                 continue
                         except:
                             pass  # If we can't parse date, include the article
-                    
+
                     articles.append(article)
-                    
+
                 except Exception as e:
                     logger.debug(f"Error parsing RSS item: {e}")
                     continue
-            
+
             logger.debug(f"Parsed {len(articles)} articles from {feed_title}")
             return articles
-            
+
         except ET.ParseError as e:
             logger.error(f"XML parsing error for {feed_url}: {e}")
             return []
         except Exception as e:
             logger.error(f"Error parsing RSS feed {feed_url}: {e}")
             return []
-    
-    def _parse_item(self, item: ET.Element, feed_url: str, feed_title: str, root_tag: str) -> Dict[str, Any]:
+
+    def _parse_item(
+        self, item: ET.Element, feed_url: str, feed_title: str, root_tag: str
+    ) -> Dict[str, Any]:
         """Parse a single RSS/Atom item.
-        
+
         Args:
             item: XML element for the item
             feed_url: Feed URL
             feed_title: Feed title
             root_tag: Root tag type (rss or atom)
-            
+
         Returns:
             Parsed article dictionary
         """
-        if root_tag == 'rss':
+        if root_tag == "rss":
             # RSS format
-            title = self._get_text(item.find('title'), 'Untitled')
-            description = self._get_text(item.find('description'), '')
-            link = self._get_text(item.find('link'), '')
-            author = self._get_text(item.find('author'), self._get_text(item.find('dc:creator'), ''))
-            pub_date = self._get_text(item.find('pubDate'), '')
-            guid = self._get_text(item.find('guid'), '')
-            
+            title = self._get_text(item.find("title"), "Untitled")
+            description = self._get_text(item.find("description"), "")
+            link = self._get_text(item.find("link"), "")
+            author = self._get_text(
+                item.find("author"), self._get_text(item.find("dc:creator"), "")
+            )
+            pub_date = self._get_text(item.find("pubDate"), "")
+            guid = self._get_text(item.find("guid"), "")
+
         else:
             # Atom format
-            title = self._get_text(item.find('.//{http://www.w3.org/2005/Atom}title'), 'Untitled')
-            summary_elem = item.find('.//{http://www.w3.org/2005/Atom}summary')
-            content_elem = item.find('.//{http://www.w3.org/2005/Atom}content')
-            description = self._get_text(content_elem or summary_elem, '')
-            
-            link_elem = item.find('.//{http://www.w3.org/2005/Atom}link[@rel=\"alternate\"]')
+            title = self._get_text(
+                item.find(".//{http://www.w3.org/2005/Atom}title"), "Untitled"
+            )
+            summary_elem = item.find(".//{http://www.w3.org/2005/Atom}summary")
+            content_elem = item.find(".//{http://www.w3.org/2005/Atom}content")
+            description = self._get_text(content_elem or summary_elem, "")
+
+            link_elem = item.find(
+                './/{http://www.w3.org/2005/Atom}link[@rel="alternate"]'
+            )
             if link_elem is None:
-                link_elem = item.find('.//{http://www.w3.org/2005/Atom}link')
-            link = link_elem.get('href', '') if link_elem is not None else ''
-            
-            author_elem = item.find('.//{http://www.w3.org/2005/Atom}author/{http://www.w3.org/2005/Atom}name')
-            author = self._get_text(author_elem, '')
-            
-            pub_date = self._get_text(item.find('.//{http://www.w3.org/2005/Atom}published'), 
-                                    self._get_text(item.find('.//{http://www.w3.org/2005/Atom}updated'), ''))
-            guid = self._get_text(item.find('.//{http://www.w3.org/2005/Atom}id'), '')
-        
+                link_elem = item.find(".//{http://www.w3.org/2005/Atom}link")
+            link = link_elem.get("href", "") if link_elem is not None else ""
+
+            author_elem = item.find(
+                ".//{http://www.w3.org/2005/Atom}author/{http://www.w3.org/2005/Atom}name"
+            )
+            author = self._get_text(author_elem, "")
+
+            pub_date = self._get_text(
+                item.find(".//{http://www.w3.org/2005/Atom}published"),
+                self._get_text(
+                    item.find(".//{http://www.w3.org/2005/Atom}updated"), ""
+                ),
+            )
+            guid = self._get_text(item.find(".//{http://www.w3.org/2005/Atom}id"), "")
+
         # Clean up description/content
         if description:
             # Remove HTML tags for preview
             import re
-            description_clean = re.sub(r'<[^>]+>', '', description)
+
+            description_clean = re.sub(r"<[^>]+>", "", description)
             description_clean = description_clean.strip()
         else:
-            description_clean = ''
-        
+            description_clean = ""
+
         return {
-            'id': guid or link,
-            'title': title,
-            'content': description,
-            'summary': description_clean[:300] + '...' if len(description_clean) > 300 else description_clean,
-            'source': 'rss',
-            'source_title': feed_title,
-            'source_url': feed_url,
-            'url': link,
-            'author': author,
-            'published_at': self._normalize_date(pub_date),
-            'tags': []  # RSS feeds typically don't have tags
+            "id": guid or link,
+            "title": title,
+            "content": description,
+            "summary": description_clean[:300] + "..."
+            if len(description_clean) > 300
+            else description_clean,
+            "source": "rss",
+            "source_title": feed_title,
+            "source_url": feed_url,
+            "url": link,
+            "author": author,
+            "published_at": self._normalize_date(pub_date),
+            "tags": [],  # RSS feeds typically don't have tags
         }
-    
-    def _get_text(self, element: Optional[ET.Element], default: str = '') -> str:
+
+    def _get_text(self, element: Optional[ET.Element], default: str = "") -> str:
         """Safely get text from XML element.
-        
+
         Args:
             element: XML element or None
             default: Default value if element is None or empty
-            
+
         Returns:
             Element text or default
         """
         if element is not None and element.text:
             return element.text.strip()
         return default
-    
+
     def _normalize_date(self, date_str: str) -> str:
         """Normalize various date formats to ISO format.
-        
+
         Args:
             date_str: Date string in various formats
-            
+
         Returns:
             ISO formatted date string or original if parsing fails
         """
         if not date_str:
-            return ''
-        
+            return ""
+
         try:
             # Try common RSS date formats
             from email.utils import parsedate_to_datetime
+
             dt = parsedate_to_datetime(date_str)
             return dt.isoformat()
         except:
             try:
                 # Try ISO format
-                dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                dt = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
                 return dt.isoformat()
             except:
                 # Return original if all parsing fails
                 return date_str
-    
+
     async def test_feeds(self) -> Dict[str, bool]:
         """Test connectivity to all configured RSS feeds.
-        
+
         Returns:
             Dictionary mapping feed URLs to connection status
         """
         if not self.feed_urls:
             return {}
-        
+
         results = {}
-        
+
         async with aiohttp.ClientSession() as session:
             tasks = []
             for feed_url in self.feed_urls:
                 task = self._test_feed(session, feed_url.strip())
                 tasks.append(task)
-            
+
             test_results = await asyncio.gather(*tasks, return_exceptions=True)
-            
+
             for i, result in enumerate(test_results):
                 feed_url = self.feed_urls[i].strip()
                 if isinstance(result, Exception):
@@ -282,24 +318,26 @@ class RSSClient:
                         logger.info(f"RSS feed test successful: {feed_url}")
                     else:
                         logger.warning(f"RSS feed test failed: {feed_url}")
-        
+
         return results
-    
+
     async def _test_feed(self, session: aiohttp.ClientSession, feed_url: str) -> bool:
         """Test a single RSS feed.
-        
+
         Args:
             session: HTTP session
             feed_url: RSS feed URL
-            
+
         Returns:
             True if feed is accessible, False otherwise
         """
         try:
-            headers = {'User-Agent': 'Newsletter-Bot/1.0 (RSS Reader)'}
+            headers = {"User-Agent": "Newsletter-Bot/1.0 (RSS Reader)"}
             timeout = aiohttp.ClientTimeout(total=10)
-            
-            async with session.get(feed_url, headers=headers, timeout=timeout) as response:
+
+            async with session.get(
+                feed_url, headers=headers, timeout=timeout
+            ) as response:
                 if response.status == 200:
                     # Try to parse a bit of the content to verify it's valid XML
                     content = await response.text()
@@ -307,6 +345,6 @@ class RSSClient:
                     return True
                 else:
                     return False
-                    
+
         except Exception:
             return False
