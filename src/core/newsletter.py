@@ -84,7 +84,7 @@ class NewsletterGenerator:
             soc = categories["society"][i] if i < len(categories["society"]) else None
             art = categories["art"][i] if i < len(categories["art"]) else None
             bus = categories["business"][i] if i < len(categories["business"]) else None
-            
+
             def headline(item):
                 if not item:
                     return ""
@@ -100,7 +100,7 @@ class NewsletterGenerator:
         lead_other = categories["society"][0] if categories["society"] else None
         out.append("| **QUANTUM COMPUTING BREAKTHROUGH** | **AI ASSISTANT DISASTER** |")
         out.append("|:-----------------------------------|:---------------------------|")
-        
+
         def lead_story(item, cat):
             if not item:
                 return " | "
