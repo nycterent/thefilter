@@ -126,25 +126,52 @@ class NewsletterGenerator:
 
             content_items = []
             for highlight in highlights:
-                item = ContentItem(
-                    id=f"readwise_{highlight['id']}",
-                    title=highlight["title"],
-                    content=highlight["content"],
-                    source=highlight["source"],
-                    url=highlight.get("url"),
-                    author=highlight.get("author"),
-                    source_title=highlight.get("source_title"),
-                    tags=highlight.get("tags", []),
-                    created_at=highlight.get("created_at"),
-                    metadata={
-                        "note": highlight.get("note"),
-                        "location": highlight.get("location"),
-                        "location_type": highlight.get("location_type"),
-                    },
-                )
-                content_items.append(item)
+                created_at_raw = highlight.get("created_at")
+                created_at = None
+                if created_at_raw:
+                    try:
+                        # Try parsing ISO format
+                        created_at = datetime.fromisoformat(
+                            created_at_raw.replace("Z", "+00:00")
+                        )
+                    except Exception as dt_err:
+                        logger.warning(
+                            f"Invalid created_at for highlight {highlight.get('id')}: "
+                            f"{created_at_raw} ({dt_err})"
+                        )
+                if not created_at:
+                    logger.warning(
+                        f"Skipping highlight {highlight.get('id')} due to missing or "
+                        f"invalid created_at"
+                    )
+                    continue
+                try:
+                    item = ContentItem(
+                        id=f"readwise_{highlight['id']}",
+                        title=highlight["title"],
+                        content=highlight["content"],
+                        source=highlight["source"],
+                        url=highlight.get("url"),
+                        author=highlight.get("author"),
+                        source_title=highlight.get("source_title"),
+                        tags=highlight.get("tags", []),
+                        created_at=created_at,
+                        metadata={
+                            "note": highlight.get("note"),
+                            "location": highlight.get("location"),
+                            "location_type": highlight.get("location_type"),
+                        },
+                    )
+                    content_items.append(item)
+                except Exception as item_err:
+                    logger.error(
+                        "Failed to create ContentItem for highlight %s: %s",
+                        highlight.get('id'),
+                        item_err
+                    )
+                    continue
 
-            logger.info(f"Retrieved {len(content_items)} items from Readwise")
+            logger.info(f"Retrieved {len(content_items)} valid items from Readwise")
             return content_items
 
         except Exception as e:

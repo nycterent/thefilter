@@ -91,7 +91,7 @@ def generate(ctx: click.Context, dry_run: bool) -> None:
 
             # Display results
             logger.info(f"📧 Generated newsletter: '{newsletter.title}'")
-            logger.info(f"📊 Total content items: {len(newsletter.content_items)}")
+            logger.info(f"📊 Total content items: {len(newsletter.items)}")
 
             if newsletter.metadata:
                 if newsletter.metadata.get("readwise_items"):
