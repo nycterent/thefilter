@@ -394,7 +394,7 @@ class NewsletterGenerator:
             # Placeholder for now
             logger.info(f"Would publish newsletter: {newsletter.title}")
             logger.info(f"Content length: {len(newsletter.content)} characters")
-            logger.info(f"Total items: {len(newsletter.content_items)}")
+            logger.info(f"Total items: {len(newsletter.items)}")
 
             return True
 
