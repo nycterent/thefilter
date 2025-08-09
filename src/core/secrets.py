@@ -57,10 +57,7 @@ class InfisicalSecretManager:
         if self.config.infisical_token:
             # Token-based auth is handled during client initialization
             logger.debug("Using token-based authentication")
-        elif (
-            self.config.infisical_client_id
-            and self.config.infisical_client_secret
-        ):
+        elif self.config.infisical_client_id and self.config.infisical_client_secret:
             # Universal auth
             self.client.auth.universal_auth.login(
                 self.config.infisical_client_id,
