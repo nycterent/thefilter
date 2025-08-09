@@ -1,6 +1,6 @@
 # Newsletter Automation Bot 🤖📧
 
-[![CI/CD](https://github.com/yourusername/newsletter-automation-bot/workflows/CI/CD%20Pipeline/badge.svg)](https://github.com/yourusername/newsletter-automation-bot/actions)
+[![CI/CD](https://github.com/nycterent/thefilter/workflows/CI/CD%20Pipeline/badge.svg)](https://github.com/nycterent/thefilter/actions)
 [![Docker](https://img.shields.io/badge/docker-ready-blue)](https://hub.docker.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
