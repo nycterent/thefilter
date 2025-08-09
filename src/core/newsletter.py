@@ -14,7 +14,9 @@ logger = logging.getLogger(__name__)
 
 
 class NewsletterGenerator:
-    async def _generate_markdown_newsletter(self, items: List[ContentItem], template: str = "the_filter") -> str:
+    async def _generate_markdown_newsletter(
+        self, items: List[ContentItem], template: str = "the_filter"
+    ) -> str:
         """
         Generate newsletter content in Markdown format using the specified template.
         Supported templates: 'the_filter' (default), others can be added.
@@ -65,11 +67,16 @@ class NewsletterGenerator:
                 "art": "art-gallery-370x150?auto=format",
                 "business": "office-370x150?auto=format",
             }
-            return f"https://images.unsplash.com/photo-{images.get(keywords, 'circuit-board-370x150?auto=format')}"
+            return (
+                "https://images.unsplash.com/photo-"
+                f"{images.get(keywords, 'circuit-board-370x150?auto=format')}"
+            )
 
         today = datetime.utcnow().strftime("%B %d, %Y")
         out = []
-        out.append(f"# THE FILTER\n*Weekly Curated Briefing • {today}*\n\n---\n")
+        out.append(
+            f"# THE FILTER\n*Weekly Curated Briefing • {today}*\n\n---\n"
+        )
 
         # HEADLINES AT A GLANCE
         out.append("## HEADLINES AT A GLANCE\n")
@@ -236,24 +243,18 @@ class NewsletterGenerator:
 
         # SOURCES & ATTRIBUTION
         out.append("## SOURCES & ATTRIBUTION\n")
+
         def sources_line(cat):
             srcs = [item.source_title or item.source for item in categories[cat] if item.url]
             urls = [item.url for item in categories[cat] if item.url]
             return " • ".join(
                 [f"[{src}]({url})" for src, url in zip(srcs, urls)]
             )
-        out.append(
-            f"**Technology:** {sources_line('technology')}"
-        )
-        out.append(
-            f"\n**Society:** {sources_line('society')}"
-        )
-        out.append(
-            f"\n**Arts:** {sources_line('art')}"
-        )
-        out.append(
-            f"\n**Business:** {sources_line('business')}"
-        )
+
+        out.append(f"**Technology:** {sources_line('technology')}")
+        out.append(f"\n**Society:** {sources_line('society')}")
+        out.append(f"\n**Arts:** {sources_line('art')}")
+        out.append(f"\n**Business:** {sources_line('business')}")
         out.append(
             "\n*The Filter curates and synthesizes from original reporting. All rights remain with original publishers.*\n"
         )
