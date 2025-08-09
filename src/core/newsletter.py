@@ -53,12 +53,12 @@ class NewsletterGenerator:
 
         if not content_items:
             logger.warning("No content found from any sources")
-            return NewsletterDraft(
-                title="No Content Available",
-                content="No new content was found from configured sources this week.",
-                content_items=[],
-                generated_at=datetime.utcnow().isoformat(),
-            )
+                return NewsletterDraft(
+                    title="No Content Available",
+                    content="No new content was found from configured sources this week.",
+                    items=[],
+                    created_at=datetime.utcnow(),
+                )
 
         logger.info(f"Aggregated {len(content_items)} content items")
 
