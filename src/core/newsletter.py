@@ -14,21 +14,258 @@ logger = logging.getLogger(__name__)
 
 
 class NewsletterGenerator:
-    async def _generate_markdown_newsletter(self, items: List[ContentItem]) -> str:
-        """Generate newsletter content in Markdown format."""
+    async def _generate_markdown_newsletter(self, items: List[ContentItem], template: str = "the_filter") -> str:
+        """
+        Generate newsletter content in Markdown format using the specified template.
+        Supported templates: 'the_filter' (default), others can be added.
+        """
+        if template == "the_filter":
+            return await self._generate_the_filter_newsletter(items)
+        # Fallback to legacy simple grouping
+        return await self._generate_simple_newsletter(items)
+
+    async def _generate_the_filter_newsletter(self, items: List[ContentItem]) -> str:
+        """
+        Generate 'The Filter' newsletter in strict markdown table format.
+        """
+        # Categorize items
+        categories = {
+            "technology": [],
+            "society": [],
+            "art": [],
+            "business": [],
+        }
+        for item in items:
+            cats = [t.lower() for t in item.tags]
+            # Heuristic: tag/category mapping
+            if "tech" in cats or "technology" in cats:
+                categories["technology"].append(item)
+            elif "society" in cats or "politics" in cats:
+                categories["society"].append(item)
+            elif "art" in cats or "media" in cats or "culture" in cats:
+                categories["art"].append(item)
+            elif "business" in cats or "economy" in cats:
+                categories["business"].append(item)
+            else:
+                # Fallback: assign by source
+                if item.source in ["readwise", "glasp"]:
+                    categories["technology"].append(item)
+                elif item.source == "rss":
+                    categories["society"].append(item)
+                else:
+                    categories["business"].append(item)
+
+        # Helper for Unsplash image
+        def get_unsplash_image(keywords: str) -> str:
+            # Use a static Unsplash image for now; can be replaced with API call
+            # Example: circuits, people, gallery, office
+            images = {
+                "technology": "circuit-board-370x150?auto=format",
+                "society": "people-meeting-370x150?auto=format",
+                "art": "art-gallery-370x150?auto=format",
+                "business": "office-370x150?auto=format",
+            }
+            return f"https://images.unsplash.com/photo-{images.get(keywords, 'circuit-board-370x150?auto=format')}"
+
+        today = datetime.utcnow().strftime("%B %d, %Y")
+        out = []
+        out.append(f"# THE FILTER\n*Weekly Curated Briefing • {today}*\n\n---\n")
+
+        # HEADLINES AT A GLANCE
+        out.append("## HEADLINES AT A GLANCE\n")
+        out.append("| **TECHNOLOGY** | **SOCIETY** | **ART & MEDIA** | **BUSINESS** |")
+        out.append("|:---------------|:------------|:----------------|:-------------|")
+        for i in range(4):
+            tech = categories["technology"][i] if i < len(categories["technology"]) else None
+            soc = categories["society"][i] if i < len(categories["society"]) else None
+            art = categories["art"][i] if i < len(categories["art"]) else None
+            bus = categories["business"][i] if i < len(categories["business"]) else None
+
+            def headline(item):
+                if not item:
+                    return ""
+                src = item.source_title or item.source or "Source Needed"
+                url = item.url or ""
+                link = (
+                    f"**[→ {src}]({url})**" if url else "**[→ Source Needed]**"
+                )
+                return f"{item.title} {link}"
+
+            out.append(
+                f"| {headline(tech)} | {headline(soc)} | "
+                f"{headline(art)} | {headline(bus)} |"
+            )
+        out.append("\n---\n")
+
+        # LEAD STORIES
+        out.append("## LEAD STORIES\n")
+        lead_tech = categories["technology"][0] if categories["technology"] else None
+
+        def lead_story(item, cat):
+            if not item:
+                return ""
+            img = get_unsplash_image(cat)
+            url = item.url or ""
+            src = item.source_title or item.source or "Source Needed"
+            summary = item.content[:180].replace("\n", " ")
+            return (
+                f"![Image]({img}) | ![Image]({img})\n| "
+                f"{summary} **[→ {src}]({url})** | "
+                f"{summary} **[→ {src}]({url})**"
+            )
+        out.append("| **[BIGGEST TECH STORY]** | **[BIGGEST OTHER STORY]** |")
+        out.append("|:-------------------------|:---------------------------|")
+        out.append(
+            lead_story(lead_tech, "technology")
+        )
+        out.append("\n---\n")
+
+        # TECHNOLOGY DESK
+        out.append("## TECHNOLOGY DESK\n")
+        tech3 = categories["technology"][2] if len(categories["technology"]) > 2 else None
+        tech4 = categories["technology"][3] if len(categories["technology"]) > 3 else None
+        out.append("| **[TECH STORY 3]** | **[TECH STORY 4]** |")
+        out.append("|:-------------------|:-------------------|")
+        for item in [tech3, tech4]:
+            img = get_unsplash_image("technology")
+            out.append(
+                f"![Image]({img}) | ![Image]({img})"
+            )
+        for item in [tech3, tech4]:
+            if item:
+                url = item.url or ""
+                src = item.source_title or item.source or "Source Needed"
+                summary = item.content[:120].replace("\n", " ")
+                out.append(
+                    f"{summary} **[→ {src}]({url})** | "
+                    f"{summary} **[→ {src}]({url})**"
+                )
+            else:
+                out.append(" | ")
+        out.append("\n---\n")
+
+        # SOCIETY & POLITICS
+        out.append("## SOCIETY & POLITICS\n")
+        soc_items = [categories["society"][i] if i < len(categories["society"]) else None for i in range(3)]
+        out.append("| **[SOCIETY STORY 1]** | **[SOCIETY STORY 2]** | **[SOCIETY STORY 3]** |")
+        out.append("|:----------------------|:----------------------|:----------------------|")
+        for item in soc_items:
+            img = get_unsplash_image("society")
+            out.append(
+                f"![Image]({img}) | ![Image]({img}) | ![Image]({img})"
+            )
+        for item in soc_items:
+            if item:
+                url = item.url or ""
+                src = item.source_title or item.source or "Source Needed"
+                summary = item.content[:120].replace("\n", " ")
+                out.append(
+                    f"{summary} **[→ {src}]({url})** | "
+                    f"{summary} **[→ {src}]({url})** | "
+                    f"{summary} **[→ {src}]({url})**"
+                )
+            else:
+                out.append(" | | ")
+        out.append("\n---\n")
+
+        # MAJOR THEME SECTION (optional, fill if enough items)
+        out.append("## [MAJOR THEME SECTION IF APPLICABLE]\n")
+        theme_items = items[4:7] if len(items) > 7 else []
+        out.append("| **[STORY 1]** | **[STORY 2]** | **[STORY 3]** |")
+        out.append("|:--------------|:--------------|:--------------|")
+        for item in theme_items:
+            img = get_unsplash_image("business")
+            out.append(
+                f"![Image]({img}) | | "
+            )
+        for item in theme_items:
+            if item:
+                url = item.url or ""
+                src = item.source_title or item.source or "Source Needed"
+                summary = item.content[:120].replace("\n", " ")
+                out.append(f"{summary} | | ")
+            else:
+                out.append(" | | ")
+        out.append("\n---\n")
+
+        # ARTS & CULTURE
+        out.append("## ARTS & CULTURE\n")
+        art_items = [categories["art"][i] if i < len(categories["art"]) else None for i in range(2)]
+        out.append("| **[ART STORY 1]** | **[ART STORY 2]** |")
+        out.append("|:------------------|:------------------|")
+        for item in art_items:
+            img = get_unsplash_image("art")
+            out.append(
+                f"![Image]({img}) | ![Image]({img})"
+            )
+        for item in art_items:
+            if item:
+                url = item.url or ""
+                src = item.source_title or item.source or "Source Needed"
+                summary = item.content[:120].replace("\n", " ")
+                out.append(
+                    f"{summary} **[→ {src}]({url})** | "
+                    f"{summary} **[→ {src}]({url})**"
+                )
+            else:
+                out.append(" | ")
+        out.append("\n---\n")
+
+        # BUSINESS & ECONOMY
+        out.append("## BUSINESS & ECONOMY\n")
+        bus_items = [categories["business"][i] if i < len(categories["business"]) else None for i in range(2)]
+        out.append("| **[BUSINESS STORY 1]** | **[BUSINESS STORY 2]** |")
+        out.append("|:-----------------------|:-----------------------|")
+        for item in bus_items:
+            img = get_unsplash_image("business")
+            out.append(
+                f"![Image]({img}) | ![Image]({img})"
+            )
+        for item in bus_items:
+            if item:
+                url = item.url or ""
+                src = item.source_title or item.source or "Source Needed"
+                summary = item.content[:120].replace("\n", " ")
+                out.append(
+                    f"{summary} **[→ {src}]({url})** | "
+                    f"{summary} **[→ {src}]({url})**"
+                )
+            else:
+                out.append(" | ")
+        out.append("\n---\n")
+
+        # SOURCES & ATTRIBUTION
+        out.append("## SOURCES & ATTRIBUTION\n")
+        def sources_line(cat):
+            srcs = [item.source_title or item.source for item in categories[cat] if item.url]
+            urls = [item.url for item in categories[cat] if item.url]
+            return " • ".join(
+                [f"[{src}]({url})" for src, url in zip(srcs, urls)]
+            )
+        out.append(
+            f"**Technology:** {sources_line('technology')}"
+        )
+        out.append(
+            f"\n**Society:** {sources_line('society')}"
+        )
+        out.append(
+            f"\n**Arts:** {sources_line('art')}"
+        )
+        out.append(
+            f"\n**Business:** {sources_line('business')}"
+        )
+        out.append(
+            "\n*The Filter curates and synthesizes from original reporting. All rights remain with original publishers.*\n"
+        )
+        return "\n".join(out)
+
+    async def _generate_simple_newsletter(self, items: List[ContentItem]) -> str:
+        """Legacy fallback: simple grouping by source."""
         sections = []
-        # Group by source
         sources = {item.source for item in items}
         for source in sorted(sources):
             source_items = [item for item in items if item.source == source]
-            if source == "readwise":
-                sections.append("## 📚 Highlights from Readwise\n")
-            elif source == "glasp":
-                sections.append("## ✨ Highlights from Glasp\n")
-            elif source == "rss":
-                sections.append("## 🌐 Latest Articles\n")
-            else:
-                sections.append(f"## {source.title()}\n")
+            sections.append(f"## {source.title()}\n")
             for item in source_items:
                 sections.append(f"### {item.title}")
                 if item.author:
@@ -39,7 +276,9 @@ class NewsletterGenerator:
                 if item.metadata and item.metadata.get("note"):
                     sections.append(f"**Note:** {item.metadata['note']}")
                 sections.append("---\n")
-        sections.append("\n---\n*This newsletter was automatically generated by your Newsletter Bot.*")
+        sections.append(
+            "\n---\n*This newsletter was automatically generated by your Newsletter Bot.*"
+        )
         return "\n".join(sections)
 
     async def _enrich_with_llm(self, items: List[ContentItem]) -> List[ContentItem]:
@@ -47,6 +286,7 @@ class NewsletterGenerator:
         # TODO: Integrate with OpenAI, Claude, or other LLM APIs
         # For now, return items unchanged
         return items
+
     async def _get_glasp_content(self) -> List[ContentItem]:
         """Get content from Glasp."""
         try:
