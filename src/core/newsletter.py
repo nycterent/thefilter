@@ -166,8 +166,8 @@ class NewsletterGenerator:
                 except Exception as item_err:
                     logger.error(
                         "Failed to create ContentItem for highlight %s: %s",
-                        highlight.get('id'),
-                        item_err
+                        highlight.get("id"),
+                        item_err,
                     )
                     continue
 

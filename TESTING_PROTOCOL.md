@@ -32,11 +32,23 @@ This document establishes our "test locally first" protocol to prevent broken CI
    ./venv/bin/flake8 src/
    ```
 
-3. **Run Tests**:
+3. **Re-run Linting After Fixes**:
+   ```bash
+   # Always re-run the full linting suite after auto-formatting or manual fixes
+   ./venv/bin/black --check src/
+   ./venv/bin/isort --check-only src/
+   ./venv/bin/flake8 src/
+   ```
+
+4. **Run Tests**:
    ```bash
    # Run full test suite (using venv)
    ./venv/bin/pytest tests/ -v
    ```
+
+**Note:**
+- If Black reports files to reformat, always run Black and repeat the linting steps before running tests or pushing.
+- This ensures code is always properly formatted and linted before tests and CI.
 
 4. **Test Basic CLI Functionality**:
    ```bash
