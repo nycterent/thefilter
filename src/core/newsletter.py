@@ -387,16 +387,41 @@ class NewsletterGenerator:
         Returns:
             True if published successfully
         """
+        import aiohttp
+
         try:
-            # TODO: Implement Buttondown API integration
             logger.info("Publishing newsletter to Buttondown...")
+            api_key = self.settings.buttondown_api_key
+            if not api_key:
+                logger.error("No Buttondown API key provided.")
+                return False
 
-            # Placeholder for now
-            logger.info(f"Would publish newsletter: {newsletter.title}")
-            logger.info(f"Content length: {len(newsletter.content)} characters")
-            logger.info(f"Total items: {len(newsletter.items)}")
+            url = "https://api.buttondown.email/v1/emails"
+            headers = {
+                "Authorization": f"Token {api_key}",
+                "Content-Type": "application/json",
+            }
+            payload = {
+                "subject": newsletter.title,
+                "body": newsletter.content,
+                # Optionally, you can add "to" or "tags" if needed
+            }
 
-            return True
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, headers=headers, json=payload) as response:
+                    if response.status == 201:
+                        logger.info(
+                            f"Draft published to Buttondown: {newsletter.title}"
+                        )
+                        return True
+                    else:
+                        error_detail = await response.text()
+                        status_msg = f"Buttondown API error {response.status}:"
+                        logger.error(status_msg)
+                        # Split error detail into multiple lines if needed
+                        for line in str(error_detail).splitlines():
+                            logger.error(f"Buttondown error detail: {line}")
+                        return False
 
         except Exception as e:
             logger.error(f"Error publishing newsletter: {e}")
@@ -404,8 +429,6 @@ class NewsletterGenerator:
 
     async def test_connections(self) -> Dict[str, bool]:
         """Test connections to all configured services.
-
-        Returns:
             Dictionary of service connection statuses
         """
         results = {}
