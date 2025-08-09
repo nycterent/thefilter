@@ -1,0 +1,153 @@
+name: Manual Newsletter Trigger
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Action to perform'
+        required: true
+        default: 'health-check'
+        type: choice
+        options:
+        - health-check
+        - generate-newsletter
+        - dry-run
+        - show-config
+      debug:
+        description: 'Enable debug logging'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  execute-action:
+    runs-on: ubuntu-latest
+    environment: production
+    
+    permissions:
+      contents: read
+      issues: write
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: 3.11
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[dev]"
+    
+    - name: Execute Health Check
+      if: inputs.action == 'health-check'
+      run: |
+        echo "🔍 Running health check..."
+        if [[ "${{ inputs.debug }}" == "true" ]]; then
+          python -m src.newsletter_bot --debug health
+        else
+          python -m src.newsletter_bot health
+        fi
+      env:
+        READWISE_API_KEY: ${{ secrets.READWISE_API_KEY }}
+        GLASP_API_KEY: ${{ secrets.GLASP_API_KEY }}
+        RSS_FEEDS: ${{ secrets.RSS_FEEDS }}
+        BUTTONDOWN_API_KEY: ${{ secrets.BUTTONDOWN_API_KEY }}
+        OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        UNSPLASH_API_KEY: ${{ secrets.UNSPLASH_API_KEY }}
+    
+    - name: Show Configuration
+      if: inputs.action == 'show-config'
+      run: |
+        echo "📋 Showing configuration (without sensitive values)..."
+        if [[ "${{ inputs.debug }}" == "true" ]]; then
+          python -m src.newsletter_bot --debug config
+        else
+          python -m src.newsletter_bot config
+        fi
+      env:
+        READWISE_API_KEY: ${{ secrets.READWISE_API_KEY }}
+        GLASP_API_KEY: ${{ secrets.GLASP_API_KEY }}
+        RSS_FEEDS: ${{ secrets.RSS_FEEDS }}
+        BUTTONDOWN_API_KEY: ${{ secrets.BUTTONDOWN_API_KEY }}
+        OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        UNSPLASH_API_KEY: ${{ secrets.UNSPLASH_API_KEY }}
+    
+    - name: Generate Newsletter (Dry Run)
+      if: inputs.action == 'dry-run'
+      run: |
+        echo "🧪 Running newsletter generation in dry-run mode..."
+        if [[ "${{ inputs.debug }}" == "true" ]]; then
+          python -m src.newsletter_bot --debug generate --dry-run
+        else
+          python -m src.newsletter_bot generate --dry-run
+        fi
+      env:
+        READWISE_API_KEY: ${{ secrets.READWISE_API_KEY }}
+        GLASP_API_KEY: ${{ secrets.GLASP_API_KEY }}
+        RSS_FEEDS: ${{ secrets.RSS_FEEDS }}
+        BUTTONDOWN_API_KEY: ${{ secrets.BUTTONDOWN_API_KEY }}
+        OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        UNSPLASH_API_KEY: ${{ secrets.UNSPLASH_API_KEY }}
+    
+    - name: Generate Newsletter (Production)
+      if: inputs.action == 'generate-newsletter'
+      run: |
+        echo "📧 Running newsletter generation in PRODUCTION mode..."
+        echo "⚠️  This will create and publish an actual newsletter!"
+        if [[ "${{ inputs.debug }}" == "true" ]]; then
+          python -m src.newsletter_bot --debug generate
+        else
+          python -m src.newsletter_bot generate
+        fi
+      env:
+        READWISE_API_KEY: ${{ secrets.READWISE_API_KEY }}
+        GLASP_API_KEY: ${{ secrets.GLASP_API_KEY }}
+        RSS_FEEDS: ${{ secrets.RSS_FEEDS }}
+        BUTTONDOWN_API_KEY: ${{ secrets.BUTTONDOWN_API_KEY }}
+        OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        UNSPLASH_API_KEY: ${{ secrets.UNSPLASH_API_KEY }}
+    
+    - name: Create status comment
+      if: always()
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const action = '${{ inputs.action }}';
+          const success = '${{ job.status }}' === 'success';
+          const debug = '${{ inputs.debug }}';
+          
+          let title, emoji;
+          if (success) {
+            title = `Manual Action Completed: ${action}`;
+            emoji = '✅';
+          } else {
+            title = `Manual Action Failed: ${action}`;
+            emoji = '❌';
+          }
+          
+          const issueBody = `## ${emoji} ${title}
+          
+          **Action:** \`${action}\`
+          **Status:** ${success ? 'Success' : 'Failed'}
+          **Debug Mode:** ${debug}
+          **Timestamp:** ${new Date().toISOString()}
+          **Workflow Run:** [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          
+          ### 🔗 Quick Links
+          - [Full Workflow Logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          - [Run Another Manual Action](${{ github.server_url }}/${{ github.repository }}/actions/workflows/manual-trigger.yml)
+          
+          ---
+          *This issue was automatically created by the Manual Trigger workflow*`;
+          
+          await github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: title,
+            body: issueBody,
+            labels: ['newsletter', 'manual', success ? 'success' : 'bug', 'automated']
+          });

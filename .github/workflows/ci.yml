@@ -1,4 +1,4 @@
-name: CI/CD Pipeline
+name: Newsletter Bot CI/CD
 
 on:
   push:
@@ -79,30 +79,43 @@ jobs:
       with:
         sarif_file: 'trivy-results.sarif'
 
-  deploy:
+  # Newsletter generation workflow
+  newsletter-health-check:
     needs: [test, security]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: github.ref == 'refs/heads/main'
     environment: production
     
     steps:
     - uses: actions/checkout@v4
     
-    - name: Build production Docker image
-      run: |
-        docker build -t newsletter-bot:${{ github.sha }} .
-        docker tag newsletter-bot:${{ github.sha }} newsletter-bot:latest
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: 3.11
     
-    - name: Deploy application (placeholder)
+    - name: Install dependencies
       run: |
-        echo "Deploying with synced secrets from Infisical..."
-        echo "Available secrets (without values):"
-        env | grep -E "(READWISE|GLASP|RSS|BUTTONDOWN|OPENROUTER|UNSPLASH)" | sed 's/=.*/=***/' || echo "No matching secrets found"
+        python -m pip install --upgrade pip
+        pip install -e ".[dev]"
+    
+    - name: Run health check
+      run: python -m src.newsletter_bot health
       env:
-        # Production secrets synced from Infisical
         READWISE_API_KEY: ${{ secrets.READWISE_API_KEY }}
         GLASP_API_KEY: ${{ secrets.GLASP_API_KEY }}
         RSS_FEEDS: ${{ secrets.RSS_FEEDS }}
         BUTTONDOWN_API_KEY: ${{ secrets.BUTTONDOWN_API_KEY }}
         OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         UNSPLASH_API_KEY: ${{ secrets.UNSPLASH_API_KEY }}
+    
+    - name: Build and push Docker image
+      if: success()
+      run: |
+        echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+        docker build -t ghcr.io/${{ github.repository }}/newsletter-bot:${{ github.sha }} .
+        docker tag ghcr.io/${{ github.repository }}/newsletter-bot:${{ github.sha }} ghcr.io/${{ github.repository }}/newsletter-bot:latest
+        docker push ghcr.io/${{ github.repository }}/newsletter-bot:${{ github.sha }}
+        docker push ghcr.io/${{ github.repository }}/newsletter-bot:latest
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
