@@ -39,3 +39,7 @@ class NewsletterDraft(BaseModel):
     )
     image_url: Optional[HttpUrl] = Field(None, description="Featured image")
     draft_id: Optional[str] = Field(None, description="External draft ID")
+    metadata: Optional[dict] = Field(
+        None,
+        description="Newsletter-level metadata (e.g., item counts, source breakdown)",
+    )
