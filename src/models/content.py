@@ -22,6 +22,10 @@ class ContentItem(BaseModel):
     source_title: Optional[str] = Field(
         None, description="Source title (e.g., book/article)"
     )
+    author: Optional[str] = Field(None, description="Content author")
+    metadata: Optional[dict] = Field(
+        None, description="Additional metadata (note, location, location_type)"
+    )
 
 
 class NewsletterDraft(BaseModel):
