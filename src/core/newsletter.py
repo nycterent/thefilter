@@ -72,14 +72,11 @@ class NewsletterGenerator:
                 f"{images.get(keywords, 'circuit-board-370x150?auto=format')}"
             )
 
-        today = datetime.utcnow().strftime("%B %d, %Y")
+        today = datetime.utcnow().strftime("%A, %B %d, %Y")
         out = []
-        out.append(
-            f"# THE FILTER\n*Weekly Curated Briefing • {today}*\n\n---\n"
-        )
-
-        # HEADLINES AT A GLANCE
-        out.append("## HEADLINES AT A GLANCE\n")
+        out.append(f"# THE FILTER\n*Curated Briefing \u2022 {today}*\n")
+        out.append("\n*Welcome to this week's curated briefing. In a **timeless minimalist** spirit, we distill the latest developments in technology, society, art, and business with precision and restraint. Expect a high-contrast mix of facts and a touch of commentary for reflection.*\n")
+        out.append("\n## HEADLINES AT A GLANCE\n")
         out.append("| **TECHNOLOGY** | **SOCIETY** | **ART & MEDIA** | **BUSINESS** |")
         out.append("|:---------------|:------------|:----------------|:-------------|")
         for i in range(4):
@@ -87,44 +84,31 @@ class NewsletterGenerator:
             soc = categories["society"][i] if i < len(categories["society"]) else None
             art = categories["art"][i] if i < len(categories["art"]) else None
             bus = categories["business"][i] if i < len(categories["business"]) else None
-
             def headline(item):
                 if not item:
                     return ""
                 src = item.source_title or item.source or "Source Needed"
                 url = item.url or ""
-                link = (
-                    f"**[→ {src}]({url})**" if url else "**[→ Source Needed]**"
-                )
-                return f"{item.title} {link}"
-
-            out.append(
-                f"| {headline(tech)} | {headline(soc)} | "
-                f"{headline(art)} | {headline(bus)} |"
-            )
+                return f"**{item.title}** - {item.content[:80].replace('\n', ' ')} [→ {src}]({url})"
+            out.append(f"| {headline(tech)} | {headline(soc)} | {headline(art)} | {headline(bus)} |")
         out.append("\n---\n")
 
         # LEAD STORIES
         out.append("## LEAD STORIES\n")
         lead_tech = categories["technology"][0] if categories["technology"] else None
-
+        lead_other = categories["society"][0] if categories["society"] else None
+        out.append("| **QUANTUM COMPUTING BREAKTHROUGH** | **AI ASSISTANT DISASTER** |")
+        out.append("|:-----------------------------------|:---------------------------|")
         def lead_story(item, cat):
             if not item:
-                return ""
+                return " | "
             img = get_unsplash_image(cat)
             url = item.url or ""
             src = item.source_title or item.source or "Source Needed"
-            summary = item.content[:180].replace("\n", " ")
-            return (
-                f"![Image]({img}) | ![Image]({img})\n| "
-                f"{summary} **[→ {src}]({url})** | "
-                f"{summary} **[→ {src}]({url})**"
-            )
-        out.append("| **[BIGGEST TECH STORY]** | **[BIGGEST OTHER STORY]** |")
-        out.append("|:-------------------------|:---------------------------|")
-        out.append(
-            lead_story(lead_tech, "technology")
-        )
+            summary = item.content[:300].replace("\n", " ")
+            return f"![Image]({img}) | ![Image]({img})\n| **{item.title}** {summary} [→ {src}]({url}) | "
+        out.append(lead_story(lead_tech, "technology"))
+        out.append(lead_story(lead_other, "society"))
         out.append("\n---\n")
 
         # TECHNOLOGY DESK
