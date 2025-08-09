@@ -3,8 +3,7 @@
 import asyncio
 import logging
 from datetime import datetime, timedelta
-from typing import List, Dict, Any, Optional
-import json
+from typing import Any, Dict, List
 
 import aiohttp
 
@@ -68,9 +67,11 @@ class ReadwiseClient:
                         for highlight in page_highlights:
                             processed_highlight = {
                                 "id": highlight.get("id"),
-                                "title": highlight.get("text", "")[:200] + "..."
-                                if len(highlight.get("text", "")) > 200
-                                else highlight.get("text", ""),
+                                "title": (
+                                    highlight.get("text", "")[:200] + "..."
+                                    if len(highlight.get("text", "")) > 200
+                                    else highlight.get("text", "")
+                                ),
                                 "content": highlight.get("text", ""),
                                 "note": highlight.get("note", ""),
                                 "source": "readwise",

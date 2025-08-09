@@ -2,12 +2,11 @@
 
 import asyncio
 import logging
-from typing import Optional
 
 import click
 
-from src.models.settings import Settings
 from src.core.newsletter import NewsletterGenerator
+from src.models.settings import Settings
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -82,7 +81,8 @@ def generate(ctx: click.Context, dry_run: bool) -> None:
 
             if failed_connections:
                 logger.warning(
-                    f"⚠️  Some services are unavailable: {', '.join(failed_connections)}"
+                    f"⚠️  Some services are unavailable: "
+                    f"{', '.join(failed_connections)}"
                 )
                 logger.info("Continuing with available sources...")
 
@@ -96,7 +96,8 @@ def generate(ctx: click.Context, dry_run: bool) -> None:
             if newsletter.metadata:
                 if newsletter.metadata.get("readwise_items"):
                     logger.info(
-                        f"   - Readwise highlights: {newsletter.metadata['readwise_items']}"
+                        f"   - Readwise highlights: "
+                        f"{newsletter.metadata['readwise_items']}"
                     )
                 if newsletter.metadata.get("rss_items"):
                     logger.info(
@@ -132,7 +133,7 @@ def health() -> None:
         logger.info("🔍 Checking system health...")
 
         # Check configuration
-        logger.info(f"📋 Configuration:")
+        logger.info("📋 Configuration:")
         logger.info(f"   - Debug mode: {settings.debug}")
         logger.info(f"   - Log level: {settings.log_level}")
         logger.info(f"   - Infisical enabled: {settings.use_infisical}")
@@ -208,12 +209,12 @@ def config() -> None:
         keys_status = {
             "Readwise": "✅ Configured" if settings.readwise_api_key else "❌ Missing",
             "Glasp": "✅ Configured" if settings.glasp_api_key else "❌ Missing",
-            "Buttondown": "✅ Configured"
-            if settings.buttondown_api_key
-            else "❌ Missing",
-            "OpenRouter": "✅ Configured"
-            if settings.openrouter_api_key
-            else "❌ Missing",
+            "Buttondown": (
+                "✅ Configured" if settings.buttondown_api_key else "❌ Missing"
+            ),
+            "OpenRouter": (
+                "✅ Configured" if settings.openrouter_api_key else "❌ Missing"
+            ),
             "Unsplash": "✅ Configured" if settings.unsplash_api_key else "❌ Missing",
         }
 
@@ -221,7 +222,7 @@ def config() -> None:
             click.echo(f"  {service}: {status}")
 
         rss_count = len(settings.rss_feeds.split(",")) if settings.rss_feeds else 0
-        click.echo(f"\n📡 Content Sources:")
+        click.echo("\n📡 Content Sources:")
         click.echo(f"  RSS Feeds: {rss_count} configured")
 
         if settings.rss_feeds and rss_count > 0:

@@ -2,10 +2,9 @@
 
 import asyncio
 import logging
-from datetime import datetime, timedelta
-from typing import List, Dict, Any, Optional
 import xml.etree.ElementTree as ET
-from urllib.parse import urljoin
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional
 
 import aiohttp
 
@@ -57,7 +56,8 @@ class RSSClient:
         all_articles.sort(key=lambda x: x.get("published_at", ""), reverse=True)
 
         logger.info(
-            f"Retrieved {len(all_articles)} articles from {len(self.feed_urls)} RSS feeds"
+            f"Retrieved {len(all_articles)} articles from "
+            f"{len(self.feed_urls)} RSS feeds"
         )
         return all_articles
 
@@ -120,18 +120,16 @@ class RSSClient:
                 feed_title = self._get_text(
                     root.find(".//channel/title"), "Unknown Feed"
                 )
-                feed_description = self._get_text(
-                    root.find(".//channel/description"), ""
-                )
+                # Channel description (not currently used)
+                root.find(".//channel/description")
             elif root.tag == "{http://www.w3.org/2005/Atom}feed":
                 # Atom feed
                 items = root.findall(".//{http://www.w3.org/2005/Atom}entry")
                 feed_title = self._get_text(
                     root.find(".//{http://www.w3.org/2005/Atom}title"), "Unknown Feed"
                 )
-                feed_description = self._get_text(
-                    root.find(".//{http://www.w3.org/2005/Atom}subtitle"), ""
-                )
+                # Atom subtitle (not currently used)
+                root.find(".//{http://www.w3.org/2005/Atom}subtitle")
             else:
                 logger.warning(f"Unrecognized feed format for {feed_url}")
                 return []
@@ -148,7 +146,7 @@ class RSSClient:
                             )
                             if pub_date < threshold_date:
                                 continue
-                        except:
+                        except Exception:
                             pass  # If we can't parse date, include the article
 
                     articles.append(article)
@@ -209,7 +207,8 @@ class RSSClient:
             link = link_elem.get("href", "") if link_elem is not None else ""
 
             author_elem = item.find(
-                ".//{http://www.w3.org/2005/Atom}author/{http://www.w3.org/2005/Atom}name"
+                ".//{http://www.w3.org/2005/Atom}author/"
+                "{http://www.w3.org/2005/Atom}name"
             )
             author = self._get_text(author_elem, "")
 
@@ -235,9 +234,11 @@ class RSSClient:
             "id": guid or link,
             "title": title,
             "content": description,
-            "summary": description_clean[:300] + "..."
-            if len(description_clean) > 300
-            else description_clean,
+            "summary": (
+                description_clean[:300] + "..."
+                if len(description_clean) > 300
+                else description_clean
+            ),
             "source": "rss",
             "source_title": feed_title,
             "source_url": feed_url,
@@ -279,12 +280,12 @@ class RSSClient:
 
             dt = parsedate_to_datetime(date_str)
             return dt.isoformat()
-        except:
+        except Exception:
             try:
                 # Try ISO format
                 dt = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
                 return dt.isoformat()
-            except:
+            except Exception:
                 # Return original if all parsing fails
                 return date_str
 

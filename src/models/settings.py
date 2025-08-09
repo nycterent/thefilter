@@ -42,10 +42,7 @@ class Settings(BaseSettings):
             return self
 
         try:
-            from src.core.secrets import (
-                InfisicalConfig,
-                InfisicalSecretManager,
-            )
+            from src.core.secrets import InfisicalConfig, InfisicalSecretManager
 
             # Initialize Infisical client
             infisical_config = InfisicalConfig()  # type: ignore

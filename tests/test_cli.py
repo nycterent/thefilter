@@ -10,7 +10,7 @@ def test_cli_group_exists():
     runner = CliRunner()
     result = runner.invoke(cli, ["--help"])
     assert result.exit_code == 0
-    assert "Entry point for the newsletter bot CLI." in result.output
+    assert "Newsletter automation bot CLI." in result.output
 
 
 def test_cli_no_commands_yet():
