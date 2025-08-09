@@ -1,0 +1,70 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "newsletter-automation-bot"
+version = "1.0.0"
+description = "Automated newsletter creation from multiple content sources"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Your Name", email = "your.email@example.com"}
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Communications :: Email",
+    "Topic :: Office/Business :: News/Diary",
+]
+requires-python = ">=3.11"
+dependencies = [
+    "aiohttp>=3.9.1",
+    "click>=8.1.7",
+    "pydantic>=2.5.2",
+    "pydantic-settings>=2.1.0",
+    "jinja2>=3.1.2",
+    "python-dotenv>=1.0.0",
+    "fastapi>=0.104.1",
+    "uvicorn>=0.24.0",
+    "celery>=5.3.4",
+    "redis>=5.0.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "flake8>=6.0.0",
+    "mypy>=1.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/yourusername/newsletter-automation-bot"
+Repository = "https://github.com/yourusername/newsletter-automation-bot"
+Issues = "https://github.com/yourusername/newsletter-automation-bot/issues"
+
+[project.scripts]
+newsletter-bot = "src.newsletter_bot:cli"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.black]
+line-length = 88
+target-version = ['py311']
+
+[tool.isort]
+profile = "black"
+line_length = 88
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
