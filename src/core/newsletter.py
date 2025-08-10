@@ -60,26 +60,27 @@ class NewsletterGenerator:
         # Helper for Unsplash image
         def get_unsplash_image(keywords: str) -> str:
             # Get proper Unsplash image using API if available, fallback to curated images
-            if hasattr(self, 'settings') and self.settings.unsplash_api_key:
+            if hasattr(self, "settings") and self.settings.unsplash_api_key:
                 # Use actual Unsplash API search
                 try:
                     import aiohttp
+
                     # For now, use curated high-quality images with proper URLs
                     curated_images = {
                         "technology": "https://images.unsplash.com/photo-1518709268805-4e9042af2176?w=370&h=150&fit=crop&crop=entropy&auto=format&q=80",
-                        "society": "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=370&h=150&fit=crop&crop=entropy&auto=format&q=80", 
+                        "society": "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=370&h=150&fit=crop&crop=entropy&auto=format&q=80",
                         "art": "https://images.unsplash.com/photo-1541961017774-22349e4a1262?w=370&h=150&fit=crop&crop=entropy&auto=format&q=80",
                         "business": "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=370&h=150&fit=crop&crop=entropy&auto=format&q=80",
                     }
                     return curated_images.get(keywords, curated_images["technology"])
                 except Exception:
                     pass
-            
+
             # Fallback to curated professional images
             curated_images = {
                 "technology": "https://images.unsplash.com/photo-1518709268805-4e9042af2176?w=370&h=150&fit=crop&crop=entropy&auto=format&q=80",
                 "society": "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=370&h=150&fit=crop&crop=entropy&auto=format&q=80",
-                "art": "https://images.unsplash.com/photo-1541961017774-22349e4a1262?w=370&h=150&fit=crop&crop=entropy&auto=format&q=80", 
+                "art": "https://images.unsplash.com/photo-1541961017774-22349e4a1262?w=370&h=150&fit=crop&crop=entropy&auto=format&q=80",
                 "business": "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=370&h=150&fit=crop&crop=entropy&auto=format&q=80",
             }
             return curated_images.get(keywords, curated_images["technology"])
@@ -120,11 +121,19 @@ class NewsletterGenerator:
         out.append("## LEAD STORIES\n")
         lead_tech = categories["technology"][0] if categories["technology"] else None
         lead_other = categories["society"][0] if categories["society"] else None
-        
+
         # Dynamic headers based on actual content
-        tech_header = lead_tech.title[:30] + "..." if lead_tech and len(lead_tech.title) > 30 else (lead_tech.title if lead_tech else "NO TECH STORY")
-        other_header = lead_other.title[:30] + "..." if lead_other and len(lead_other.title) > 30 else (lead_other.title if lead_other else "NO SOCIETY STORY")
-        
+        tech_header = (
+            lead_tech.title[:30] + "..."
+            if lead_tech and len(lead_tech.title) > 30
+            else (lead_tech.title if lead_tech else "NO TECH STORY")
+        )
+        other_header = (
+            lead_other.title[:30] + "..."
+            if lead_other and len(lead_other.title) > 30
+            else (lead_other.title if lead_other else "NO SOCIETY STORY")
+        )
+
         out.append(f"| **{tech_header.upper()}** | **{other_header.upper()}** |")
         out.append(
             "|:-----------------------------------|:---------------------------|"
@@ -151,11 +160,19 @@ class NewsletterGenerator:
         tech4 = (
             categories["technology"][3] if len(categories["technology"]) > 3 else None
         )
-        
+
         # Dynamic headers for tech stories
-        tech3_header = tech3.title[:25] + "..." if tech3 and len(tech3.title) > 25 else (tech3.title if tech3 else "NO STORY AVAILABLE")
-        tech4_header = tech4.title[:25] + "..." if tech4 and len(tech4.title) > 25 else (tech4.title if tech4 else "NO STORY AVAILABLE")
-        
+        tech3_header = (
+            tech3.title[:25] + "..."
+            if tech3 and len(tech3.title) > 25
+            else (tech3.title if tech3 else "NO STORY AVAILABLE")
+        )
+        tech4_header = (
+            tech4.title[:25] + "..."
+            if tech4 and len(tech4.title) > 25
+            else (tech4.title if tech4 else "NO STORY AVAILABLE")
+        )
+
         out.append(f"| **{tech3_header.upper()}** | **{tech4_header.upper()}** |")
         out.append("|:-------------------|:-------------------|")
         for item in [tech3, tech4]:
@@ -169,7 +186,7 @@ class NewsletterGenerator:
             content3 = f"{summary3} **[→ {src3}]({url3})**"
         else:
             content3 = " "
-            
+
         if tech4:
             url4 = tech4.url or ""
             src4 = tech4.source_title or tech4.source or "Source Needed"
@@ -177,7 +194,7 @@ class NewsletterGenerator:
             content4 = f"{summary4} **[→ {src4}]({url4})**"
         else:
             content4 = " "
-            
+
         out.append(f"| {content3} | {content4} |")
         out.append("\n---\n")
 
@@ -187,7 +204,7 @@ class NewsletterGenerator:
             categories["society"][i] if i < len(categories["society"]) else None
             for i in range(3)
         ]
-        
+
         # Dynamic headers for society stories
         soc_headers = []
         for i, item in enumerate(soc_items):
@@ -196,7 +213,7 @@ class NewsletterGenerator:
                 soc_headers.append(f"**{header.upper()}**")
             else:
                 soc_headers.append("**NO STORY**")
-        
+
         out.append(f"| {soc_headers[0]} | {soc_headers[1]} | {soc_headers[2]} |")
         out.append(
             "|:----------------------|:----------------------|:----------------------|"
@@ -214,41 +231,55 @@ class NewsletterGenerator:
                 content_columns.append(f"{summary} **[→ {src}]({url})**")
             else:
                 content_columns.append(" ")
-        
-        out.append(f"| {content_columns[0]} | {content_columns[1]} | {content_columns[2]} |")
+
+        out.append(
+            f"| {content_columns[0]} | {content_columns[1]} | {content_columns[2]} |"
+        )
         out.append("\n---\n")
 
         # MAJOR THEME SECTION (optional, fill if enough items)
-        theme_section_title = "TRENDING TOPICS" if len(items) > 7 else "ADDITIONAL INSIGHTS"
+        theme_section_title = (
+            "TRENDING TOPICS" if len(items) > 7 else "ADDITIONAL INSIGHTS"
+        )
         out.append(f"## {theme_section_title}\n")
-        theme_items = items[4:7] if len(items) > 7 else items[:3] if len(items) <= 7 else []
-        
+        theme_items = (
+            items[4:7] if len(items) > 7 else items[:3] if len(items) <= 7 else []
+        )
+
         # Dynamic headers for theme stories
         theme_headers = []
         for i in range(3):
             if i < len(theme_items) and theme_items[i]:
-                header = theme_items[i].title[:15] + "..." if len(theme_items[i].title) > 15 else theme_items[i].title
+                header = (
+                    theme_items[i].title[:15] + "..."
+                    if len(theme_items[i].title) > 15
+                    else theme_items[i].title
+                )
                 theme_headers.append(f"**{header.upper()}**")
             else:
                 theme_headers.append("**NO STORY**")
-        
+
         out.append(f"| {theme_headers[0]} | {theme_headers[1]} | {theme_headers[2]} |")
         out.append("|:--------------|:--------------|:--------------|")
         # Generate images row
         img = get_unsplash_image("business")
         out.append(f"![Image]({img}) | ![Image]({img}) | ![Image]({img})")
-        
+
         # Generate content for each column separately
         theme_content = []
         for i in range(3):
             if i < len(theme_items) and theme_items[i]:
                 url = theme_items[i].url or ""
-                src = theme_items[i].source_title or theme_items[i].source or "Source Needed"
+                src = (
+                    theme_items[i].source_title
+                    or theme_items[i].source
+                    or "Source Needed"
+                )
                 summary = theme_items[i].content[:120].replace("\n", " ")
                 theme_content.append(f"{summary} **[→ {src}]({url})**")
             else:
                 theme_content.append(" ")
-        
+
         out.append(f"| {theme_content[0]} | {theme_content[1]} | {theme_content[2]} |")
         out.append("\n---\n")
 
@@ -258,7 +289,7 @@ class NewsletterGenerator:
             categories["art"][i] if i < len(categories["art"]) else None
             for i in range(2)
         ]
-        
+
         # Dynamic headers for art stories
         art_headers = []
         for i, item in enumerate(art_items):
@@ -267,7 +298,7 @@ class NewsletterGenerator:
                 art_headers.append(f"**{header.upper()}**")
             else:
                 art_headers.append("**NO ART STORY**")
-        
+
         out.append(f"| {art_headers[0]} | {art_headers[1]} |")
         out.append("|:------------------|:------------------|")
         # Add images row (one row for all columns)
@@ -283,7 +314,7 @@ class NewsletterGenerator:
                 art_content.append(f"{summary} **[→ {src}]({url})**")
             else:
                 art_content.append(" ")
-        
+
         out.append(f"| {art_content[0]} | {art_content[1]} |")
         out.append("\n---\n")
 
@@ -293,7 +324,7 @@ class NewsletterGenerator:
             categories["business"][i] if i < len(categories["business"]) else None
             for i in range(2)
         ]
-        
+
         # Dynamic headers for business stories
         bus_headers = []
         for i, item in enumerate(bus_items):
@@ -302,7 +333,7 @@ class NewsletterGenerator:
                 bus_headers.append(f"**{header.upper()}**")
             else:
                 bus_headers.append("**NO BUSINESS STORY**")
-        
+
         out.append(f"| {bus_headers[0]} | {bus_headers[1]} |")
         out.append("|:-----------------------|:-----------------------|")
         # Add images row (one row for all columns)
@@ -318,7 +349,7 @@ class NewsletterGenerator:
                 bus_content.append(f"{summary} **[→ {src}]({url})**")
             else:
                 bus_content.append(" ")
-        
+
         out.append(f"| {bus_content[0]} | {bus_content[1]} |")
         out.append("\n---\n")
 
@@ -334,12 +365,16 @@ class NewsletterGenerator:
                     # For RSS feeds with same source name, use article title as differentiator
                     if src_name in source_map and item.source == "rss":
                         # Create shorter, more specific name from article title
-                        short_title = item.title[:40] + "..." if len(item.title) > 40 else item.title
+                        short_title = (
+                            item.title[:40] + "..."
+                            if len(item.title) > 40
+                            else item.title
+                        )
                         source_key = f"{short_title}"
                     else:
                         source_key = src_name
                     source_map[source_key] = item.url
-            
+
             return " • ".join([f"[{src}]({url})" for src, url in source_map.items()])
 
         out.append(f"**Technology:** {sources_line('technology')}")
@@ -529,10 +564,14 @@ class NewsletterGenerator:
 
         if not tasks:
             logger.error("🚨 No content sources configured - newsletter will be empty!")
-            logger.error("Please check API keys: READWISE_API_KEY, GLASP_API_KEY, RSS_FEEDS")
+            logger.error(
+                "Please check API keys: READWISE_API_KEY, GLASP_API_KEY, RSS_FEEDS"
+            )
             return []
 
-        logger.info(f"Fetching content from {len(tasks)} sources: {', '.join(source_names)}")
+        logger.info(
+            f"Fetching content from {len(tasks)} sources: {', '.join(source_names)}"
+        )
 
         # Execute all content collection tasks
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -915,11 +954,15 @@ class NewsletterGenerator:
         try:
             # For now, check Buttondown for existing issues to determine next number
             # This is a simple implementation that could be improved
-            if hasattr(self.settings, 'buttondown_api_key') and self.settings.buttondown_api_key:
+            if (
+                hasattr(self.settings, "buttondown_api_key")
+                and self.settings.buttondown_api_key
+            ):
                 import aiohttp
+
                 url = "https://api.buttondown.email/v1/emails"
                 headers = {"Authorization": f"Token {self.settings.buttondown_api_key}"}
-                
+
                 try:
                     async with aiohttp.ClientSession() as session:
                         async with session.get(url, headers=headers) as response:
@@ -927,16 +970,20 @@ class NewsletterGenerator:
                                 emails = await response.json()
                                 # Count existing "Curated Briefing" emails
                                 existing_count = 0
-                                for email in emails.get('results', []):
-                                    if email.get('subject', '').startswith('Curated Briefing'):
+                                for email in emails.get("results", []):
+                                    if email.get("subject", "").startswith(
+                                        "Curated Briefing"
+                                    ):
                                         existing_count += 1
                                 return existing_count + 1
                 except Exception as e:
-                    logger.warning(f"Could not fetch existing newsletters for numbering: {e}")
-            
+                    logger.warning(
+                        f"Could not fetch existing newsletters for numbering: {e}"
+                    )
+
             # Fallback: start at 002 (since 001 exists)
             return 2
-            
+
         except Exception as e:
             logger.error(f"Error determining next issue number: {e}")
             return 2  # Safe fallback

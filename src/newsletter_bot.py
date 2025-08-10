@@ -42,15 +42,21 @@ def generate(ctx: click.Context, dry_run: bool) -> None:
             # Validate that we have the required API keys
             # For dry-run mode with RSS feeds, we can be more lenient
             if dry_run and settings.rss_feeds:
-                logger.info("🧪 Dry-run mode with RSS feeds - relaxed API key validation")
+                logger.info(
+                    "🧪 Dry-run mode with RSS feeds - relaxed API key validation"
+                )
                 missing_critical = []
                 # Only OpenRouter is truly required for content processing
                 if not settings.openrouter_api_key:
                     missing_critical.append("OpenRouter")
-                
+
                 if missing_critical:
-                    logger.warning(f"⚠️  Missing API keys: {', '.join(missing_critical)}")
-                    logger.info("Continuing with available sources (content may not be AI-processed)")
+                    logger.warning(
+                        f"⚠️  Missing API keys: {', '.join(missing_critical)}"
+                    )
+                    logger.info(
+                        "Continuing with available sources (content may not be AI-processed)"
+                    )
             else:
                 required_keys = [
                     ("readwise_api_key", "Readwise"),
