@@ -432,21 +432,45 @@ class NewsletterGenerator:
     
     def _balance_categories(self, categories: dict) -> None:
         """Ensure balanced distribution of content across categories."""
-        # If any category is completely empty, redistribute from the largest category
-        empty_categories = [cat for cat, items in categories.items() if len(items) == 0]
+        total_items = sum(len(items) for items in categories.values())
         
-        if empty_categories:
-            # Find category with most items
-            largest_cat = max(categories, key=lambda x: len(categories[x]))
-            largest_items = categories[largest_cat]
+        if total_items == 0:
+            logger.warning("No content items to balance across categories")
+            return
             
-            if len(largest_items) >= len(empty_categories):
-                # Redistribute items to empty categories
-                for i, empty_cat in enumerate(empty_categories):
-                    if i < len(largest_items):
-                        item_to_move = largest_items.pop()
-                        categories[empty_cat].append(item_to_move)
-                        logger.debug(f"Rebalanced: moved item to {empty_cat} from {largest_cat}")
+        # Target: at least 2 items per category if we have 8+ items total
+        min_per_category = 2 if total_items >= 8 else 1
+        
+        # Find categories that need items
+        categories_needing_items = []
+        for cat, items in categories.items():
+            needed = max(0, min_per_category - len(items))
+            if needed > 0:
+                categories_needing_items.extend([cat] * needed)
+        
+        if categories_needing_items:
+            # Find categories with excess items (more than target)
+            target_per_category = max(2, total_items // 4)  # Aim for roughly equal distribution
+            
+            donor_items = []
+            for cat, items in categories.items():
+                if len(items) > target_per_category:
+                    # Take excess items from over-populated categories
+                    excess = len(items) - target_per_category
+                    for _ in range(min(excess, len(categories_needing_items))):
+                        if items:  # Safety check
+                            donor_items.append((cat, items.pop()))
+            
+            # Distribute donor items to categories that need them
+            for i, category_needing in enumerate(categories_needing_items):
+                if i < len(donor_items):
+                    donor_cat, item = donor_items[i]
+                    categories[category_needing].append(item)
+                    logger.debug(f"Rebalanced: moved item from {donor_cat} to {category_needing}")
+        
+        # Log final distribution
+        distribution = {cat: len(items) for cat, items in categories.items()}
+        logger.info(f"Category distribution after balancing: {distribution}")
 
     async def _generate_simple_newsletter(self, items: List[ContentItem]) -> str:
         """Legacy fallback: simple grouping by source."""
