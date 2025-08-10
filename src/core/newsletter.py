@@ -981,23 +981,45 @@ class NewsletterGenerator:
     async def _process_content(
         self, content_items: List[ContentItem]
     ) -> List[ContentItem]:
-        """Process and enrich content items.
+        """Process and enrich content items with diverse selection.
 
         Args:
             content_items: Raw content items
 
         Returns:
-            Processed content items
+            Processed content items (max 20, balanced across categories)
         """
-        # For now, just return items sorted by date
-        # TODO: Add AI processing, categorization, summarization
-
-        processed_items = sorted(
-            content_items, key=lambda x: x.created_at or "", reverse=True
-        )
-
-        # Limit to top 20 items to keep newsletter manageable
-        return processed_items[:20]
+        # First, categorize all items to ensure diversity
+        categorized_items = {
+            "technology": [],
+            "society": [],
+            "art": [],
+            "business": [],
+        }
+        
+        for item in content_items:
+            category = self._categorize_content(item)
+            categorized_items[category].append(item)
+        
+        # Sort each category by date (newest first)
+        for category in categorized_items:
+            categorized_items[category] = sorted(
+                categorized_items[category], 
+                key=lambda x: x.created_at or "", 
+                reverse=True
+            )
+        
+        # Balance categories to meet template requirements
+        self._balance_categories(categorized_items)
+        
+        # Select items from balanced categories (max 20 total)
+        final_items = []
+        for category, items in categorized_items.items():
+            final_items.extend(items)
+        
+        # Sort final selection by date and limit to 20
+        final_items = sorted(final_items, key=lambda x: x.created_at or "", reverse=True)
+        return final_items[:20]
     
     def _enhance_content_quality(self, content_items: List[ContentItem]) -> List[ContentItem]:
         """Enhance content quality by improving titles, sources, and filtering."""
