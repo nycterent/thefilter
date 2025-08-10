@@ -815,66 +815,108 @@ class NewsletterGenerator:
         return unique_content
 
     async def _get_readwise_content(self) -> List[ContentItem]:
-        """Get content from Readwise."""
+        """Get content from Readwise Reader - recent documents."""
         try:
-            highlights = await self.readwise_client.get_recent_highlights(days=7)
+            # Get recent documents from Readwise Reader
+            documents = await self.readwise_client.get_recent_reader_documents(days=7)
 
             content_items = []
-            missing_dates_count = 0
-            for highlight in highlights:
-                created_at_raw = highlight.get("created_at")
+            for doc in documents:
+                # Parse document timestamps
+                created_at_raw = doc.get("created_at") or doc.get("updated_at")
                 created_at = None
+                
                 if created_at_raw:
                     try:
-                        # Try parsing ISO format
                         created_at = datetime.fromisoformat(
                             created_at_raw.replace("Z", "+00:00")
                         )
-                    except Exception as dt_err:
-                        logger.debug(
-                            f"Invalid created_at for highlight {highlight.get('id')}: "
-                            f"{created_at_raw} ({dt_err})"
-                        )
-                if not created_at:
-                    missing_dates_count += 1
+                    except Exception:
+                        created_at = datetime.now(timezone.utc)
+                else:
                     created_at = datetime.now(timezone.utc)
+                    
                 if created_at.tzinfo is None:
                     created_at = created_at.replace(tzinfo=timezone.utc)
+
                 try:
+                    # Extract document information
+                    title = doc.get("title") or "Untitled Document"
+                    author = doc.get("author", "")
+                    category = doc.get("category", "article")
+                    summary = doc.get("summary", "")
+                    url = doc.get("url", "")
+                    word_count = doc.get("word_count")
+                    reading_progress = doc.get("reading_progress")
+                    
+                    # Handle tags - Reader API returns dict instead of list
+                    tags_raw = doc.get("tags", [])
+                    tags = []
+                    if isinstance(tags_raw, list):
+                        tags = tags_raw
+                    elif isinstance(tags_raw, dict):
+                        # Extract tag names from dict if available
+                        tags = list(tags_raw.keys()) if tags_raw else []
+                    
+                    # Clean and validate URL
+                    clean_url = None
+                    if url and isinstance(url, str) and url.strip():
+                        clean_url = url.strip()
+                        # Ensure it's a valid URL format
+                        if not clean_url.startswith(('http://', 'https://')):
+                            clean_url = None
+                    
+                    # Create content from summary or metadata
+                    content_parts = []
+                    if summary:
+                        content_parts.append(summary)
+                    if author:
+                        content_parts.append(f"Author: {author}")
+                    if word_count is not None and word_count > 0:
+                        content_parts.append(f"~{word_count} words")
+                    if reading_progress is not None and reading_progress > 0:
+                        progress_pct = min(100, int(reading_progress * 100))
+                        content_parts.append(f"{progress_pct}% read")
+                        
+                    content = " • ".join(content_parts) if content_parts else "Recent document from Reader"
+                    
+                    # Clean up title and author for better presentation
+                    clean_title = title.strip() if title else "Untitled Document"
+                    if not clean_title:
+                        clean_title = f"Document from {category}"
+
                     item = ContentItem(
-                        id=f"readwise_{highlight['id']}",
-                        title=highlight["title"],
-                        content=highlight["content"],
-                        source=highlight["source"],
-                        url=highlight.get("url"),
-                        author=highlight.get("author"),
-                        source_title=highlight.get("source_title"),
-                        tags=highlight.get("tags", []),
+                        id=f"readwise_reader_{doc['id']}",
+                        title=clean_title,
+                        content=content,
+                        source="readwise_reader",
+                        url=clean_url,
+                        author=author if author else None,
+                        source_title="Readwise Reader",
+                        tags=tags,
                         created_at=created_at,
                         metadata={
-                            "note": highlight.get("note"),
-                            "location": highlight.get("location"),
-                            "location_type": highlight.get("location_type"),
+                            "category": category,
+                            "location": doc.get("location", ""),
+                            "word_count": word_count,
+                            "reading_progress": reading_progress,
+                            "reader_doc_id": doc.get("id")
                         },
                     )
                     content_items.append(item)
                 except Exception as item_err:
                     logger.error(
-                        "Failed to create ContentItem for highlight %s: %s",
-                        highlight.get("id"),
+                        "Failed to create ContentItem for Reader document %s: %s",
+                        doc.get("id"),
                         item_err,
                     )
                     continue
 
-            logger.info(f"Retrieved {len(content_items)} valid items from Readwise")
-            if missing_dates_count > 0:
-                logger.info(
-                    f"Note: {missing_dates_count} highlights had missing dates (using current timestamp)"
-                )
+            logger.info(f"Retrieved {len(content_items)} recent documents from Readwise Reader")
             return content_items
 
         except Exception as e:
-            logger.error(f"Error getting Readwise content: {e}")
+            logger.error(f"Error getting Readwise Reader content: {e}")
             return []
 
     async def _get_rss_content(self) -> List[ContentItem]:
