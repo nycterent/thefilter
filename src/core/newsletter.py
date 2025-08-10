@@ -5,6 +5,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Dict, List
 
+from src.clients.openrouter import OpenRouterClient
 from src.clients.readwise import ReadwiseClient
 from src.clients.rss import RSSClient
 from src.models.content import ContentItem, NewsletterDraft
@@ -39,7 +40,7 @@ class NewsletterGenerator:
         }
         for item in items:
             # Improved categorization using multiple signals
-            category = self._categorize_content(item)
+            category = await self._categorize_content(item)
             categories[category].append(item)
 
         # Ensure balanced distribution across categories
@@ -374,9 +375,20 @@ class NewsletterGenerator:
         )
         return "\n".join(out)
 
-    def _categorize_content(self, item: ContentItem) -> str:
-        """Intelligently categorize content based on multiple signals."""
-        # Check tags first
+    async def _categorize_content(self, item: ContentItem) -> str:
+        """Intelligently categorize content using AI when available, fallback to keywords."""
+        # Try AI categorization first if OpenRouter is available
+        if self.openrouter_client:
+            try:
+                ai_category = await self.openrouter_client.categorize_content(
+                    item.title, item.content, item.tags
+                )
+                if ai_category:
+                    return ai_category
+            except Exception as e:
+                logger.debug(f"AI categorization failed, using fallback: {e}")
+        
+        # Fallback to keyword-based categorization
         tags_lower = [tag.lower() for tag in item.tags]
         
         # Technology keywords
@@ -569,6 +581,7 @@ class NewsletterGenerator:
         self.readwise_client = self._init_readwise_client(settings)
         self.glasp_client = self._init_glasp_client(settings)
         self.rss_client = self._init_rss_client(settings)
+        self.openrouter_client = self._init_openrouter_client(settings)
 
         # Log source configuration status
         logger.info("📋 Content source configuration:")
@@ -658,6 +671,19 @@ class NewsletterGenerator:
             logger.error(f"❌ Failed to initialize RSS client: {e}")
             return None
 
+    def _init_openrouter_client(self, settings: Settings):
+        """Initialize OpenRouter client with validation."""
+        if not settings.openrouter_api_key or not settings.openrouter_api_key.strip():
+            logger.info("🔧 OpenRouter disabled: OPENROUTER_API_KEY not set or empty")
+            return None
+        
+        try:
+            logger.info("🔧 OpenRouter enabled for AI content processing")
+            return OpenRouterClient(settings.openrouter_api_key)
+        except Exception as e:
+            logger.error(f"❌ Failed to initialize OpenRouter client: {e}")
+            return None
+
     def _is_valid_rss_url(self, url: str) -> bool:
         """Basic validation for RSS URL format."""
         import re
@@ -713,7 +739,7 @@ class NewsletterGenerator:
         processed_content = await self._process_content(content_items)
         
         # Step 2.5: Enhance content quality
-        enhanced_content = self._enhance_content_quality(processed_content)
+        enhanced_content = await self._enhance_content_quality(processed_content)
 
         # Step 3: Generate newsletter draft
         newsletter = await self._create_newsletter_draft(enhanced_content)
@@ -1040,7 +1066,7 @@ class NewsletterGenerator:
         }
         
         for item in content_items:
-            category = self._categorize_content(item)
+            category = await self._categorize_content(item)
             categorized_items[category].append(item)
         
         # Sort each category by date (newest first)
@@ -1063,8 +1089,8 @@ class NewsletterGenerator:
         final_items = sorted(final_items, key=lambda x: x.created_at or "", reverse=True)
         return final_items[:20]
     
-    def _enhance_content_quality(self, content_items: List[ContentItem]) -> List[ContentItem]:
-        """Enhance content quality by improving titles, sources, and filtering."""
+    async def _enhance_content_quality(self, content_items: List[ContentItem]) -> List[ContentItem]:
+        """Enhance content quality by improving titles, sources, and filtering with AI when available."""
         enhanced_items = []
         
         for item in content_items:
@@ -1074,11 +1100,22 @@ class NewsletterGenerator:
             # Improve source attribution
             enhanced_source = self._improve_source_attribution(item)
             
+            # Enhance content summary with AI if available
+            enhanced_content = item.content
+            if self.openrouter_client and len(item.content) > 200:
+                try:
+                    enhanced_content = await self.openrouter_client.enhance_content_summary(
+                        enhanced_title, item.content, max_length=150
+                    )
+                except Exception as e:
+                    logger.debug(f"AI content enhancement failed: {e}")
+                    enhanced_content = item.content
+            
             # Create enhanced item
             enhanced_item = ContentItem(
                 id=item.id,
                 title=enhanced_title,
-                content=item.content,
+                content=enhanced_content,
                 source=item.source,
                 url=item.url,
                 author=item.author or enhanced_source.get('author', ''),
