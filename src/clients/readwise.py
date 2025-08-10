@@ -166,13 +166,19 @@ class ReadwiseClient:
 
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, headers=self.headers) as response:
-                    if response.status == 200:
+                    # 200 = OK with content, 204 = OK no content (both valid for auth)
+                    if response.status in [200, 204]:
                         logger.info("Readwise API connection successful")
                         return True
                     else:
                         logger.error(
                             f"Readwise API connection failed: {response.status}"
                         )
+                        try:
+                            error_detail = await response.text()
+                            logger.error(f"Readwise error detail: {error_detail}")
+                        except Exception:
+                            pass
                         return False
 
         except Exception as e:
