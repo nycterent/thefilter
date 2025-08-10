@@ -75,12 +75,18 @@ class NewsletterGenerator:
         today = datetime.utcnow().strftime("%A, %B %d, %Y")
         out = []
         out.append(f"# THE FILTER\n*Curated Briefing \u2022 {today}*\n")
-        out.append("\n*Welcome to this week's curated briefing. In a **timeless minimalist** spirit, we distill the latest developments in technology, society, art, and business with precision and restraint. Expect a high-contrast mix of facts and a touch of commentary for reflection.*\n")
+        out.append(
+            "\n*Welcome to this week's curated briefing. In a **timeless minimalist** spirit, we distill the latest developments in technology, society, art, and business with precision and restraint. Expect a high-contrast mix of facts and a touch of commentary for reflection.*\n"
+        )
         out.append("\n## HEADLINES AT A GLANCE\n")
         out.append("| **TECHNOLOGY** | **SOCIETY** | **ART & MEDIA** | **BUSINESS** |")
         out.append("|:---------------|:------------|:----------------|:-------------|")
         for i in range(4):
-            tech = categories["technology"][i] if i < len(categories["technology"]) else None
+            tech = (
+                categories["technology"][i]
+                if i < len(categories["technology"])
+                else None
+            )
             soc = categories["society"][i] if i < len(categories["society"]) else None
             art = categories["art"][i] if i < len(categories["art"]) else None
             bus = categories["business"][i] if i < len(categories["business"]) else None
@@ -90,9 +96,12 @@ class NewsletterGenerator:
                     return ""
                 src = item.source_title or item.source or "Source Needed"
                 url = item.url or ""
-                content_clean = item.content[:80].replace('\n', ' ')
+                content_clean = item.content[:80].replace("\n", " ")
                 return f"**{item.title}** - {content_clean} [→ {src}]({url})"
-            out.append(f"| {headline(tech)} | {headline(soc)} | {headline(art)} | {headline(bus)} |")
+
+            out.append(
+                f"| {headline(tech)} | {headline(soc)} | {headline(art)} | {headline(bus)} |"
+            )
         out.append("\n---\n")
 
         # LEAD STORIES
@@ -100,7 +109,9 @@ class NewsletterGenerator:
         lead_tech = categories["technology"][0] if categories["technology"] else None
         lead_other = categories["society"][0] if categories["society"] else None
         out.append("| **QUANTUM COMPUTING BREAKTHROUGH** | **AI ASSISTANT DISASTER** |")
-        out.append("|:-----------------------------------|:---------------------------|")
+        out.append(
+            "|:-----------------------------------|:---------------------------|"
+        )
 
         def lead_story(item, cat):
             if not item:
@@ -110,21 +121,24 @@ class NewsletterGenerator:
             src = item.source_title or item.source or "Source Needed"
             summary = item.content[:300].replace("\n", " ")
             return f"![Image]({img}) | ![Image]({img})\n| **{item.title}** {summary} [→ {src}]({url}) | "
+
         out.append(lead_story(lead_tech, "technology"))
         out.append(lead_story(lead_other, "society"))
         out.append("\n---\n")
 
         # TECHNOLOGY DESK
         out.append("## TECHNOLOGY DESK\n")
-        tech3 = categories["technology"][2] if len(categories["technology"]) > 2 else None
-        tech4 = categories["technology"][3] if len(categories["technology"]) > 3 else None
+        tech3 = (
+            categories["technology"][2] if len(categories["technology"]) > 2 else None
+        )
+        tech4 = (
+            categories["technology"][3] if len(categories["technology"]) > 3 else None
+        )
         out.append("| **[TECH STORY 3]** | **[TECH STORY 4]** |")
         out.append("|:-------------------|:-------------------|")
         for item in [tech3, tech4]:
             img = get_unsplash_image("technology")
-            out.append(
-                f"![Image]({img}) | ![Image]({img})"
-            )
+            out.append(f"![Image]({img}) | ![Image]({img})")
         for item in [tech3, tech4]:
             if item:
                 url = item.url or ""
@@ -140,14 +154,19 @@ class NewsletterGenerator:
 
         # SOCIETY & POLITICS
         out.append("## SOCIETY & POLITICS\n")
-        soc_items = [categories["society"][i] if i < len(categories["society"]) else None for i in range(3)]
-        out.append("| **[SOCIETY STORY 1]** | **[SOCIETY STORY 2]** | **[SOCIETY STORY 3]** |")
-        out.append("|:----------------------|:----------------------|:----------------------|")
+        soc_items = [
+            categories["society"][i] if i < len(categories["society"]) else None
+            for i in range(3)
+        ]
+        out.append(
+            "| **[SOCIETY STORY 1]** | **[SOCIETY STORY 2]** | **[SOCIETY STORY 3]** |"
+        )
+        out.append(
+            "|:----------------------|:----------------------|:----------------------|"
+        )
         for item in soc_items:
             img = get_unsplash_image("society")
-            out.append(
-                f"![Image]({img}) | ![Image]({img}) | ![Image]({img})"
-            )
+            out.append(f"![Image]({img}) | ![Image]({img}) | ![Image]({img})")
         for item in soc_items:
             if item:
                 url = item.url or ""
@@ -169,9 +188,7 @@ class NewsletterGenerator:
         out.append("|:--------------|:--------------|:--------------|")
         for item in theme_items:
             img = get_unsplash_image("business")
-            out.append(
-                f"![Image]({img}) | | "
-            )
+            out.append(f"![Image]({img}) | | ")
         for item in theme_items:
             if item:
                 url = item.url or ""
@@ -184,14 +201,15 @@ class NewsletterGenerator:
 
         # ARTS & CULTURE
         out.append("## ARTS & CULTURE\n")
-        art_items = [categories["art"][i] if i < len(categories["art"]) else None for i in range(2)]
+        art_items = [
+            categories["art"][i] if i < len(categories["art"]) else None
+            for i in range(2)
+        ]
         out.append("| **[ART STORY 1]** | **[ART STORY 2]** |")
         out.append("|:------------------|:------------------|")
         for item in art_items:
             img = get_unsplash_image("art")
-            out.append(
-                f"![Image]({img}) | ![Image]({img})"
-            )
+            out.append(f"![Image]({img}) | ![Image]({img})")
         for item in art_items:
             if item:
                 url = item.url or ""
@@ -207,14 +225,15 @@ class NewsletterGenerator:
 
         # BUSINESS & ECONOMY
         out.append("## BUSINESS & ECONOMY\n")
-        bus_items = [categories["business"][i] if i < len(categories["business"]) else None for i in range(2)]
+        bus_items = [
+            categories["business"][i] if i < len(categories["business"]) else None
+            for i in range(2)
+        ]
         out.append("| **[BUSINESS STORY 1]** | **[BUSINESS STORY 2]** |")
         out.append("|:-----------------------|:-----------------------|")
         for item in bus_items:
             img = get_unsplash_image("business")
-            out.append(
-                f"![Image]({img}) | ![Image]({img})"
-            )
+            out.append(f"![Image]({img}) | ![Image]({img})")
         for item in bus_items:
             if item:
                 url = item.url or ""
@@ -232,11 +251,11 @@ class NewsletterGenerator:
         out.append("## SOURCES & ATTRIBUTION\n")
 
         def sources_line(cat):
-            srcs = [item.source_title or item.source for item in categories[cat] if item.url]
+            srcs = [
+                item.source_title or item.source for item in categories[cat] if item.url
+            ]
             urls = [item.url for item in categories[cat] if item.url]
-            return " • ".join(
-                [f"[{src}]({url})" for src, url in zip(srcs, urls)]
-            )
+            return " • ".join([f"[{src}]({url})" for src, url in zip(srcs, urls)])
 
         out.append(f"**Technology:** {sources_line('technology')}")
         out.append(f"\n**Society:** {sources_line('society')}")
@@ -316,6 +335,7 @@ class NewsletterGenerator:
         except Exception as e:
             logger.error(f"Error getting Glasp content: {e}")
             return []
+
     """Main newsletter generation orchestrator."""
 
     def __init__(self, settings: Settings):
@@ -332,8 +352,9 @@ class NewsletterGenerator:
         )
 
         self.glasp_client = (
-            __import__("src.clients.glasp", fromlist=["GlaspClient"])
-            .GlaspClient(settings.glasp_api_key)
+            __import__("src.clients.glasp", fromlist=["GlaspClient"]).GlaspClient(
+                settings.glasp_api_key
+            )
             if getattr(settings, "glasp_api_key", None)
             else None
         )
@@ -761,7 +782,7 @@ class NewsletterGenerator:
 
     async def test_connections(self) -> Dict[str, bool]:
         """Test connections to all configured services.
-            Dictionary of service connection statuses
+        Dictionary of service connection statuses
         """
         results = {}
 
