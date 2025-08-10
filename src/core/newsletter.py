@@ -438,25 +438,38 @@ class NewsletterGenerator:
             logger.warning("No content items to balance across categories")
             return
             
-        # Target: at least 2 items per category if we have 8+ items total
-        min_per_category = 2 if total_items >= 8 else 1
+        # Template requirements: technology(4), society(3), art(2), business(2) = 11 minimum
+        template_requirements = {
+            'technology': 4,  # Headlines + technology desk  
+            'society': 3,     # Society section
+            'art': 2,         # Arts section
+            'business': 2     # Business section
+        }
+        
+        # Scale down requirements if we don't have enough total items
+        total_required = sum(template_requirements.values())  # 11
+        if total_items < total_required:
+            scale_factor = total_items / total_required
+            for cat in template_requirements:
+                template_requirements[cat] = max(1, int(template_requirements[cat] * scale_factor))
+        
+        min_per_category = template_requirements
         
         # Find categories that need items
         categories_needing_items = []
         for cat, items in categories.items():
-            needed = max(0, min_per_category - len(items))
+            needed = max(0, min_per_category[cat] - len(items))
             if needed > 0:
                 categories_needing_items.extend([cat] * needed)
         
         if categories_needing_items:
-            # Find categories with excess items (more than target)
-            target_per_category = max(2, total_items // 4)  # Aim for roughly equal distribution
-            
+            # Find categories with excess items (more than their requirement)
             donor_items = []
             for cat, items in categories.items():
-                if len(items) > target_per_category:
+                required = min_per_category[cat]
+                if len(items) > required:
                     # Take excess items from over-populated categories
-                    excess = len(items) - target_per_category
+                    excess = len(items) - required
                     for _ in range(min(excess, len(categories_needing_items))):
                         if items:  # Safety check
                             donor_items.append((cat, items.pop()))
