@@ -974,15 +974,15 @@ class NewsletterGenerator:
             enhanced_source = self._improve_source_attribution(item)
             
             # Enhance content summary with AI if available
-            enhanced_content = item.content
-            if self.openrouter_client and len(item.content) > 200:
+            enhanced_content = self._improve_summary_quality(item.content, enhanced_title)
+            if self.openrouter_client and len(enhanced_content) > 200:
                 try:
                     enhanced_content = await self.openrouter_client.enhance_content_summary(
-                        enhanced_title, item.content, max_length=150
+                        enhanced_title, enhanced_content, max_length=160
                     )
                 except Exception as e:
                     logger.debug(f"AI content enhancement failed: {e}")
-                    enhanced_content = item.content
+                    # Keep our improved summary as fallback
             
             # Create enhanced item
             enhanced_item = ContentItem(
@@ -1220,6 +1220,91 @@ class NewsletterGenerator:
         except Exception as e:
             logger.debug(f"Error extracting source from URL {url}: {e}")
             return ""
+
+    def _improve_summary_quality(self, content: str, title: str) -> str:
+        """Improve summary quality through intelligent processing."""
+        if not content:
+            return ""
+        
+        # Handle list-based content (like ProductHacker)
+        if content.count('\n') > 3 and len(content) > 500:
+            return self._extract_key_points_summary(content, title)
+        
+        # Handle URL-heavy content
+        if content.startswith('https://') or content.startswith('http://'):
+            return self._extract_meaningful_content(content)
+        
+        # Handle social media link spam
+        if any(spam_word in content.lower()[:100] for spam_word in ['join', 'discord', 'instagram', 'patreon']):
+            return self._skip_social_links(content)
+        
+        # Ensure good sentence completion for truncation
+        return self._ensure_complete_sentences(content)
+    
+    def _extract_key_points_summary(self, content: str, title: str) -> str:
+        """Extract key points from list-heavy content."""
+        lines = [line.strip() for line in content.split('\n') if line.strip()]
+        
+        # Find meaningful content lines (not social links)
+        meaningful_lines = []
+        for line in lines:
+            if (not line.startswith('http') and 
+                not any(social in line.lower() for social in ['discord', 'instagram', 'patreon', 'join']) and
+                len(line) > 20 and
+                '–' in line):  # ProductHacker format
+                meaningful_lines.append(line)
+        
+        if meaningful_lines:
+            # Take first 2-3 meaningful lines
+            summary_lines = meaningful_lines[:2]
+            summary = ' • '.join(summary_lines)
+            return summary[:160] + "..." if len(summary) > 160 else summary
+        
+        # Fallback to first meaningful paragraph
+        for line in lines:
+            if len(line) > 50 and not line.startswith('http'):
+                return line[:160] + "..." if len(line) > 160 else line
+                
+        return content[:160]
+    
+    def _extract_meaningful_content(self, content: str) -> str:
+        """Extract meaningful content from URL-heavy text."""
+        lines = content.split('\n')
+        for line in lines:
+            line = line.strip()
+            if (len(line) > 30 and 
+                not line.startswith('http') and 
+                not line.startswith('www')):
+                return line[:160] + "..." if len(line) > 160 else line
+        return content[:160]
+    
+    def _skip_social_links(self, content: str) -> str:
+        """Skip social media links and find actual content."""
+        lines = content.split('\n')
+        for line in lines[3:]:  # Skip first few lines with social links
+            line = line.strip()
+            if (len(line) > 40 and 
+                not any(social in line.lower() for social in ['discord', 'instagram', 'patreon', 'twitter', 'facebook'])):
+                return line[:160] + "..." if len(line) > 160 else line
+        return content[:160]
+    
+    def _ensure_complete_sentences(self, content: str) -> str:
+        """Ensure summary ends at sentence boundary for better truncation."""
+        if len(content) <= 160:
+            return content
+            
+        # Find last complete sentence within 160 chars
+        truncated = content[:157]  # Leave room for "..."
+        last_period = truncated.rfind('.')
+        last_exclamation = truncated.rfind('!')
+        last_question = truncated.rfind('?')
+        
+        sentence_end = max(last_period, last_exclamation, last_question)
+        
+        if sentence_end > 80:  # Only use if we have substantial content
+            return content[:sentence_end + 1]
+        else:
+            return content[:160] + "..."
     
     def _meets_quality_standards(self, item: ContentItem) -> bool:
         """Check if content item meets minimum quality standards."""

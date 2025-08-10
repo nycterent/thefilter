@@ -31,7 +31,7 @@ class OpenRouterClient:
         self.default_model = "google/gemma-2-9b-it:free"  # Free Gemma model
 
     async def enhance_content_summary(
-        self, title: str, content: str, max_length: int = 150
+        self, title: str, content: str, max_length: int = 160
     ) -> str:
         """Enhance content summary using AI.
 
@@ -48,12 +48,12 @@ class OpenRouterClient:
             return content[:max_length]
 
         try:
-            prompt = f"""Summarize this content in a compelling, informative way. Keep it under {max_length} characters.
+            prompt = f"""Create an engaging, informative summary for a newsletter. Focus on WHY this matters to readers and what's interesting/surprising. Keep it under {max_length} characters and avoid starting with URLs or social links.
 
 Title: {title}
-Content: {content[:800]}
+Content: {content[:600]}
 
-Summary:"""
+Write a compelling summary that hooks the reader:"""
 
             response = await self._make_request(prompt, max_tokens=50)
             if response and "choices" in response and len(response["choices"]) > 0:
