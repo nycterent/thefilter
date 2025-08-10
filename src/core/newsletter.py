@@ -8,6 +8,7 @@ from typing import Dict, List
 from src.clients.openrouter import OpenRouterClient
 from src.clients.readwise import ReadwiseClient
 from src.clients.rss import RSSClient
+from src.clients.unsplash import UnsplashClient
 from src.models.content import ContentItem, NewsletterDraft
 from src.models.settings import Settings
 
@@ -46,25 +47,15 @@ class NewsletterGenerator:
         # Ensure balanced distribution across categories
         self._balance_categories(categories)
 
-        # Helper for Unsplash image
-        def get_unsplash_image(keywords: str) -> str:
-            # Get proper Unsplash image using API if available, fallback to curated images
-            if hasattr(self, "settings") and self.settings.unsplash_api_key:
-                # Use actual Unsplash API search
+        # Helper for dynamic Unsplash images
+        async def get_unsplash_image(category: str, topic_hint: str = "") -> str:
+            """Get dynamic image using Unsplash API or fallback to curated images."""
+            if self.unsplash_client:
                 try:
-                    import aiohttp
-
-                    # For now, use curated high-quality images with proper URLs
-                    curated_images = {
-                        "technology": "https://images.unsplash.com/photo-1518709268805-4e9042af2176?w=370&h=150&fit=crop&crop=entropy&auto=format&q=80",
-                        "society": "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=370&h=150&fit=crop&crop=entropy&auto=format&q=80",
-                        "art": "https://images.unsplash.com/photo-1541961017774-22349e4a1262?w=370&h=150&fit=crop&crop=entropy&auto=format&q=80",
-                        "business": "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=370&h=150&fit=crop&crop=entropy&auto=format&q=80",
-                    }
-                    return curated_images.get(keywords, curated_images["technology"])
-                except Exception:
-                    pass
-
+                    return await self.unsplash_client.get_category_image(category, topic_hint)
+                except Exception as e:
+                    logger.debug(f"Unsplash API failed, using fallback: {e}")
+            
             # Fallback to curated professional images
             curated_images = {
                 "technology": "https://images.unsplash.com/photo-1518709268805-4e9042af2176?w=370&h=150&fit=crop&crop=entropy&auto=format&q=80",
@@ -72,7 +63,7 @@ class NewsletterGenerator:
                 "art": "https://images.unsplash.com/photo-1541961017774-22349e4a1262?w=370&h=150&fit=crop&crop=entropy&auto=format&q=80",
                 "business": "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=370&h=150&fit=crop&crop=entropy&auto=format&q=80",
             }
-            return curated_images.get(keywords, curated_images["technology"])
+            return curated_images.get(category, curated_images["technology"])
 
         today = datetime.now(timezone.utc).strftime("%A, %B %d, %Y")
         out = []
@@ -128,17 +119,17 @@ class NewsletterGenerator:
             "|:-----------------------------------|:---------------------------|"
         )
 
-        def lead_story(item, cat):
+        async def lead_story(item, cat):
             if not item:
                 return " | "
-            img = get_unsplash_image(cat)
+            img = await get_unsplash_image(cat)
             url = item.url or ""
             src = item.source_title or item.source or "Source Needed"
             summary = item.content[:300].replace("\n", " ")
             return f"![Image]({img}) | ![Image]({img})\n| **{item.title}** {summary} [→ {src}]({url}) | "
 
-        out.append(lead_story(lead_tech, "technology"))
-        out.append(lead_story(lead_other, "society"))
+        out.append(await lead_story(lead_tech, "technology"))
+        out.append(await lead_story(lead_other, "society"))
         out.append("\n---\n")
 
         # TECHNOLOGY DESK
@@ -165,7 +156,7 @@ class NewsletterGenerator:
         out.append(f"| **{tech3_header.upper()}** | **{tech4_header.upper()}** |")
         out.append("|:-------------------|:-------------------|")
         for item in [tech3, tech4]:
-            img = get_unsplash_image("technology")
+            img = await get_unsplash_image("technology")
             out.append(f"![Image]({img}) | ![Image]({img})")
         # Generate content for each column separately
         if tech3:
@@ -208,7 +199,7 @@ class NewsletterGenerator:
             "|:----------------------|:----------------------|:----------------------|"
         )
         # Add images row (one row for all columns)
-        img = get_unsplash_image("society")
+        img = await get_unsplash_image("society")
         out.append(f"![Image]({img}) | ![Image]({img}) | ![Image]({img})")
         # Generate content for each column separately
         content_columns = []
@@ -251,7 +242,7 @@ class NewsletterGenerator:
         out.append(f"| {theme_headers[0]} | {theme_headers[1]} | {theme_headers[2]} |")
         out.append("|:--------------|:--------------|:--------------|")
         # Generate images row
-        img = get_unsplash_image("business")
+        img = await get_unsplash_image("business")
         out.append(f"![Image]({img}) | ![Image]({img}) | ![Image]({img})")
 
         # Generate content for each column separately
@@ -291,7 +282,7 @@ class NewsletterGenerator:
         out.append(f"| {art_headers[0]} | {art_headers[1]} |")
         out.append("|:------------------|:------------------|")
         # Add images row (one row for all columns)
-        img = get_unsplash_image("art")
+        img = await get_unsplash_image("art")
         out.append(f"![Image]({img}) | ![Image]({img})")
         # Generate content for each column separately
         art_content = []
@@ -326,7 +317,7 @@ class NewsletterGenerator:
         out.append(f"| {bus_headers[0]} | {bus_headers[1]} |")
         out.append("|:-----------------------|:-----------------------|")
         # Add images row (one row for all columns)
-        img = get_unsplash_image("business")
+        img = await get_unsplash_image("business")
         out.append(f"![Image]({img}) | ![Image]({img})")
         # Generate content for each column separately
         bus_content = []
@@ -582,6 +573,7 @@ class NewsletterGenerator:
         self.glasp_client = self._init_glasp_client(settings)
         self.rss_client = self._init_rss_client(settings)
         self.openrouter_client = self._init_openrouter_client(settings)
+        self.unsplash_client = self._init_unsplash_client(settings)
 
         # Log source configuration status
         logger.info("📋 Content source configuration:")
@@ -682,6 +674,19 @@ class NewsletterGenerator:
             return OpenRouterClient(settings.openrouter_api_key)
         except Exception as e:
             logger.error(f"❌ Failed to initialize OpenRouter client: {e}")
+            return None
+
+    def _init_unsplash_client(self, settings: Settings):
+        """Initialize Unsplash client with validation."""
+        if not settings.unsplash_api_key or not settings.unsplash_api_key.strip():
+            logger.info("🔧 Unsplash disabled: UNSPLASH_API_KEY not set or empty")
+            return None
+        
+        try:
+            logger.info("🔧 Unsplash enabled for dynamic newsletter images")
+            return UnsplashClient(settings.unsplash_api_key)
+        except Exception as e:
+            logger.error(f"❌ Failed to initialize Unsplash client: {e}")
             return None
 
     def _is_valid_rss_url(self, url: str) -> bool:
