@@ -81,7 +81,7 @@ class NewsletterGenerator:
         if len(top_stories) >= 2:
             intro_items = []
             for category, item in top_stories[:3]:  # Top 3 stories
-                src = item.source_title or item.source or "Unknown Source"
+                src = item.source_title or item.source or "Unknown"
                 intro_items.append(f"**{item.title}** from {src}")
             out.append(f"\n*Today's highlights: {' • '.join(intro_items)}*\n")
         
@@ -130,7 +130,7 @@ class NewsletterGenerator:
         for i, item in enumerate(tech_items):
             if item:
                 img = await get_unsplash_image("technology", item.title)
-                src = item.source_title or item.source or "Unknown Source"
+                src = item.source_title or item.source or "Unknown"
                 url = item.url or ""
                 summary = item.content[:150].replace("\n", " ")
                 
@@ -149,7 +149,7 @@ class NewsletterGenerator:
         for i, item in enumerate(soc_items):
             if item:
                 img = await get_unsplash_image("society", item.title)
-                src = item.source_title or item.source or "Unknown Source"
+                src = item.source_title or item.source or "Unknown"
                 url = item.url or ""
                 summary = item.content[:180].replace("\n", " ")
                 
@@ -168,7 +168,7 @@ class NewsletterGenerator:
         for item in art_items:
             if item:
                 img = await get_unsplash_image("art", item.title)
-                src = item.source_title or item.source or "Unknown Source"
+                src = item.source_title or item.source or "Unknown"
                 url = item.url or ""
                 summary = item.content[:150].replace("\n", " ")
                 
@@ -188,7 +188,7 @@ class NewsletterGenerator:
         for item in bus_items:
             if item:
                 img = await get_unsplash_image("business", item.title)
-                src = item.source_title or item.source or "Unknown Source"
+                src = item.source_title or item.source or "Unknown"
                 url = item.url or ""
                 summary = item.content[:150].replace("\n", " ")
                 
@@ -205,11 +205,19 @@ class NewsletterGenerator:
         out.append("## SOURCES & ATTRIBUTION\n")
 
         def sources_line(cat):
-            # Collect unique sources to avoid repetition
+            # Collect unique sources to avoid repetition, but only include items with valid URLs and sources
             source_map = {}
             for item in categories[cat]:
-                if item.url:
-                    src_name = item.source_title or item.source or "Unknown Source"
+                if item.url and str(item.url).startswith(('http://', 'https://')):
+                    src_name = item.source_title or item.source
+                    # Skip if source name is missing or generic
+                    if not src_name or src_name in ['Unknown', 'Unknown Source', 'readwise', 'rss', 'glasp']:
+                        # Try to extract source from URL instead
+                        if hasattr(self, '_extract_source_from_url'):
+                            src_name = self._extract_source_from_url(str(item.url))
+                        if not src_name:
+                            continue  # Skip items without identifiable sources
+                    
                     # For RSS feeds with same source name, use article title as differentiator
                     if src_name in source_map and item.source == "rss":
                         # Create shorter, more specific name from article title
@@ -223,7 +231,10 @@ class NewsletterGenerator:
                         source_key = src_name
                     source_map[source_key] = item.url
 
-            return " • ".join([f"[{src}]({url})" for src, url in source_map.items()])
+            if not source_map:
+                return "*No valid sources with URLs available for this section*"
+            
+            return " • ".join([f"[{src}]({url})" for src, url in source_map.items()][:5])  # Limit to 5 sources per section
 
         out.append(f"**Technology:** {sources_line('technology')}")
         out.append(f"\n**Society:** {sources_line('society')}")
@@ -250,14 +261,16 @@ class NewsletterGenerator:
         # Fallback to keyword-based categorization
         tags_lower = [tag.lower() for tag in item.tags]
         
-        # Technology keywords
+        # Technology keywords (including pure science/physics)
         tech_keywords = ['technology', 'tech', 'ai', 'artificial intelligence', 'machine learning', 
                         'software', 'computer', 'digital', 'internet', 'data', 'algorithm',
-                        'programming', 'code', 'cybersecurity', 'blockchain', 'crypto']
+                        'programming', 'code', 'cybersecurity', 'blockchain', 'crypto',
+                        'quantum', 'physics', 'science', 'research', 'discovery', 'experiment']
         
-        # Society keywords  
+        # Society keywords (explicitly exclude pure science/physics)  
         society_keywords = ['politics', 'government', 'policy', 'law', 'society', 'social',
-                           'democracy', 'election', 'war', 'conflict', 'human rights', 'justice']
+                           'democracy', 'election', 'war', 'conflict', 'human rights', 'justice',
+                           'community', 'culture', 'education', 'healthcare', 'environment']
         
         # Art keywords
         art_keywords = ['art', 'culture', 'media', 'film', 'music', 'book', 'literature',
@@ -613,9 +626,12 @@ class NewsletterGenerator:
         
         # Step 2.5: Enhance content quality
         enhanced_content = await self._enhance_content_quality(processed_content)
+        
+        # Step 2.7: Filter for content diversity to prevent repetitive themes
+        diverse_content = self._ensure_content_diversity(enhanced_content)
 
         # Step 3: Generate newsletter draft
-        newsletter = await self._create_newsletter_draft(enhanced_content)
+        newsletter = await self._create_newsletter_draft(diverse_content)
 
         # Step 4: Publish (if not dry run)
         if not dry_run and self.settings.buttondown_api_key:
@@ -764,6 +780,10 @@ class NewsletterGenerator:
                         # Ensure it's a valid URL format
                         if not clean_url.startswith(('http://', 'https://')):
                             clean_url = None
+                    
+                    # Debug URL issues
+                    if not clean_url:
+                        logger.debug(f"Invalid/missing URL for '{title[:50]}...': '{url}'") 
                     
                     # Create content from summary or metadata
                     content_parts = []
@@ -1190,6 +1210,11 @@ class NewsletterGenerator:
                 'anthropic': 'Anthropic',
                 'google': 'Google',
                 'microsoft': 'Microsoft',
+                'producthacker': 'ProductHacker',
+                'pragmaticengineer': 'The Pragmatic Engineer',
+                'newsletter': 'Newsletter',
+                'blog': 'Blog',
+                'news': 'News',
                 'apple': 'Apple',
                 'meta': 'Meta',
                 'stripe': 'Stripe',
@@ -1220,6 +1245,58 @@ class NewsletterGenerator:
         except Exception as e:
             logger.debug(f"Error extracting source from URL {url}: {e}")
             return ""
+    
+    def _ensure_content_diversity(self, content_items: List[ContentItem]) -> List[ContentItem]:
+        """Filter content to ensure diversity and prevent repetitive themes."""
+        if len(content_items) <= 10:
+            return content_items  # Too few items to filter
+        
+        # Group content by similar themes using title/content analysis
+        diverse_items = []
+        
+        # Common words to ignore when detecting similarity
+        stopwords = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'is', 'are', 'was', 'were', 'be', 'been', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should'}
+        
+        for item in content_items:
+            # Extract key theme words from title and content
+            title_words = set(word.lower().strip('.,!?()[]{}"') 
+                            for word in item.title.split() 
+                            if len(word) > 3 and word.lower() not in stopwords)
+            content_words = set(word.lower().strip('.,!?()[]{}"') 
+                              for word in item.content.split()[:50]  # First 50 words
+                              if len(word) > 4 and word.lower() not in stopwords)
+            
+            key_theme_words = (title_words | content_words)
+            
+            # Check if this item is too similar to already selected items
+            is_similar = False
+            for existing_item in diverse_items[-5:]:  # Check last 5 items for similarity
+                existing_title_words = set(word.lower().strip('.,!?()[]{}"') 
+                                         for word in existing_item.title.split() 
+                                         if len(word) > 3 and word.lower() not in stopwords)
+                existing_content_words = set(word.lower().strip('.,!?()[]{}"') 
+                                           for word in existing_item.content.split()[:50]
+                                           if len(word) > 4 and word.lower() not in stopwords)
+                existing_theme_words = existing_title_words | existing_content_words
+                
+                # Calculate similarity score
+                common_words = key_theme_words & existing_theme_words
+                total_words = len(key_theme_words | existing_theme_words)
+                
+                if total_words > 0:
+                    similarity = len(common_words) / total_words
+                    
+                    # If more than 40% similarity in key words, consider too similar
+                    if similarity > 0.4:
+                        logger.debug(f"Filtering similar content: '{item.title[:50]}...' similar to '{existing_item.title[:50]}...' (similarity: {similarity:.2f})")
+                        is_similar = True
+                        break
+            
+            if not is_similar:
+                diverse_items.append(item)
+        
+        logger.info(f"Content diversity filter: {len(content_items)} -> {len(diverse_items)} items (removed {len(content_items) - len(diverse_items)} similar items)")
+        return diverse_items
 
     def _improve_summary_quality(self, content: str, title: str) -> str:
         """Improve summary quality through intelligent processing."""
