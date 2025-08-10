@@ -465,9 +465,11 @@ class NewsletterGenerator:
             settings: Application settings with API keys
         """
         self.settings = settings
+
+        # Initialize content source clients only when API keys are provided
         self.readwise_client = (
             ReadwiseClient(settings.readwise_api_key)
-            if settings.readwise_api_key
+            if settings.readwise_api_key and settings.readwise_api_key.strip()
             else None
         )
 
@@ -475,17 +477,50 @@ class NewsletterGenerator:
             __import__("src.clients.glasp", fromlist=["GlaspClient"]).GlaspClient(
                 settings.glasp_api_key
             )
-            if getattr(settings, "glasp_api_key", None)
+            if settings.glasp_api_key and settings.glasp_api_key.strip()
             else None
         )
 
         # Parse RSS feeds from comma-separated string
         rss_feeds = []
-        if settings.rss_feeds:
+        if settings.rss_feeds and settings.rss_feeds.strip():
             rss_feeds = [
                 url.strip() for url in settings.rss_feeds.split(",") if url.strip()
             ]
         self.rss_client = RSSClient(rss_feeds) if rss_feeds else None
+
+        # Log source configuration status
+        logger.info("📋 Content source configuration:")
+        logger.info(
+            f"   - Readwise: {'✅ Enabled' if self.readwise_client else '❌ Disabled (no API key)'}"
+        )
+        logger.info(
+            f"   - Glasp: {'✅ Enabled' if self.glasp_client else '❌ Disabled (no API key)'}"
+        )
+        logger.info(
+            f"   - RSS Feeds: {'✅ Enabled' if self.rss_client else '❌ Disabled (no feeds configured)'}"
+        )
+
+        # Validate that at least one source is available
+        active_sources = sum(
+            [
+                1
+                for client in [self.readwise_client, self.glasp_client, self.rss_client]
+                if client is not None
+            ]
+        )
+
+        if active_sources == 0:
+            logger.error(
+                "🚨 No content sources configured! Newsletter generation will fail."
+            )
+            logger.error(
+                "Please set at least one of: READWISE_API_KEY, GLASP_API_KEY, RSS_FEEDS"
+            )
+        else:
+            logger.info(
+                f"✅ {active_sources} content source(s) configured successfully"
+            )
 
     async def generate_newsletter(self, dry_run: bool = False) -> NewsletterDraft:
         """Generate a complete newsletter.
@@ -497,6 +532,26 @@ class NewsletterGenerator:
             Generated newsletter draft
         """
         logger.info(f"Starting newsletter generation (dry_run={dry_run})")
+
+        # Check if we have any configured sources before proceeding
+        active_sources = sum(
+            [
+                1
+                for client in [self.readwise_client, self.glasp_client, self.rss_client]
+                if client is not None
+            ]
+        )
+
+        if active_sources == 0:
+            logger.error(
+                "🚨 Cannot generate newsletter: No content sources are configured!"
+            )
+            return NewsletterDraft(
+                title="Configuration Error",
+                content="Newsletter generation failed: No content sources configured. Please set at least one of: READWISE_API_KEY, GLASP_API_KEY, or RSS_FEEDS.",
+                items=[],
+                created_at=datetime.now(timezone.utc),
+            )
 
         # Step 1: Aggregate content from all sources
         content_items = await self._aggregate_content()
