@@ -77,6 +77,14 @@ class ReadwiseClient:
 
                         # Process highlights
                         for highlight in page_highlights:
+                            # Handle date fields properly - prefer updated_at if created_at is missing
+                            created_at = highlight.get("created_at") or highlight.get(
+                                "updated_at"
+                            )
+                            updated_at = highlight.get("updated_at") or highlight.get(
+                                "created_at"
+                            )
+
                             processed_highlight = {
                                 "id": highlight.get("id"),
                                 "title": (
@@ -91,8 +99,8 @@ class ReadwiseClient:
                                 "author": highlight.get("author", "Unknown"),
                                 "url": highlight.get("source_url"),
                                 "tags": highlight.get("tags", []),
-                                "created_at": highlight.get("created_at"),
-                                "updated_at": highlight.get("updated_at"),
+                                "created_at": created_at,
+                                "updated_at": updated_at,
                                 "location": highlight.get("location"),
                                 "location_type": highlight.get("location_type"),
                             }

@@ -33,9 +33,25 @@ class GlaspClient:
                 ) as response:
                     if response.status != 200:
                         error_detail = await response.text()
-                        logger.error(
-                            f"Glasp API error: {response.status} - {error_detail}"
-                        )
+                        # Check if this is a Cloudflare blocking page
+                        if (
+                            "cloudflare" in error_detail.lower()
+                            and response.status == 403
+                        ):
+                            logger.warning(
+                                f"Glasp API blocked by Cloudflare (status {response.status}). "
+                                "This may be due to automated access restrictions."
+                            )
+                        else:
+                            # For other errors, show limited detail
+                            short_detail = (
+                                error_detail[:200] + "..."
+                                if len(error_detail) > 200
+                                else error_detail
+                            )
+                            logger.error(
+                                f"Glasp API error: {response.status} - {short_detail}"
+                            )
                         return []
                     data = await response.json()
                     return data.get("results", [])

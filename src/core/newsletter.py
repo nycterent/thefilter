@@ -620,6 +620,7 @@ class NewsletterGenerator:
             highlights = await self.readwise_client.get_recent_highlights(days=7)
 
             content_items = []
+            missing_dates_count = 0
             for highlight in highlights:
                 created_at_raw = highlight.get("created_at")
                 created_at = None
@@ -630,15 +631,12 @@ class NewsletterGenerator:
                             created_at_raw.replace("Z", "+00:00")
                         )
                     except Exception as dt_err:
-                        logger.warning(
+                        logger.debug(
                             f"Invalid created_at for highlight {highlight.get('id')}: "
                             f"{created_at_raw} ({dt_err})"
                         )
                 if not created_at:
-                    logger.info(
-                        f"Highlight {highlight.get('id')} missing or invalid date."
-                    )
-                    logger.info("Using now() as fallback.")
+                    missing_dates_count += 1
                     created_at = datetime.now(timezone.utc)
                 if created_at.tzinfo is None:
                     created_at = created_at.replace(tzinfo=timezone.utc)
@@ -669,6 +667,10 @@ class NewsletterGenerator:
                     continue
 
             logger.info(f"Retrieved {len(content_items)} valid items from Readwise")
+            if missing_dates_count > 0:
+                logger.info(
+                    f"Note: {missing_dates_count} highlights had missing dates (using current timestamp)"
+                )
             return content_items
 
         except Exception as e:
