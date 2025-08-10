@@ -47,9 +47,9 @@ jobs:
       run: |
         echo "🔍 Running health check..."
         if [[ "${{ inputs.debug }}" == "true" ]]; then
-          python -m src.newsletter_bot --debug health
+          python -m src.newsletter_bot --debug health || exit 1
         else
-          python -m src.newsletter_bot health
+          python -m src.newsletter_bot health || exit 1
         fi
       env:
         READWISE_API_KEY: ${{ secrets.READWISE_API_KEY }}
@@ -64,9 +64,9 @@ jobs:
       run: |
         echo "📋 Showing configuration (without sensitive values)..."
         if [[ "${{ inputs.debug }}" == "true" ]]; then
-          python -m src.newsletter_bot --debug config
+          python -m src.newsletter_bot --debug config || exit 1
         else
-          python -m src.newsletter_bot config
+          python -m src.newsletter_bot config || exit 1
         fi
       env:
         READWISE_API_KEY: ${{ secrets.READWISE_API_KEY }}
@@ -81,9 +81,9 @@ jobs:
       run: |
         echo "🧪 Running newsletter generation in dry-run mode..."
         if [[ "${{ inputs.debug }}" == "true" ]]; then
-          python -m src.newsletter_bot --debug generate --dry-run
+          python -m src.newsletter_bot --debug generate --dry-run || exit 1
         else
-          python -m src.newsletter_bot generate --dry-run
+          python -m src.newsletter_bot generate --dry-run || exit 1
         fi
       env:
         READWISE_API_KEY: ${{ secrets.READWISE_API_KEY }}
@@ -99,9 +99,9 @@ jobs:
         echo "📧 Running newsletter generation in PRODUCTION mode..."
         echo "⚠️  This will create and publish an actual newsletter!"
         if [[ "${{ inputs.debug }}" == "true" ]]; then
-          python -m src.newsletter_bot --debug generate
+          python -m src.newsletter_bot --debug generate || exit 1
         else
-          python -m src.newsletter_bot generate
+          python -m src.newsletter_bot generate || exit 1
         fi
       env:
         READWISE_API_KEY: ${{ secrets.READWISE_API_KEY }}

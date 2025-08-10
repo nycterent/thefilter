@@ -90,7 +90,8 @@ class NewsletterGenerator:
                     return ""
                 src = item.source_title or item.source or "Source Needed"
                 url = item.url or ""
-                return f"**{item.title}** - {item.content[:80].replace('\n', ' ')} [→ {src}]({url})"
+                content_clean = item.content[:80].replace('\n', ' ')
+                return f"**{item.title}** - {content_clean} [→ {src}]({url})"
             out.append(f"| {headline(tech)} | {headline(soc)} | {headline(art)} | {headline(bus)} |")
         out.append("\n---\n")
 

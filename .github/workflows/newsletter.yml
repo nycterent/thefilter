@@ -47,8 +47,14 @@ jobs:
       id: health_check
       run: |
         echo "Running health check..."
-        python -m src.newsletter_bot health
-        echo "health_status=healthy" >> $GITHUB_OUTPUT
+        if python -m src.newsletter_bot health; then
+          echo "health_status=healthy" >> $GITHUB_OUTPUT
+          echo "Health check passed"
+        else
+          echo "health_status=unhealthy" >> $GITHUB_OUTPUT
+          echo "Health check failed"
+          exit 1
+        fi
       env:
         READWISE_API_KEY: ${{ secrets.READWISE_API_KEY }}
         GLASP_API_KEY: ${{ secrets.GLASP_API_KEY }}
@@ -56,7 +62,6 @@ jobs:
         BUTTONDOWN_API_KEY: ${{ secrets.BUTTONDOWN_API_KEY }}
         OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         UNSPLASH_API_KEY: ${{ secrets.UNSPLASH_API_KEY }}
-      continue-on-error: true
     
     - name: Generate newsletter
       id: generate
@@ -79,14 +84,13 @@ jobs:
         if $CMD > newsletter_output.log 2>&1; then
           echo "generation_status=success" >> $GITHUB_OUTPUT
           echo "Newsletter generation completed successfully"
+          echo "output_file=newsletter_output.log" >> $GITHUB_OUTPUT
         else
           echo "generation_status=failed" >> $GITHUB_OUTPUT
           echo "Newsletter generation failed"
+          echo "output_file=newsletter_output.log" >> $GITHUB_OUTPUT
           exit 1
         fi
-        
-        # Store output for later use
-        echo "output_file=newsletter_output.log" >> $GITHUB_OUTPUT
       env:
         READWISE_API_KEY: ${{ secrets.READWISE_API_KEY }}
         GLASP_API_KEY: ${{ secrets.GLASP_API_KEY }}
@@ -94,7 +98,6 @@ jobs:
         BUTTONDOWN_API_KEY: ${{ secrets.BUTTONDOWN_API_KEY }}
         OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         UNSPLASH_API_KEY: ${{ secrets.UNSPLASH_API_KEY }}
-      continue-on-error: true
     
     - name: Upload newsletter output
       uses: actions/upload-artifact@v3
@@ -141,7 +144,7 @@ jobs:
           });
     
     - name: Create failure issue
-      if: steps.generate.outputs.generation_status == 'failed' || steps.health_check.outputs.health_status != 'healthy'
+      if: failure() || steps.generate.outputs.generation_status == 'failed' || steps.health_check.outputs.health_status == 'unhealthy'
       uses: actions/github-script@v7
       with:
         script: |
