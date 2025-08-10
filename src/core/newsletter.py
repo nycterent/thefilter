@@ -38,24 +38,12 @@ class NewsletterGenerator:
             "business": [],
         }
         for item in items:
-            cats = [t.lower() for t in item.tags]
-            # Heuristic: tag/category mapping
-            if "tech" in cats or "technology" in cats:
-                categories["technology"].append(item)
-            elif "society" in cats or "politics" in cats:
-                categories["society"].append(item)
-            elif "art" in cats or "media" in cats or "culture" in cats:
-                categories["art"].append(item)
-            elif "business" in cats or "economy" in cats:
-                categories["business"].append(item)
-            else:
-                # Fallback: assign by source
-                if item.source in ["readwise", "glasp"]:
-                    categories["technology"].append(item)
-                elif item.source == "rss":
-                    categories["society"].append(item)
-                else:
-                    categories["business"].append(item)
+            # Improved categorization using multiple signals
+            category = self._categorize_content(item)
+            categories[category].append(item)
+
+        # Ensure balanced distribution across categories
+        self._balance_categories(categories)
 
         # Helper for Unsplash image
         def get_unsplash_image(keywords: str) -> str:
@@ -386,6 +374,80 @@ class NewsletterGenerator:
         )
         return "\n".join(out)
 
+    def _categorize_content(self, item: ContentItem) -> str:
+        """Intelligently categorize content based on multiple signals."""
+        # Check tags first
+        tags_lower = [tag.lower() for tag in item.tags]
+        
+        # Technology keywords
+        tech_keywords = ['technology', 'tech', 'ai', 'artificial intelligence', 'machine learning', 
+                        'software', 'computer', 'digital', 'internet', 'data', 'algorithm',
+                        'programming', 'code', 'cybersecurity', 'blockchain', 'crypto']
+        
+        # Society keywords  
+        society_keywords = ['politics', 'government', 'policy', 'law', 'society', 'social',
+                           'democracy', 'election', 'war', 'conflict', 'human rights', 'justice']
+        
+        # Art keywords
+        art_keywords = ['art', 'culture', 'media', 'film', 'music', 'book', 'literature',
+                       'design', 'creative', 'artist', 'entertainment', 'museum']
+        
+        # Business keywords
+        business_keywords = ['business', 'economy', 'economic', 'finance', 'market', 'company',
+                            'startup', 'investment', 'money', 'trade', 'commerce', 'industry']
+        
+        # Check content and title for keywords
+        content_text = f"{item.title} {item.content}".lower()
+        
+        # Count keyword matches
+        tech_score = sum(1 for keyword in tech_keywords if keyword in content_text)
+        society_score = sum(1 for keyword in society_keywords if keyword in content_text)
+        art_score = sum(1 for keyword in art_keywords if keyword in content_text)
+        business_score = sum(1 for keyword in business_keywords if keyword in content_text)
+        
+        # Add tag-based scoring
+        tech_score += sum(1 for tag in tags_lower if any(kw in tag for kw in tech_keywords))
+        society_score += sum(1 for tag in tags_lower if any(kw in tag for kw in society_keywords))
+        art_score += sum(1 for tag in tags_lower if any(kw in tag for kw in art_keywords))
+        business_score += sum(1 for tag in tags_lower if any(kw in tag for kw in business_keywords))
+        
+        # Determine category based on highest score
+        scores = {
+            'technology': tech_score,
+            'society': society_score, 
+            'art': art_score,
+            'business': business_score
+        }
+        
+        best_category = max(scores, key=scores.get)
+        
+        # If no clear winner (all scores 0), use source-based fallback
+        if scores[best_category] == 0:
+            if item.source in ["readwise", "glasp"]:
+                return "technology"
+            else:
+                return "society"
+                
+        return best_category
+    
+    def _balance_categories(self, categories: dict) -> None:
+        """Ensure balanced distribution of content across categories."""
+        # If any category is completely empty, redistribute from the largest category
+        empty_categories = [cat for cat, items in categories.items() if len(items) == 0]
+        
+        if empty_categories:
+            # Find category with most items
+            largest_cat = max(categories, key=lambda x: len(categories[x]))
+            largest_items = categories[largest_cat]
+            
+            if len(largest_items) >= len(empty_categories):
+                # Redistribute items to empty categories
+                for i, empty_cat in enumerate(empty_categories):
+                    if i < len(largest_items):
+                        item_to_move = largest_items.pop()
+                        categories[empty_cat].append(item_to_move)
+                        logger.debug(f"Rebalanced: moved item to {empty_cat} from {largest_cat}")
+
     async def _generate_simple_newsletter(self, items: List[ContentItem]) -> str:
         """Legacy fallback: simple grouping by source."""
         sections = []
@@ -466,28 +528,10 @@ class NewsletterGenerator:
         """
         self.settings = settings
 
-        # Initialize content source clients only when API keys are provided
-        self.readwise_client = (
-            ReadwiseClient(settings.readwise_api_key)
-            if settings.readwise_api_key and settings.readwise_api_key.strip()
-            else None
-        )
-
-        self.glasp_client = (
-            __import__("src.clients.glasp", fromlist=["GlaspClient"]).GlaspClient(
-                settings.glasp_api_key
-            )
-            if settings.glasp_api_key and settings.glasp_api_key.strip()
-            else None
-        )
-
-        # Parse RSS feeds from comma-separated string
-        rss_feeds = []
-        if settings.rss_feeds and settings.rss_feeds.strip():
-            rss_feeds = [
-                url.strip() for url in settings.rss_feeds.split(",") if url.strip()
-            ]
-        self.rss_client = RSSClient(rss_feeds) if rss_feeds else None
+        # Initialize content source clients with validation
+        self.readwise_client = self._init_readwise_client(settings)
+        self.glasp_client = self._init_glasp_client(settings)
+        self.rss_client = self._init_rss_client(settings)
 
         # Log source configuration status
         logger.info("📋 Content source configuration:")
@@ -512,15 +556,76 @@ class NewsletterGenerator:
 
         if active_sources == 0:
             logger.error(
-                "🚨 No content sources configured! Newsletter generation will fail."
+                "🚨 FATAL: No content sources configured! Newsletter generation cannot proceed."
             )
             logger.error(
                 "Please set at least one of: READWISE_API_KEY, GLASP_API_KEY, RSS_FEEDS"
+            )
+            raise ValueError(
+                "No content sources available. Please configure at least one API key or RSS feed."
             )
         else:
             logger.info(
                 f"✅ {active_sources} content source(s) configured successfully"
             )
+
+    def _init_readwise_client(self, settings: Settings):
+        """Initialize Readwise client with validation."""
+        if not settings.readwise_api_key or not settings.readwise_api_key.strip():
+            logger.info("🔧 Readwise disabled: READWISE_API_KEY not set or empty")
+            return None
+        
+        try:
+            return ReadwiseClient(settings.readwise_api_key.strip())
+        except Exception as e:
+            logger.error(f"❌ Failed to initialize Readwise client: {e}")
+            return None
+
+    def _init_glasp_client(self, settings: Settings):
+        """Initialize Glasp client with validation."""
+        if not settings.glasp_api_key or not settings.glasp_api_key.strip():
+            logger.info("🔧 Glasp disabled: GLASP_API_KEY not set or empty")
+            return None
+        
+        try:
+            GlaspClient = __import__("src.clients.glasp", fromlist=["GlaspClient"]).GlaspClient
+            return GlaspClient(settings.glasp_api_key.strip())
+        except Exception as e:
+            logger.error(f"❌ Failed to initialize Glasp client: {e}")
+            return None
+
+    def _init_rss_client(self, settings: Settings):
+        """Initialize RSS client with validation."""
+        if not settings.rss_feeds or not settings.rss_feeds.strip():
+            logger.info("🔧 RSS disabled: RSS_FEEDS not set or empty")
+            return None
+        
+        # Parse and validate RSS feeds
+        rss_feeds = []
+        for url in settings.rss_feeds.split(","):
+            url = url.strip()
+            if url:
+                if self._is_valid_rss_url(url):
+                    rss_feeds.append(url)
+                else:
+                    logger.warning(f"⚠️ Invalid RSS URL skipped: {url}")
+        
+        if not rss_feeds:
+            logger.warning("🔧 RSS disabled: No valid RSS feed URLs found")
+            return None
+        
+        try:
+            logger.info(f"🔧 RSS enabled with {len(rss_feeds)} feed(s)")
+            return RSSClient(rss_feeds)
+        except Exception as e:
+            logger.error(f"❌ Failed to initialize RSS client: {e}")
+            return None
+
+    def _is_valid_rss_url(self, url: str) -> bool:
+        """Basic validation for RSS URL format."""
+        import re
+        url_pattern = r'^https?://[^\s/$.?#].[^\s]*$'
+        return bool(re.match(url_pattern, url))
 
     async def generate_newsletter(self, dry_run: bool = False) -> NewsletterDraft:
         """Generate a complete newsletter.
@@ -569,9 +674,12 @@ class NewsletterGenerator:
 
         # Step 2: Process and organize content
         processed_content = await self._process_content(content_items)
+        
+        # Step 2.5: Enhance content quality
+        enhanced_content = self._enhance_content_quality(processed_content)
 
         # Step 3: Generate newsletter draft
-        newsletter = await self._create_newsletter_draft(processed_content)
+        newsletter = await self._create_newsletter_draft(enhanced_content)
 
         # Step 4: Publish (if not dry run)
         if not dry_run and self.settings.buttondown_api_key:
@@ -853,6 +961,247 @@ class NewsletterGenerator:
 
         # Limit to top 20 items to keep newsletter manageable
         return processed_items[:20]
+    
+    def _enhance_content_quality(self, content_items: List[ContentItem]) -> List[ContentItem]:
+        """Enhance content quality by improving titles, sources, and filtering."""
+        enhanced_items = []
+        
+        for item in content_items:
+            # Extract better title from content if current title is generic
+            enhanced_title = self._extract_better_title(item)
+            
+            # Improve source attribution
+            enhanced_source = self._improve_source_attribution(item)
+            
+            # Create enhanced item
+            enhanced_item = ContentItem(
+                id=item.id,
+                title=enhanced_title,
+                content=item.content,
+                source=item.source,
+                url=item.url,
+                author=item.author or enhanced_source.get('author', ''),
+                source_title=enhanced_source.get('source_title', item.source_title),
+                tags=item.tags,
+                created_at=item.created_at,
+                metadata=item.metadata
+            )
+            
+            # Only include items with sufficient quality
+            if self._meets_quality_standards(enhanced_item):
+                enhanced_items.append(enhanced_item)
+            else:
+                logger.debug(f"Filtered out low-quality item: {enhanced_title[:50]}...")
+        
+        logger.info(f"Enhanced and filtered content: {len(enhanced_items)}/{len(content_items)} items passed quality check")
+        return enhanced_items
+    
+    def _extract_better_title(self, item: ContentItem) -> str:
+        """Extract a better title from content if the current one is generic."""
+        import re
+        current_title = item.title.strip()
+        
+        # Skip if title is already meaningful
+        if self._is_meaningful_title(current_title):
+            return current_title
+            
+        # Try to extract better title from content
+        if not item.content or len(item.content) < 30:
+            return current_title
+            
+        # Look for potential titles in content
+        better_title = self._find_title_in_content(item.content)
+        if better_title:
+            logger.debug(f"Improved title: '{current_title}' -> '{better_title}'")
+            return better_title
+            
+        return current_title
+
+    def _is_meaningful_title(self, title: str) -> bool:
+        """Check if a title is meaningful and specific."""
+        if len(title) < 10:
+            return False
+            
+        # Generic patterns that indicate a poor title
+        import re
+        generic_patterns = [
+            r'.*featured article.*',
+            r'untitled.*',
+            r'^(article|post|highlight|note)\s*\d*$',
+            r'^\w+\s+\d+\s*$',  # Date-based titles
+            r'^(the|a|an)\s+\w+\s+\d+$'  # "The January 5" type titles
+        ]
+        
+        return not any(re.match(pattern, title.lower()) for pattern in generic_patterns)
+        
+    def _find_title_in_content(self, content: str) -> str:
+        """Find a good title within content text."""
+        import re
+        
+        # Try different strategies to find a good title
+        strategies = [
+            self._extract_from_sentences,
+            self._extract_from_first_line,
+            self._extract_from_capitalized_phrases
+        ]
+        
+        for strategy in strategies:
+            title = strategy(content)
+            if title and self._is_good_extracted_title(title):
+                return title[:80]  # Limit length
+                
+        return ""
+        
+    def _extract_from_sentences(self, content: str) -> str:
+        """Extract title from well-formed sentences."""
+        import re
+        sentences = re.split(r'[.!?]\s+', content[:500])
+        
+        for sentence in sentences[:3]:
+            sentence = sentence.strip()
+            if 15 <= len(sentence) <= 100 and self._looks_like_title(sentence):
+                return sentence
+        return ""
+        
+    def _extract_from_first_line(self, content: str) -> str:
+        """Extract title from first content line."""
+        lines = content.strip().split('\n')
+        if lines:
+            first_line = lines[0].strip()
+            if 10 <= len(first_line) <= 100 and self._looks_like_title(first_line):
+                return first_line
+        return ""
+        
+    def _extract_from_capitalized_phrases(self, content: str) -> str:
+        """Extract title from capitalized phrases."""
+        import re
+        # Look for phrases that start with capital and have good length
+        words = content.split()[:15]
+        if len(words) >= 4:
+            phrase = ' '.join(words)
+            if phrase and phrase[0].isupper():
+                return phrase + "..."
+        return ""
+        
+    def _looks_like_title(self, text: str) -> bool:
+        """Check if text looks like it could be a good title."""
+        import re
+        return (
+            text[0].isupper() and
+            not text.lower().startswith(('this', 'that', 'it', 'in', 'on', 'at', 'the', 'a', 'an')) and
+            not text.endswith((':')) and
+            not re.match(r'^https?://', text.lower()) and
+            len([c for c in text if c.isupper()]) >= 2  # Has some capitalization
+        )
+        
+    def _is_good_extracted_title(self, title: str) -> bool:
+        """Final check if extracted title is good quality."""
+        return (
+            10 <= len(title) <= 100 and
+            title.strip() and
+            not title.lower().startswith('http') and
+            sum(1 for c in title if c.isalnum()) >= 5  # Has meaningful content
+        )
+    
+    def _improve_source_attribution(self, item: ContentItem) -> dict:
+        """Improve source attribution to avoid 'Unknown' sources."""
+        import re
+        from urllib.parse import urlparse
+        
+        result = {
+            'source_title': item.source_title,
+            'author': item.author
+        }
+        
+        # If source_title is generic, missing, or uninformative, improve it
+        needs_improvement = (
+            not item.source_title or 
+            item.source_title in ['Unknown', 'Unknown Source'] or
+            'featured articles' in item.source_title.lower() or
+            'untitled' in item.source_title.lower() or
+            len(item.source_title.strip()) < 3
+        )
+        
+        if needs_improvement and item.url:
+            improved_source = self._extract_source_from_url(item.url)
+            if improved_source:
+                result['source_title'] = improved_source
+                logger.debug(f"Improved source: '{item.source_title}' -> '{improved_source}'")
+        
+        # Try to improve author if missing
+        if not result['author'] and item.url:
+            # Some URLs contain author info that we could extract
+            # This is a placeholder for future enhancement
+            pass
+        
+        return result
+        
+    def _extract_source_from_url(self, url: str) -> str:
+        """Extract a meaningful source name from URL."""
+        import re
+        from urllib.parse import urlparse
+        
+        try:
+            parsed = urlparse(url)
+            domain = parsed.netloc.lower()
+            
+            if not domain:
+                return ""
+            
+            # Remove common prefixes and suffixes
+            domain = re.sub(r'^(www\.|m\.|mobile\.)', '', domain)
+            domain = re.sub(r'\.(com|org|net|edu|gov|io|co\.uk)$', '', domain)
+            
+            # Handle special cases for common domains
+            domain_mapping = {
+                'wikipedia': 'Wikipedia',
+                'reddit': 'Reddit',
+                'github': 'GitHub',
+                'stackoverflow': 'Stack Overflow',
+                'medium': 'Medium',
+                'substack': 'Substack',
+                'youtube': 'YouTube',
+                'youtu': 'YouTube',
+                'twitter': 'Twitter/X',
+                'x': 'Twitter/X'
+            }
+            
+            # Check for known mappings first
+            for key, value in domain_mapping.items():
+                if key in domain:
+                    return value
+            
+            # For other domains, clean up and capitalize
+            # Take the main domain part before first dot
+            main_domain = domain.split('.')[0]
+            
+            if main_domain and len(main_domain) > 2:
+                # Convert to readable format
+                # Handle camelCase or underscore-separated names
+                readable_name = re.sub(r'([a-z])([A-Z])', r'\1 \2', main_domain)
+                readable_name = readable_name.replace('_', ' ').replace('-', ' ')
+                return readable_name.title()
+                
+        except Exception:
+            return ""
+        
+        return ""
+    
+    def _meets_quality_standards(self, item: ContentItem) -> bool:
+        """Check if content item meets minimum quality standards."""
+        # Minimum content length
+        if not item.content or len(item.content.strip()) < 50:
+            return False
+        
+        # Must have a meaningful title
+        if not item.title or len(item.title.strip()) < 10:
+            return False
+        
+        # Must have either URL or source info
+        if not item.url and not item.source_title:
+            return False
+        
+        return True
 
     async def _create_newsletter_draft(
         self, content_items: List[ContentItem]
