@@ -161,17 +161,24 @@ class NewsletterGenerator:
         for item in [tech3, tech4]:
             img = get_unsplash_image("technology")
             out.append(f"![Image]({img}) | ![Image]({img})")
-        for item in [tech3, tech4]:
-            if item:
-                url = item.url or ""
-                src = item.source_title or item.source or "Source Needed"
-                summary = item.content[:120].replace("\n", " ")
-                out.append(
-                    f"{summary} **[→ {src}]({url})** | "
-                    f"{summary} **[→ {src}]({url})**"
-                )
-            else:
-                out.append(" | ")
+        # Generate content for each column separately
+        if tech3:
+            url3 = tech3.url or ""
+            src3 = tech3.source_title or tech3.source or "Source Needed"
+            summary3 = tech3.content[:120].replace("\n", " ")
+            content3 = f"{summary3} **[→ {src3}]({url3})**"
+        else:
+            content3 = " "
+            
+        if tech4:
+            url4 = tech4.url or ""
+            src4 = tech4.source_title or tech4.source or "Source Needed"
+            summary4 = tech4.content[:120].replace("\n", " ")
+            content4 = f"{summary4} **[→ {src4}]({url4})**"
+        else:
+            content4 = " "
+            
+        out.append(f"| {content3} | {content4} |")
         out.append("\n---\n")
 
         # SOCIETY & POLITICS
@@ -194,21 +201,21 @@ class NewsletterGenerator:
         out.append(
             "|:----------------------|:----------------------|:----------------------|"
         )
-        for item in soc_items:
-            img = get_unsplash_image("society")
-            out.append(f"![Image]({img}) | ![Image]({img}) | ![Image]({img})")
+        # Add images row (one row for all columns)
+        img = get_unsplash_image("society")
+        out.append(f"![Image]({img}) | ![Image]({img}) | ![Image]({img})")
+        # Generate content for each column separately
+        content_columns = []
         for item in soc_items:
             if item:
                 url = item.url or ""
                 src = item.source_title or item.source or "Source Needed"
                 summary = item.content[:120].replace("\n", " ")
-                out.append(
-                    f"{summary} **[→ {src}]({url})** | "
-                    f"{summary} **[→ {src}]({url})** | "
-                    f"{summary} **[→ {src}]({url})**"
-                )
+                content_columns.append(f"{summary} **[→ {src}]({url})**")
             else:
-                out.append(" | | ")
+                content_columns.append(" ")
+        
+        out.append(f"| {content_columns[0]} | {content_columns[1]} | {content_columns[2]} |")
         out.append("\n---\n")
 
         # MAJOR THEME SECTION (optional, fill if enough items)
@@ -227,17 +234,22 @@ class NewsletterGenerator:
         
         out.append(f"| {theme_headers[0]} | {theme_headers[1]} | {theme_headers[2]} |")
         out.append("|:--------------|:--------------|:--------------|")
-        for item in theme_items:
-            img = get_unsplash_image("business")
-            out.append(f"![Image]({img}) | | ")
-        for item in theme_items:
-            if item:
-                url = item.url or ""
-                src = item.source_title or item.source or "Source Needed"
-                summary = item.content[:120].replace("\n", " ")
-                out.append(f"{summary} | | ")
+        # Generate images row
+        img = get_unsplash_image("business")
+        out.append(f"![Image]({img}) | ![Image]({img}) | ![Image]({img})")
+        
+        # Generate content for each column separately
+        theme_content = []
+        for i in range(3):
+            if i < len(theme_items) and theme_items[i]:
+                url = theme_items[i].url or ""
+                src = theme_items[i].source_title or theme_items[i].source or "Source Needed"
+                summary = theme_items[i].content[:120].replace("\n", " ")
+                theme_content.append(f"{summary} **[→ {src}]({url})**")
             else:
-                out.append(" | | ")
+                theme_content.append(" ")
+        
+        out.append(f"| {theme_content[0]} | {theme_content[1]} | {theme_content[2]} |")
         out.append("\n---\n")
 
         # ARTS & CULTURE
@@ -258,20 +270,21 @@ class NewsletterGenerator:
         
         out.append(f"| {art_headers[0]} | {art_headers[1]} |")
         out.append("|:------------------|:------------------|")
-        for item in art_items:
-            img = get_unsplash_image("art")
-            out.append(f"![Image]({img}) | ![Image]({img})")
+        # Add images row (one row for all columns)
+        img = get_unsplash_image("art")
+        out.append(f"![Image]({img}) | ![Image]({img})")
+        # Generate content for each column separately
+        art_content = []
         for item in art_items:
             if item:
                 url = item.url or ""
                 src = item.source_title or item.source or "Source Needed"
                 summary = item.content[:120].replace("\n", " ")
-                out.append(
-                    f"{summary} **[→ {src}]({url})** | "
-                    f"{summary} **[→ {src}]({url})**"
-                )
+                art_content.append(f"{summary} **[→ {src}]({url})**")
             else:
-                out.append(" | ")
+                art_content.append(" ")
+        
+        out.append(f"| {art_content[0]} | {art_content[1]} |")
         out.append("\n---\n")
 
         # BUSINESS & ECONOMY
@@ -292,31 +305,42 @@ class NewsletterGenerator:
         
         out.append(f"| {bus_headers[0]} | {bus_headers[1]} |")
         out.append("|:-----------------------|:-----------------------|")
-        for item in bus_items:
-            img = get_unsplash_image("business")
-            out.append(f"![Image]({img}) | ![Image]({img})")
+        # Add images row (one row for all columns)
+        img = get_unsplash_image("business")
+        out.append(f"![Image]({img}) | ![Image]({img})")
+        # Generate content for each column separately
+        bus_content = []
         for item in bus_items:
             if item:
                 url = item.url or ""
                 src = item.source_title or item.source or "Source Needed"
                 summary = item.content[:120].replace("\n", " ")
-                out.append(
-                    f"{summary} **[→ {src}]({url})** | "
-                    f"{summary} **[→ {src}]({url})**"
-                )
+                bus_content.append(f"{summary} **[→ {src}]({url})**")
             else:
-                out.append(" | ")
+                bus_content.append(" ")
+        
+        out.append(f"| {bus_content[0]} | {bus_content[1]} |")
         out.append("\n---\n")
 
         # SOURCES & ATTRIBUTION
         out.append("## SOURCES & ATTRIBUTION\n")
 
         def sources_line(cat):
-            srcs = [
-                item.source_title or item.source for item in categories[cat] if item.url
-            ]
-            urls = [item.url for item in categories[cat] if item.url]
-            return " • ".join([f"[{src}]({url})" for src, url in zip(srcs, urls)])
+            # Collect unique sources to avoid repetition
+            source_map = {}
+            for item in categories[cat]:
+                if item.url:
+                    src_name = item.source_title or item.source or "Unknown Source"
+                    # For RSS feeds with same source name, use article title as differentiator
+                    if src_name in source_map and item.source == "rss":
+                        # Create shorter, more specific name from article title
+                        short_title = item.title[:40] + "..." if len(item.title) > 40 else item.title
+                        source_key = f"{short_title}"
+                    else:
+                        source_key = src_name
+                    source_map[source_key] = item.url
+            
+            return " • ".join([f"[{src}]({url})" for src, url in source_map.items()])
 
         out.append(f"**Technology:** {sources_line('technology')}")
         out.append(f"\n**Society:** {sources_line('society')}")
@@ -480,28 +504,46 @@ class NewsletterGenerator:
 
         # Collect content from all sources concurrently
         tasks = []
+        source_names = []
 
         if self.readwise_client:
             tasks.append(self._get_readwise_content())
+            source_names.append("Readwise")
+            logger.info("✅ Readwise client configured - will fetch content")
+        else:
+            logger.warning("❌ Readwise client not configured (missing API key?)")
 
         if self.glasp_client:
             tasks.append(self._get_glasp_content())
+            source_names.append("Glasp")
+            logger.info("✅ Glasp client configured - will fetch content")
+        else:
+            logger.warning("❌ Glasp client not configured (missing API key?)")
 
         if self.rss_client:
             tasks.append(self._get_rss_content())
+            source_names.append("RSS")
+            logger.info("✅ RSS client configured - will fetch content")
+        else:
+            logger.warning("❌ RSS client not configured (no RSS feeds?)")
 
         if not tasks:
-            logger.warning("No content sources configured")
+            logger.error("🚨 No content sources configured - newsletter will be empty!")
+            logger.error("Please check API keys: READWISE_API_KEY, GLASP_API_KEY, RSS_FEEDS")
             return []
+
+        logger.info(f"Fetching content from {len(tasks)} sources: {', '.join(source_names)}")
 
         # Execute all content collection tasks
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         # Process results
         for i, result in enumerate(results):
+            source_name = source_names[i]
             if isinstance(result, Exception):
-                logger.error(f"Content source {i} failed: {result}")
+                logger.error(f"❌ {source_name} failed: {result}")
             else:
+                logger.info(f"✅ {source_name} returned {len(result)} items")
                 all_content.extend(result)
 
         # Remove duplicates based on content similarity

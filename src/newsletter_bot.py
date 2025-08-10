@@ -40,25 +40,37 @@ def generate(ctx: click.Context, dry_run: bool) -> None:
             logger.info("Starting newsletter generation...")
 
             # Validate that we have the required API keys
-            required_keys = [
-                ("readwise_api_key", "Readwise"),
-                ("buttondown_api_key", "Buttondown"),
-                ("openrouter_api_key", "OpenRouter"),
-            ]
+            # For dry-run mode with RSS feeds, we can be more lenient
+            if dry_run and settings.rss_feeds:
+                logger.info("🧪 Dry-run mode with RSS feeds - relaxed API key validation")
+                missing_critical = []
+                # Only OpenRouter is truly required for content processing
+                if not settings.openrouter_api_key:
+                    missing_critical.append("OpenRouter")
+                
+                if missing_critical:
+                    logger.warning(f"⚠️  Missing API keys: {', '.join(missing_critical)}")
+                    logger.info("Continuing with available sources (content may not be AI-processed)")
+            else:
+                required_keys = [
+                    ("readwise_api_key", "Readwise"),
+                    ("buttondown_api_key", "Buttondown"),
+                    ("openrouter_api_key", "OpenRouter"),
+                ]
 
-            missing_keys = []
-            for key, service in required_keys:
-                if not getattr(settings, key):
-                    missing_keys.append(service)
+                missing_keys = []
+                for key, service in required_keys:
+                    if not getattr(settings, key):
+                        missing_keys.append(service)
 
-            if missing_keys:
-                logger.error(
-                    f"Missing required API keys for: {', '.join(missing_keys)}"
-                )
-                logger.error(
-                    "Please configure secrets in Infisical or environment variables"
-                )
-                return
+                if missing_keys:
+                    logger.error(
+                        f"Missing required API keys for: {', '.join(missing_keys)}"
+                    )
+                    logger.error(
+                        "Please configure secrets in Infisical or environment variables"
+                    )
+                    return
 
             logger.info("✅ Configuration validated")
 
