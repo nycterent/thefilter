@@ -71,30 +71,21 @@ class NewsletterGenerator:
         out.append(
             "\n*Welcome to this week's curated briefing. In a **timeless minimalist** spirit, we distill the latest developments in technology, society, art, and business with precision and restraint. Expect a high-contrast mix of facts and a touch of commentary for reflection.*\n"
         )
-        out.append("\n## HEADLINES AT A GLANCE\n")
-        out.append("| **TECHNOLOGY** | **SOCIETY** | **ART & MEDIA** | **BUSINESS** |")
-        out.append("|:---------------|:------------|:----------------|:-------------|")
-        for i in range(4):
-            tech = (
-                categories["technology"][i]
-                if i < len(categories["technology"])
-                else None
-            )
-            soc = categories["society"][i] if i < len(categories["society"]) else None
-            art = categories["art"][i] if i < len(categories["art"]) else None
-            bus = categories["business"][i] if i < len(categories["business"]) else None
-
-            def headline(item):
-                if not item:
-                    return ""
-                src = item.source_title or item.source or "Source Needed"
-                url = item.url or ""
-                content_clean = item.content[:80].replace("\n", " ")
-                return f"**{item.title}** - {content_clean} [→ {src}]({url})"
-
-            out.append(
-                f"| {headline(tech)} | {headline(soc)} | {headline(art)} | {headline(bus)} |"
-            )
+        
+        # Dynamic intro based on top stories
+        top_stories = []
+        for category, items in categories.items():
+            if items:
+                top_stories.append((category, items[0]))
+        
+        if len(top_stories) >= 2:
+            intro_items = []
+            for category, item in top_stories[:3]:  # Top 3 stories
+                src = item.source_title or item.source or "Unknown Source"
+                intro_items.append(f"**{item.title}** from {src}")
+            out.append(f"\n*Today's highlights: {' • '.join(intro_items)}*\n")
+        
+        out.append("\n---\n")
         out.append("\n---\n")
 
         # LEAD STORIES
@@ -132,206 +123,83 @@ class NewsletterGenerator:
         out.append(await lead_story(lead_other, "society"))
         out.append("\n---\n")
 
-        # TECHNOLOGY DESK
-        out.append("## TECHNOLOGY DESK\n")
-        tech3 = (
-            categories["technology"][2] if len(categories["technology"]) > 2 else None
-        )
-        tech4 = (
-            categories["technology"][3] if len(categories["technology"]) > 3 else None
-        )
-
-        # Dynamic headers for tech stories
-        tech3_header = (
-            tech3.title[:25] + "..."
-            if tech3 and len(tech3.title) > 25
-            else (tech3.title if tech3 else "NO STORY AVAILABLE")
-        )
-        tech4_header = (
-            tech4.title[:25] + "..."
-            if tech4 and len(tech4.title) > 25
-            else (tech4.title if tech4 else "NO STORY AVAILABLE")
-        )
-
-        out.append(f"| **{tech3_header.upper()}** | **{tech4_header.upper()}** |")
-        out.append("|:-------------------|:-------------------|")
-        for item in [tech3, tech4]:
-            img = await get_unsplash_image("technology")
-            out.append(f"![Image]({img}) | ![Image]({img})")
-        # Generate content for each column separately
-        if tech3:
-            url3 = tech3.url or ""
-            src3 = tech3.source_title or tech3.source or "Source Needed"
-            summary3 = tech3.content[:120].replace("\n", " ")
-            content3 = f"{summary3} **[→ {src3}]({url3})**"
-        else:
-            content3 = " "
-
-        if tech4:
-            url4 = tech4.url or ""
-            src4 = tech4.source_title or tech4.source or "Source Needed"
-            summary4 = tech4.content[:120].replace("\n", " ")
-            content4 = f"{summary4} **[→ {src4}]({url4})**"
-        else:
-            content4 = " "
-
-        out.append(f"| {content3} | {content4} |")
+        # TECHNOLOGY SPOTLIGHT
+        out.append("## 🔬 TECHNOLOGY\n")
+        tech_items = categories["technology"][2:5]  # Get 2-4 additional tech items
+        
+        for i, item in enumerate(tech_items):
+            if item:
+                img = await get_unsplash_image("technology", item.title)
+                src = item.source_title or item.source or "Unknown Source"
+                url = item.url or ""
+                summary = item.content[:150].replace("\n", " ")
+                
+                out.append(f"### {item.title}\n")
+                out.append(f"![{item.title}]({img})\n")
+                out.append(f"{summary}\n")
+                out.append(f"*Source: [{src}]({url})*\n")
+                if i < len(tech_items) - 1:  # Add separator except for last item
+                    out.append("---\n")
         out.append("\n---\n")
 
-        # SOCIETY & POLITICS
-        out.append("## SOCIETY & POLITICS\n")
-        soc_items = [
-            categories["society"][i] if i < len(categories["society"]) else None
-            for i in range(3)
-        ]
-
-        # Dynamic headers for society stories
-        soc_headers = []
+        # SOCIETY & CULTURE
+        out.append("## 🌍 SOCIETY & CULTURE\n")
+        soc_items = categories["society"][:3]  # Get up to 3 society items
+        
         for i, item in enumerate(soc_items):
             if item:
-                header = item.title[:20] + "..." if len(item.title) > 20 else item.title
-                soc_headers.append(f"**{header.upper()}**")
-            else:
-                soc_headers.append("**NO STORY**")
-
-        out.append(f"| {soc_headers[0]} | {soc_headers[1]} | {soc_headers[2]} |")
-        out.append(
-            "|:----------------------|:----------------------|:----------------------|"
-        )
-        # Add images row (one row for all columns)
-        img = await get_unsplash_image("society")
-        out.append(f"![Image]({img}) | ![Image]({img}) | ![Image]({img})")
-        # Generate content for each column separately
-        content_columns = []
-        for item in soc_items:
-            if item:
+                img = await get_unsplash_image("society", item.title)
+                src = item.source_title or item.source or "Unknown Source"
                 url = item.url or ""
-                src = item.source_title or item.source or "Source Needed"
-                summary = item.content[:120].replace("\n", " ")
-                content_columns.append(f"{summary} **[→ {src}]({url})**")
-            else:
-                content_columns.append(" ")
-
-        out.append(
-            f"| {content_columns[0]} | {content_columns[1]} | {content_columns[2]} |"
-        )
-        out.append("\n---\n")
-
-        # MAJOR THEME SECTION (optional, fill if enough items)
-        theme_section_title = (
-            "TRENDING TOPICS" if len(items) > 7 else "ADDITIONAL INSIGHTS"
-        )
-        out.append(f"## {theme_section_title}\n")
-        theme_items = (
-            items[4:7] if len(items) > 7 else items[:3] if len(items) <= 7 else []
-        )
-
-        # Dynamic headers for theme stories
-        theme_headers = []
-        for i in range(3):
-            if i < len(theme_items) and theme_items[i]:
-                header = (
-                    theme_items[i].title[:15] + "..."
-                    if len(theme_items[i].title) > 15
-                    else theme_items[i].title
-                )
-                theme_headers.append(f"**{header.upper()}**")
-            else:
-                theme_headers.append("**NO STORY**")
-
-        out.append(f"| {theme_headers[0]} | {theme_headers[1]} | {theme_headers[2]} |")
-        out.append("|:--------------|:--------------|:--------------|")
-        # Generate images row
-        img = await get_unsplash_image("business")
-        out.append(f"![Image]({img}) | ![Image]({img}) | ![Image]({img})")
-
-        # Generate content for each column separately
-        theme_content = []
-        for i in range(3):
-            if i < len(theme_items) and theme_items[i]:
-                url = theme_items[i].url or ""
-                src = (
-                    theme_items[i].source_title
-                    or theme_items[i].source
-                    or "Source Needed"
-                )
-                summary = theme_items[i].content[:120].replace("\n", " ")
-                theme_content.append(f"{summary} **[→ {src}]({url})**")
-            else:
-                theme_content.append(" ")
-
-        out.append(f"| {theme_content[0]} | {theme_content[1]} | {theme_content[2]} |")
+                summary = item.content[:180].replace("\n", " ")
+                
+                # Use bullet points for a more organic feel
+                out.append(f"**• {item.title}**\n")
+                if i == 0:  # Only show image for first item to avoid clutter
+                    out.append(f"![{item.title}]({img})\n")
+                out.append(f"{summary} *([{src}]({url}))*\n")
+        
         out.append("\n---\n")
 
         # ARTS & CULTURE
-        out.append("## ARTS & CULTURE\n")
-        art_items = [
-            categories["art"][i] if i < len(categories["art"]) else None
-            for i in range(2)
-        ]
-
-        # Dynamic headers for art stories
-        art_headers = []
-        for i, item in enumerate(art_items):
-            if item:
-                header = item.title[:25] + "..." if len(item.title) > 25 else item.title
-                art_headers.append(f"**{header.upper()}**")
-            else:
-                art_headers.append("**NO ART STORY**")
-
-        out.append(f"| {art_headers[0]} | {art_headers[1]} |")
-        out.append("|:------------------|:------------------|")
-        # Add images row (one row for all columns)
-        img = await get_unsplash_image("art")
-        out.append(f"![Image]({img}) | ![Image]({img})")
-        # Generate content for each column separately
-        art_content = []
+        out.append("## 🎨 ARTS & CULTURE\n")
+        art_items = categories["art"][:2]  # Get up to 2 art items
+        
         for item in art_items:
             if item:
+                img = await get_unsplash_image("art", item.title)
+                src = item.source_title or item.source or "Unknown Source"
                 url = item.url or ""
-                src = item.source_title or item.source or "Source Needed"
-                summary = item.content[:120].replace("\n", " ")
-                art_content.append(f"{summary} **[→ {src}]({url})**")
-            else:
-                art_content.append(" ")
-
-        out.append(f"| {art_content[0]} | {art_content[1]} |")
-        out.append("\n---\n")
+                summary = item.content[:150].replace("\n", " ")
+                
+                out.append(f"**{item.title}**\n")
+                out.append(f"![{item.title}]({img})\n")
+                out.append(f"{summary} *([{src}]({url}))*\n\n")
+        
+        if not art_items or all(item is None for item in art_items):
+            out.append("*No arts & culture stories this week.*\n\n")
+        
+        out.append("---\n")
 
         # BUSINESS & ECONOMY
-        out.append("## BUSINESS & ECONOMY\n")
-        bus_items = [
-            categories["business"][i] if i < len(categories["business"]) else None
-            for i in range(2)
-        ]
-
-        # Dynamic headers for business stories
-        bus_headers = []
-        for i, item in enumerate(bus_items):
-            if item:
-                header = item.title[:25] + "..." if len(item.title) > 25 else item.title
-                bus_headers.append(f"**{header.upper()}**")
-            else:
-                bus_headers.append("**NO BUSINESS STORY**")
-
-        out.append(f"| {bus_headers[0]} | {bus_headers[1]} |")
-        out.append("|:-----------------------|:-----------------------|")
-        # Add images row (one row for all columns)
-        img = await get_unsplash_image("business")
-        out.append(f"![Image]({img}) | ![Image]({img})")
-        # Generate content for each column separately
-        bus_content = []
+        out.append("## 💼 BUSINESS & ECONOMY\n")
+        bus_items = categories["business"][:2]  # Get up to 2 business items
+        
         for item in bus_items:
             if item:
+                img = await get_unsplash_image("business", item.title)
+                src = item.source_title or item.source or "Unknown Source"
                 url = item.url or ""
-                src = item.source_title or item.source or "Source Needed"
-                summary = item.content[:120].replace("\n", " ")
-                bus_content.append(f"{summary} **[→ {src}]({url})**")
-            else:
-                bus_content.append(" ")
+                summary = item.content[:150].replace("\n", " ")
+                
+                out.append(f"**{item.title}**\n")
+                out.append(f"![{item.title}]({img})\n")
+                out.append(f"{summary} *([{src}]({url}))*\n\n")
+        
+        if not bus_items or all(item is None for item in bus_items):
+            out.append("*No business stories this week.*\n\n")
 
-        out.append(f"| {bus_content[0]} | {bus_content[1]} |")
-        out.append("\n---\n")
+        out.append("---\n")
 
         # SOURCES & ATTRIBUTION
         out.append("## SOURCES & ATTRIBUTION\n")
@@ -1291,44 +1159,67 @@ class NewsletterGenerator:
             if not domain:
                 return ""
             
+            # Handle Readwise Reader URLs specially
+            if 'readwise.io' in domain:
+                return "Readwise Reader"
+            
             # Remove common prefixes and suffixes
             domain = re.sub(r'^(www\.|m\.|mobile\.)', '', domain)
-            domain = re.sub(r'\.(com|org|net|edu|gov|io|co\.uk)$', '', domain)
+            original_domain = domain
+            domain = re.sub(r'\.(com|org|net|edu|gov|io|co\.uk|ai)$', '', domain)
             
             # Handle special cases for common domains
-            domain_mapping = {
-                'wikipedia': 'Wikipedia',
-                'reddit': 'Reddit',
-                'github': 'GitHub',
-                'stackoverflow': 'Stack Overflow',
+            source_mapping = {
+                'nature': 'Nature',
+                'techcrunch': 'TechCrunch', 
+                'arstechnica': 'Ars Technica',
+                'wired': 'WIRED',
+                'theverge': 'The Verge',
                 'medium': 'Medium',
                 'substack': 'Substack',
+                'github': 'GitHub',
+                'stackoverflow': 'Stack Overflow',
+                'reddit': 'Reddit',
                 'youtube': 'YouTube',
-                'youtu': 'YouTube',
-                'twitter': 'Twitter/X',
-                'x': 'Twitter/X'
+                'twitter': 'Twitter',
+                'linkedin': 'LinkedIn',
+                'hackernews': 'Hacker News',
+                'ycombinator': 'Y Combinator',
+                'tailscale': 'Tailscale',
+                'openai': 'OpenAI',
+                'anthropic': 'Anthropic',
+                'google': 'Google',
+                'microsoft': 'Microsoft',
+                'apple': 'Apple',
+                'meta': 'Meta',
+                'stripe': 'Stripe',
             }
             
-            # Check for known mappings first
-            for key, value in domain_mapping.items():
-                if key in domain:
-                    return value
+            if domain in source_mapping:
+                return source_mapping[domain]
             
-            # For other domains, clean up and capitalize
-            # Take the main domain part before first dot
-            main_domain = domain.split('.')[0]
+            # For substack domains like "someone.substack.com"
+            if '.substack' in original_domain:
+                subdomain = original_domain.split('.')[0]
+                return f"{subdomain.title()} (Substack)"
             
-            if main_domain and len(main_domain) > 2:
-                # Convert to readable format
-                # Handle camelCase or underscore-separated names
-                readable_name = re.sub(r'([a-z])([A-Z])', r'\1 \2', main_domain)
-                readable_name = readable_name.replace('_', ' ').replace('-', ' ')
-                return readable_name.title()
-                
-        except Exception:
+            # For github.io domains like "someone.github.io" 
+            if '.github' in original_domain:
+                subdomain = original_domain.split('.')[0]
+                return f"{subdomain.title()} (GitHub Pages)"
+            
+            # Clean up domain name for presentation
+            domain_parts = domain.split('.')
+            if len(domain_parts) > 0:
+                main_domain = domain_parts[0]
+                # Capitalize and clean up
+                return main_domain.replace('-', ' ').replace('_', ' ').title()
+            
+            return domain.title()
+            
+        except Exception as e:
+            logger.debug(f"Error extracting source from URL {url}: {e}")
             return ""
-        
-        return ""
     
     def _meets_quality_standards(self, item: ContentItem) -> bool:
         """Check if content item meets minimum quality standards."""
