@@ -60,18 +60,9 @@ jobs:
       run: |
         docker run --rm newsletter-bot:test python -c "import src.newsletter_bot; print('Import successful')"
 
-  security:
-    runs-on: ubuntu-latest
-    permissions:
-      security-events: write
-    steps:
-    - uses: actions/checkout@v4
-    
-  # Trivy scan and SARIF upload removed
-
   # Newsletter generation workflow
   newsletter-health-check:
-    needs: [test, security]
+    needs: [test]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     environment: production
