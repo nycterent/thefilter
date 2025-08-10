@@ -122,6 +122,119 @@ class ReadwiseClient:
             logger.error(f"Error fetching Readwise highlights: {e}", exc_info=True)
             return []
 
+    async def get_recent_reader_documents(self, days: int = 30) -> List[Dict[str, Any]]:
+        """Get curated documents from Readwise Reader (fully read or 'twiar' tagged).
+
+        Args:
+            days: Number of days back to fetch documents (extended to 30 for better curation)
+
+        Returns:
+            List of curated Reader document dictionaries
+        """
+        if not self.api_key:
+            logger.error("No Readwise API key provided. Cannot connect to Readwise Reader.")
+            return []
+            
+        try:
+            threshold_date = datetime.utcnow() - timedelta(days=days)
+            updated_after = threshold_date.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+            url = "https://readwise.io/api/v3/list/"
+            params = {
+                "updatedAfter": updated_after,
+            }
+
+            all_documents = []
+            page_cursor = None
+
+            async with aiohttp.ClientSession() as session:
+                while True:
+                    if page_cursor:
+                        params["pageCursor"] = page_cursor
+
+                    async with session.get(
+                        url, headers=self.headers, params=params
+                    ) as response:
+                        if response.status != 200:
+                            logger.error(
+                                f"Readwise Reader API error: {response.status}. "
+                                f"URL: {url} Params: {params}"
+                            )
+                            try:
+                                error_detail = await response.text()
+                                logger.error(f"Readwise Reader error detail: {error_detail}")
+                            except Exception:
+                                pass
+                            break
+
+                        data = await response.json()
+                        page_documents = data.get("results", [])
+
+                        if not page_documents:
+                            break
+
+                        all_documents.extend(page_documents)
+
+                        # Check if there are more pages
+                        page_cursor = data.get("nextPageCursor")
+                        if not page_cursor:
+                            break
+
+                        # Rate limiting - Reader API is 20 requests per minute
+                        await asyncio.sleep(3)  # 3 seconds between requests
+
+            # Filter for high-quality curated articles
+            curated_documents = self._filter_curated_articles(all_documents)
+            
+            logger.info(f"Retrieved {len(curated_documents)} curated articles from {len(all_documents)} total documents")
+            return curated_documents
+
+        except Exception as e:
+            logger.error(f"Error fetching Readwise Reader documents: {e}")
+            return []
+
+    def _filter_curated_articles(self, documents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Filter documents to only include curated articles (fully read or 'twiar' tagged).
+        
+        Args:
+            documents: All documents from API
+            
+        Returns:
+            Filtered list of curated articles
+        """
+        curated = []
+        
+        for doc in documents:
+            reading_progress = doc.get('reading_progress', 0)
+            tags = doc.get('tags', {})
+            
+            is_fully_read = reading_progress and reading_progress >= 1.0
+            has_twiar_tag = self._has_twiar_tag(tags)
+            
+            # Include if fully read OR has twiar tag
+            if is_fully_read or has_twiar_tag:
+                curated.append(doc)
+        
+        # Sort by reading progress (fully read first) then by date
+        curated.sort(key=lambda x: (
+            -(x.get('reading_progress', 0) or 0),  # Fully read first
+            x.get('created_at', '') or ''  # Then by date
+        ), reverse=True)
+        
+        return curated
+    
+    def _has_twiar_tag(self, tags) -> bool:
+        """Check if document has 'twiar' tag (case-insensitive)."""
+        if not tags:
+            return False
+            
+        if isinstance(tags, dict):
+            return any('twiar' in tag_name.lower() for tag_name in tags.keys() if tag_name)
+        elif isinstance(tags, list):
+            return any('twiar' in str(tag).lower() for tag in tags if tag)
+        
+        return False
+
     async def get_books(self, days: int = 30) -> List[Dict[str, Any]]:
         """Get recent books from Readwise.
 
