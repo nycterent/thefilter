@@ -31,7 +31,7 @@ class OpenRouterClient:
             "X-Title": "The Filter Newsletter",  # Optional title
         }
         # Use free models only
-        self.default_model = "google/gemma-2-9b-it:free"  # Free Gemma model
+        self.default_model = "meta-llama/llama-3.2-3b-instruct:free"  # Free Llama model
 
         # Rate limiting for free tier (20 requests/minute)
         self.last_request_time = 0
@@ -59,12 +59,21 @@ class OpenRouterClient:
             return content[:max_length]
 
         try:
-            prompt = f"""Create an engaging, informative summary for a newsletter. Focus on WHY this matters to readers and what's interesting/surprising. Keep it under {max_length} characters and avoid starting with URLs or social links.
+            prompt = f"""Create an engaging newsletter summary using journalism best practices. Focus on reader engagement and thought-provoking content.
 
 Title: {title}
 Content: {content[:600]}
 
-Write a compelling summary that hooks the reader:"""
+TASK: Write a compelling summary that:
+- Starts with a hook or intriguing question
+- Explains WHY this matters beyond surface facts  
+- Highlights what's surprising or controversial
+- Uses conversational, storytelling tone
+- Encourages reader curiosity and engagement
+- Keeps under {max_length} characters
+- Avoids starting with URLs or social links
+
+Write an engaging summary that attracts and retains readers:"""
 
             response = await self._make_request(prompt, max_tokens=50)
             if response and "choices" in response and len(response["choices"]) > 0:
@@ -398,44 +407,16 @@ Choose the most appropriate category. Respond with ONLY ONE WORD: technology, so
             return user_highlights  # Fallback to highlights
 
         try:
-            # Check if we have substantial user highlights to work with
-            has_user_perspective = user_highlights and len(user_highlights.strip()) > 20
+            # Simplified, more effective prompt for free models
+            prompt = f"""You are a skilled newsletter writer. Write a 2-3 paragraph commentary about this article.
 
-            if has_user_perspective:
-                prompt = f"""You are a skilled newsletter writer. Read this article and write thoughtful commentary that incorporates the user's perspective and insights.
+ARTICLE: {article_title}
 
-ARTICLE TITLE: {article_title}
+CONTENT: {article_content[:2000]}
 
-ARTICLE CONTENT:
-{article_content[:3000]}
+USER HIGHLIGHTS: {user_highlights}
 
-USER'S PERSPECTIVE/HIGHLIGHTS:
-{user_highlights}
-
-TASK: Write a 2-3 paragraph commentary that:
-1. Incorporates the user's specific insights, reactions, or perspective
-2. Uses the user's analytical angle or emotional response as a starting point
-3. Provides thoughtful analysis that builds on their viewpoint
-4. Sounds like an informed editorial take, not a news summary
-5. Keep it under 300 words for newsletter brevity
-
-Write the commentary:"""
-            else:
-                prompt = f"""You are a skilled newsletter writer. Read this article and write engaging commentary for a curated newsletter.
-
-ARTICLE TITLE: {article_title}
-
-ARTICLE CONTENT:
-{article_content[:3000]}
-
-TASK: Write a 2-3 paragraph commentary that:
-1. Identifies the most interesting or surprising aspects of this story
-2. Provides thoughtful analysis beyond just restating facts
-3. Explains why this matters to informed readers
-4. Sounds like an informed editorial take, not a news summary
-5. Keep it under 300 words for newsletter brevity
-
-Write the commentary:"""
+Focus on the key themes from the article and user highlights. Use a conversational tone and explain why this matters. Keep under 300 words."""
 
             response = await self._make_request(prompt, max_tokens=200, temperature=0.7)
             if response and "choices" in response and len(response["choices"]) > 0:
@@ -457,37 +438,51 @@ Write the commentary:"""
 
         try:
             if content_type == "article":
-                prompt = f"""You are a tough but fair newsletter editor. Your job is to ROAST this article commentary and provide brutal but constructive feedback with specific improvement suggestions.
+                prompt = f"""You are a tough but fair newsletter editor using journalism best practices. ROAST this article commentary with constructive feedback.
 
 COMMENTARY TO REVIEW:
 {content}
 
-EVALUATE:
-1. Does it have a clear, compelling angle?
-2. Is it insightful beyond basic facts?
-3. Does it sound engaging and editorial (not generic news)?
-4. Is it well-written and flow well?
-5. Would subscribers find this worth their time?
+EVALUATE USING JOURNALISM STANDARDS:
+1. ENGAGEMENT: Does it start with a compelling hook or thought-provoking question?
+2. INSIGHT: Goes beyond basic facts to provide unique perspective?
+3. STORYTELLING: Uses conversational tone with narrative elements?
+4. CRITICAL THINKING: Challenges conventional thinking or raises important questions?
+5. READER VALUE: Would informed subscribers find this worth their time?
+6. STRUCTURE: Clear flow from hook to analysis to thought-provoking conclusion?
 
-Provide a ROAST with specific feedback AND concrete suggestions for improvement. Rate 1-10 (7+ passes). Be tough - mediocre content gets rejected, but always provide actionable advice for the next revision.
+Provide specific feedback on:
+- What journalism techniques are missing
+- How to improve engagement and readability
+- Suggestions for better storytelling elements
+- Ways to add more thought-provoking content
+
+Rate 1-10 (7+ passes). Be constructively critical - provide actionable advice for improvement:
 
 Format: SCORE: X/10\nFEEDBACK: [your brutal but constructive roast with specific suggestions for improvement]\nAPPROVED: YES/NO"""
             else:  # newsletter
-                prompt = f"""You are a tough newsletter editor reviewing the full newsletter. ROAST this newsletter and provide brutal feedback on overall quality, flow, and reader value with specific suggestions for improvement.
+                prompt = f"""You are a tough newsletter editor applying journalism best practices. ROAST this full newsletter with constructive feedback.
 
 NEWSLETTER TO REVIEW:
 {content[:2000]}...
 
-EVALUATE:
-1. Overall quality and coherence
-2. Mix of content and categories
-3. Editorial voice and consistency
-4. Reader engagement and value
-5. Professional newsletter standards
+EVALUATE USING JOURNALISM STANDARDS:
+1. OVERALL ENGAGEMENT: Does it attract and retain reader attention throughout?
+2. CONTENT MIX: Balanced variety with strong editorial voice?
+3. STORYTELLING: Uses narrative elements and conversational tone?
+4. CRITICAL THINKING: Challenges readers with thought-provoking content?
+5. READER VALUE: Provides unique insights beyond basic news?
+6. STRUCTURE: Clear flow with compelling hooks and satisfying conclusions?
 
-Provide a ROAST with specific feedback AND concrete suggestions for improvement. Rate 1-10 (8+ passes for full newsletter). Be merciless but provide actionable advice.
+Provide specific feedback on:
+- How to improve overall reader engagement
+- Missing journalism techniques (storytelling, questioning, etc.)
+- Opportunities for more thought-provoking content
+- Ways to strengthen editorial voice and coherence
 
-Format: SCORE: X/10\nFEEDBACK: [your comprehensive roast with specific improvement suggestions]\nAPPROVED: YES/NO"""
+Rate 1-10 (8+ passes for full newsletter). Be constructively critical with actionable advice:
+
+Format: SCORE: X/10\nFEEDBACK: [comprehensive feedback with specific journalism improvements]\nAPPROVED: YES/NO"""
 
             response = await self._make_request(prompt, max_tokens=150, temperature=0.8)
             if response and "choices" in response and len(response["choices"]) > 0:
@@ -543,7 +538,7 @@ Format: SCORE: X/10\nFEEDBACK: [your comprehensive roast with specific improveme
                 else "USER CONTEXT: This is curated content from the user's RSS feed"
             )
 
-            prompt = f"""You are a newsletter writer revising your work based on tough editorial feedback. Take the feedback seriously and implement ALL suggested improvements.
+            prompt = f"""You are a skilled newsletter writer revising content using journalism best practices. Implement ALL editorial feedback to create engaging, thought-provoking content.
 
 ORIGINAL CONTENT:
 {original_content}
@@ -554,9 +549,23 @@ EDITOR'S DETAILED FEEDBACK AND SUGGESTIONS:
 ARTICLE CONTEXT: {article_content[:1000] if article_content else 'N/A'}
 {context_section}
 
-TASK: Completely rewrite the content addressing EVERY point in the editor's feedback. Implement all suggested improvements. Make it sharper, more insightful, and more engaging. {"Incorporate the user's perspective if provided." if has_user_context else "Focus on what makes this story compelling for informed readers."} Keep under 300 words.
+TASK: Completely rewrite using these journalism techniques:
 
-Apply all editorial suggestions and create a substantially improved version:"""
+STRUCTURE IMPROVEMENTS:
+- Start with a compelling hook or thought-provoking question
+- Build narrative flow with storytelling elements
+- End with questions that encourage reader reflection
+
+CONTENT ENHANCEMENTS:
+- Use conversational tone with personal anecdotes where appropriate
+- Challenge conventional thinking with unique perspectives
+- Include interactive elements or calls to action
+- Focus on WHY this matters to informed readers
+- {"Incorporate the user's perspective as your editorial angle" if has_user_context else "Develop a unique editorial angle"}
+
+Implement ALL editor suggestions. Make it engaging content that attracts and retains readership. Keep under 300 words."
+
+Create substantially improved content using journalism best practices:"""
 
             response = await self._make_request(prompt, max_tokens=200, temperature=0.6)
             if response and "choices" in response and len(response["choices"]) > 0:
@@ -604,3 +613,142 @@ Respond with only: YES (contains user commentary) or NO (pure article content)""
         except Exception as e:
             logger.error(f"Error detecting user commentary: {e}")
             return False
+
+    async def assess_content_quality(
+        self, content: str, content_type: str = "article"
+    ) -> Dict[str, Any]:
+        """Assess content quality using journalism best practices rubric."""
+        if not self.api_key:
+            return {
+                "overall_score": 7,
+                "engagement_score": 7,
+                "insight_score": 7,
+                "storytelling_score": 7,
+                "suggestions": [
+                    "No quality assessment available - OpenRouter API key not configured"
+                ],
+                "strengths": ["Content present"],
+                "areas_for_improvement": [],
+            }
+
+        try:
+            prompt = f"""You are a journalism quality assessor. Evaluate this {content_type} content using professional journalism standards.
+
+CONTENT TO ASSESS:
+{content}
+
+JOURNALISM QUALITY RUBRIC (Rate each 1-10):
+
+1. ENGAGEMENT (Hook & Reader Retention):
+- Compelling opening that draws readers in
+- Thought-provoking questions or hooks
+- Maintains interest throughout
+
+2. INSIGHT (Analysis & Perspective):
+- Goes beyond surface-level facts
+- Provides unique or challenging perspectives
+- Explains WHY this matters to readers
+
+3. STORYTELLING (Narrative & Flow):
+- Uses conversational tone
+- Incorporates narrative elements
+- Clear structure and flow
+
+4. CRITICAL THINKING (Depth & Questions):
+- Challenges conventional thinking
+- Raises important questions
+- Encourages reader reflection
+
+Provide detailed assessment in this format:
+ENGAGEMENT_SCORE: X/10
+INSIGHT_SCORE: X/10  
+STORYTELLING_SCORE: X/10
+CRITICAL_THINKING_SCORE: X/10
+OVERALL_SCORE: X/10
+
+STRENGTHS: [List 2-3 specific strengths]
+AREAS_FOR_IMPROVEMENT: [List 2-3 specific areas needing work]
+SUGGESTIONS: [3-4 actionable suggestions for improvement]"""
+
+            response = await self._make_request(prompt, max_tokens=200, temperature=0.3)
+            if response and "choices" in response and len(response["choices"]) > 0:
+                assessment = response["choices"][0]["message"]["content"].strip()
+
+                # Parse the structured response
+                parsed = self._parse_quality_assessment(assessment)
+                return parsed
+            else:
+                return self._default_quality_assessment()
+
+        except Exception as e:
+            logger.error(f"Error assessing content quality: {e}")
+            return self._default_quality_assessment()
+
+    def _parse_quality_assessment(self, assessment: str) -> Dict[str, Any]:
+        """Parse structured quality assessment response."""
+        import re
+
+        try:
+            # Extract scores
+            engagement = re.search(r"ENGAGEMENT_SCORE:\s*(\d+)", assessment)
+            insight = re.search(r"INSIGHT_SCORE:\s*(\d+)", assessment)
+            storytelling = re.search(r"STORYTELLING_SCORE:\s*(\d+)", assessment)
+            critical_thinking = re.search(
+                r"CRITICAL_THINKING_SCORE:\s*(\d+)", assessment
+            )
+            overall = re.search(r"OVERALL_SCORE:\s*(\d+)", assessment)
+
+            # Extract text sections
+            strengths = re.search(r"STRENGTHS:\s*\[(.*?)\]", assessment, re.DOTALL)
+            improvements = re.search(
+                r"AREAS_FOR_IMPROVEMENT:\s*\[(.*?)\]", assessment, re.DOTALL
+            )
+            suggestions = re.search(r"SUGGESTIONS:\s*\[(.*?)\]", assessment, re.DOTALL)
+
+            return {
+                "engagement_score": int(engagement.group(1)) if engagement else 7,
+                "insight_score": int(insight.group(1)) if insight else 7,
+                "storytelling_score": int(storytelling.group(1)) if storytelling else 7,
+                "critical_thinking_score": (
+                    int(critical_thinking.group(1)) if critical_thinking else 7
+                ),
+                "overall_score": int(overall.group(1)) if overall else 7,
+                "strengths": (
+                    [s.strip() for s in strengths.group(1).split(",")]
+                    if strengths
+                    else []
+                ),
+                "areas_for_improvement": (
+                    [s.strip() for s in improvements.group(1).split(",")]
+                    if improvements
+                    else []
+                ),
+                "suggestions": (
+                    [s.strip() for s in suggestions.group(1).split(",")]
+                    if suggestions
+                    else []
+                ),
+            }
+        except Exception as e:
+            logger.error(f"Error parsing quality assessment: {e}")
+            return self._default_quality_assessment()
+
+    def _default_quality_assessment(self) -> Dict[str, Any]:
+        """Return default quality assessment when parsing fails."""
+        return {
+            "engagement_score": 7,
+            "insight_score": 7,
+            "storytelling_score": 7,
+            "critical_thinking_score": 7,
+            "overall_score": 7,
+            "strengths": ["Content is present and readable"],
+            "areas_for_improvement": [
+                "Could enhance engagement",
+                "Could add more insight",
+            ],
+            "suggestions": [
+                "Add compelling hooks",
+                "Include thought-provoking questions",
+                "Use more conversational tone",
+            ],
+        }

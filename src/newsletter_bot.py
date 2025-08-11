@@ -285,6 +285,7 @@ def config() -> None:
         rss_count = len(settings.rss_feeds.split(",")) if settings.rss_feeds else 0
         click.echo("\n📡 Content Sources:")
         click.echo(f"  RSS Feeds: {rss_count} configured")
+        click.echo(f"  Readwise Filter Tag: '{settings.readwise_filter_tag}'")
 
         if settings.rss_feeds and rss_count > 0:
             click.echo("\n📋 RSS Feed URLs:")

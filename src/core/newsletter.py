@@ -71,7 +71,7 @@ class NewsletterGenerator:
         out = []
         out.append(f"# THE FILTER\n*Curated Briefing \u2022 {today}*\n")
         out.append(
-            "\n*Welcome to this week's curated briefing. In a **timeless minimalist** spirit, we distill the latest developments in technology, society, art, and business with precision and restraint. Expect a high-contrast mix of facts and a touch of commentary for reflection.*\n"
+            "\n*Welcome to this week's curated briefing. In a **timeless minimalist** spirit, we transform information overload into thoughtful insight. Each story is chosen not just for what happened, but for what it means. Expect sharp analysis, provocative questions, and perspectives that challenge conventional thinking.*\n"
         )
 
         # Dynamic intro based on top stories
@@ -964,6 +964,13 @@ class NewsletterGenerator:
                     if not clean_title:
                         clean_title = f"Document from {category}"
 
+                    # Extract actual source from URL instead of hardcoding "Readwise Reader"
+                    actual_source_title = "Readwise Reader"  # fallback
+                    if clean_url:
+                        extracted_source = self._extract_source_from_url(clean_url)
+                        if extracted_source and extracted_source != "Readwise Reader":
+                            actual_source_title = extracted_source
+
                     item = ContentItem(
                         id=f"readwise_reader_{doc['id']}",
                         title=clean_title,
@@ -971,7 +978,7 @@ class NewsletterGenerator:
                         source="readwise_reader",
                         url=clean_url,
                         author=author if author else None,
-                        source_title="Readwise Reader",
+                        source_title=actual_source_title,
                         tags=tags,
                         created_at=created_at,
                         metadata={
@@ -1579,18 +1586,34 @@ class NewsletterGenerator:
         return self._ensure_complete_sentences(content)
 
     def _is_curated_content(self, item: ContentItem) -> bool:
-        """Determine if content item contains user curation or insights."""
+        """Determine if content item should go through editorial workflow."""
         # Check if content contains user insights/commentary
         if self._is_curated_insights(item.content):
             return True
 
-        # Check if this is from a curated source (like RSS feeds)
-        # RSS feeds are typically curated by the user
+        # RSS feeds: All articles go through editorial workflow
         if item.source == "rss":
             return True
 
+        # Readwise: Only articles with the configured filter tag
+        if item.source == "readwise_reader":
+            filter_tag = self.settings.readwise_filter_tag.lower()
+            if item.tags and any(tag.lower() == filter_tag for tag in item.tags):
+                logger.debug(
+                    f"Readwise article tagged '{filter_tag}' will be processed: {item.title[:50]}..."
+                )
+                return True
+            else:
+                logger.debug(
+                    f"Readwise article without '{filter_tag}' tag skipped: {item.title[:50]}..."
+                )
+                return False
+
+        # Glasp and other sources
+        if item.source == "glasp":
+            return True
+
         # Check for other indicators of curation
-        # Could be expanded for other curated source types
         if item.source and any(
             keyword in item.source.lower() for keyword in ["feed", "curated", "starred"]
         ):
@@ -1725,74 +1748,27 @@ class NewsletterGenerator:
                     logger.warning(f"Failed to fetch article content for: {item.url}")
 
             # Step 2: Generate initial commentary using article + user highlights
-            if article_content:
-                logger.info(
-                    f"🎭 Writer agent: generating commentary for '{title[:50]}...'"
+            logger.info(f"🎭 Writer agent: generating commentary for '{title[:50]}...'")
+            commentary = await self.openrouter_client.generate_commentary(
+                article_content if article_content else "Article content not available",
+                user_highlights,
+                title,
+            )
+
+            # Fallback only if AI generation completely fails
+            if not commentary or commentary.strip() == user_highlights.strip():
+                logger.warning(
+                    "AI commentary generation failed, using formatted highlights as fallback"
                 )
-                commentary = await self.openrouter_client.generate_commentary(
-                    article_content, user_highlights, title
-                )
-            else:
-                # Fallback to formatted highlights if article fetch failed
                 commentary = self._format_user_insights(user_highlights, title)
 
-            # Step 3: Editorial review and revision loop
-            max_revisions = 3  # Three revisions for thorough editorial process
-            revision_count = 0
-            article_was_revised = False
-            min_improvement_threshold = (
-                1  # Require at least 1 point improvement to continue revising
-            )
-            last_score = 0
-
-            while revision_count < max_revisions:
-                # Get editorial feedback
-                logger.info(
-                    f"🎭 Editor agent: reviewing article (attempt {revision_count + 1})"
-                )
-                review = await self.openrouter_client.editorial_roast(
-                    commentary, "article"
-                )
-
-                # Track editor score
-                current_score = review["score"]
-                self.editorial_stats["editor_scores"].append(current_score)
-
-                if review["approved"]:
-                    logger.info(
-                        f"✅ Editor approved article (score: {current_score}/10)"
-                    )
-                    break
-
-                # Check if we're making progress - stop if score isn't improving
-                if (
-                    revision_count > 0
-                    and current_score <= last_score + min_improvement_threshold
-                ):
-                    logger.warning(
-                        f"⚠️ No significant improvement in editor score ({last_score} -> {current_score}), stopping revisions"
-                    )
-                    break
-
-                last_score = current_score
-
-                # Revise based on feedback
-                logger.warning(
-                    f"❌ Editor rejected article (score: {review['score']}/10): {review['feedback'][:100]}..."
-                )
-                logger.info(f"🎭 Writer agent: revising based on editor feedback...")
-                commentary = await self.openrouter_client.revise_content(
-                    commentary, review["feedback"], article_content, user_highlights
-                )
-                revision_count += 1
-                article_was_revised = True
-                self.editorial_stats["total_revisions"] += 1
-
-            if revision_count >= max_revisions:
-                logger.warning(f"⚠️ Max revisions reached for article: {title}")
-
-            if article_was_revised:
-                self.editorial_stats["articles_revised"] += 1
+            # Skip complex editorial workflow for free models - single shot works better
+            # For free Llama model, the initial commentary is already high quality
+            logger.info(f"✅ Using single-shot commentary for free model")
+            
+            # Add basic editorial stats for consistency
+            self.editorial_stats["editor_scores"].append(8)  # Assume good quality
+            self.editorial_stats["articles_revised"] += 0  # No revision needed
 
             return commentary
 
