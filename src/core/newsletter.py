@@ -213,10 +213,15 @@ class NewsletterGenerator:
                 if item.url and str(item.url).startswith(("http://", "https://")):
                     src_name = item.source_title or item.source
                     # Skip if source name is missing or generic
-                    if not src_name or src_name in [
-                        "Unknown",
-                        "Unknown Source",
-                    ] or src_name.lower() == item.source.lower():
+                    if (
+                        not src_name
+                        or src_name
+                        in [
+                            "Unknown",
+                            "Unknown Source",
+                        ]
+                        or src_name.lower() == item.source.lower()
+                    ):
                         # Try to extract source from URL instead
                         if hasattr(self, "_extract_source_from_url"):
                             src_name = self._extract_source_from_url(str(item.url))
@@ -256,7 +261,9 @@ class NewsletterGenerator:
         """Intelligently categorize content using AI when available, fallback to keywords."""
         # For curated content with clear user insights, use keyword-based categorization to save API calls
         if self._is_curated_content(item) and self._is_curated_insights(item.content):
-            logger.debug(f"Using keyword categorization for curated insights: {item.title}")
+            logger.debug(
+                f"Using keyword categorization for curated insights: {item.title}"
+            )
         # Try AI categorization for complex/ambiguous content only
         elif (
             self.openrouter_client
@@ -593,9 +600,7 @@ class NewsletterGenerator:
                 "No content sources available. Please configure at least one API key or RSS feed."
             )
         else:
-            logger.info(
-                f"✅ {active_sources} content source(s) configured successfully"
-            )
+            logger.info(f"✅ {active_sources} content source(s) configured successfully")
 
     def _init_readwise_client(self, settings: Settings):
         """Initialize Readwise client with validation."""
@@ -1576,17 +1581,19 @@ class NewsletterGenerator:
         # Check if content contains user insights/commentary
         if self._is_curated_insights(item.content):
             return True
-        
+
         # Check if this is from a curated source (like RSS feeds)
         # RSS feeds are typically curated by the user
         if item.source == "rss":
             return True
-        
+
         # Check for other indicators of curation
         # Could be expanded for other curated source types
-        if item.source and any(keyword in item.source.lower() for keyword in ["feed", "curated", "starred"]):
+        if item.source and any(
+            keyword in item.source.lower() for keyword in ["feed", "curated", "starred"]
+        ):
             return True
-            
+
         return False
 
     def _is_curated_insights(self, content: str) -> bool:
