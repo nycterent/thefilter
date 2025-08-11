@@ -41,8 +41,8 @@ def generate(ctx: click.Context, dry_run: bool) -> None:
         try:
             # Lazy imports to avoid importing heavy dependencies when the
             # CLI module is merely imported (e.g. during tests).
-            from src.models.settings import Settings
             from src.core.newsletter import NewsletterGenerator
+            from src.models.settings import Settings
 
             settings = Settings(debug=ctx.obj.get("debug", False))
             logger.info("Starting newsletter generation...")
@@ -200,8 +200,8 @@ def health() -> None:
     try:
         # Import Settings lazily to avoid requiring optional dependencies
         # when merely importing the CLI module.
-        from src.models.settings import Settings
         from src.core.newsletter import NewsletterGenerator
+        from src.models.settings import Settings
 
         settings = Settings()
         logger.info("🔍 Checking system health...")

@@ -35,7 +35,7 @@ class NewsletterGenerator:
         Generate 'The Filter' newsletter in strict markdown table format.
         """
         # Categorize items
-        categories = {
+        categories: dict[str, list[ContentItem]] = {
             "technology": [],
             "society": [],
             "art": [],
@@ -535,7 +535,7 @@ class NewsletterGenerator:
             "business": business_score,
         }
 
-        best_category = max(scores, key=scores.get)
+        best_category = max(scores, key=lambda k: scores[k])
 
         # If no clear winner (all scores 0), use content-based fallback
         if scores[best_category] == 0:
@@ -658,6 +658,7 @@ class NewsletterGenerator:
                     url=highlight.get("url"),
                     author=highlight.get("author"),
                     source_title=highlight.get("source_title"),
+                    is_paywalled=False,
                     tags=highlight.get("tags", []),
                     created_at=created_at,
                     metadata={
@@ -859,6 +860,9 @@ class NewsletterGenerator:
                 content="Newsletter generation failed: No content sources configured. Please set at least one of: READWISE_API_KEY, GLASP_API_KEY, or RSS_FEEDS.",
                 items=[],
                 created_at=datetime.now(timezone.utc),
+                image_url=None,
+                draft_id=None,
+                metadata=None,
             )
 
         # Step 1: Aggregate content from all sources
@@ -871,6 +875,9 @@ class NewsletterGenerator:
                 content="No new content was found from configured sources this week.",
                 items=[],
                 created_at=datetime.now(timezone.utc),
+                image_url=None,
+                draft_id=None,
+                metadata=None,
             )
 
         logger.info(f"Aggregated {len(content_items)} content items")
@@ -1107,6 +1114,7 @@ class NewsletterGenerator:
                         url=clean_url,
                         author=author if author else None,
                         source_title=actual_source_title,
+                        is_paywalled=False,
                         tags=tags,
                         created_at=created_at,
                         metadata={
@@ -1163,6 +1171,7 @@ class NewsletterGenerator:
                     url=article.get("url"),
                     author=article.get("author"),
                     source_title=article.get("source_title"),
+                    is_paywalled=False,
                     tags=article.get("tags", []),
                     created_at=created_at,
                     metadata={
@@ -1437,6 +1446,7 @@ class NewsletterGenerator:
                 url=item.url,
                 author=item.author or enhanced_source.get("author", ""),
                 source_title=enhanced_source.get("source_title", item.source_title),
+                is_paywalled=item.is_paywalled,
                 tags=item.tags,
                 created_at=item.created_at,
                 metadata=item.metadata,
@@ -2182,9 +2192,9 @@ class NewsletterGenerator:
             return False
 
         # Check for complete sentences - no truncated content
-        if item.content.endswith(('...', '…')):
+        if item.content.endswith(("...", "…")):
             return False
-        if not item.content.endswith(('.', '!', '?')):
+        if not item.content.endswith((".", "!", "?")):
             return False
 
         # Check for AI refusal text and prompt leakage
@@ -2285,6 +2295,9 @@ class NewsletterGenerator:
             content=newsletter_content,
             items=enriched_items,
             created_at=datetime.now(timezone.utc),
+            image_url=None,
+            draft_id=None,
+            metadata=None,
         )
 
     def _create_readwise_section(self, items: List[ContentItem]) -> str:

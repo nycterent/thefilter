@@ -400,7 +400,6 @@ class RSSClient:
         if not html_content:
             return ""
 
-
         from html import unescape
 
         try:
@@ -510,8 +509,6 @@ class RSSClient:
         """
         if not html_content:
             return ""
-
-
 
         try:
             # Look for URLs that are not Feedbin URLs

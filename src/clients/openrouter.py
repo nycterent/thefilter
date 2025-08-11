@@ -30,7 +30,7 @@ class OpenRouterClient:
             "X-Title": "The Filter Newsletter",  # Optional title
         }
         # Use free models only - default to OpenRouter's Venice model
-        self.default_model = "openai/gpt-4o-mini:free"  # Venice free model
+        self.default_model = "cognitivecomputations/dolphin-mistral-24b-venice-edition:free"  # Venice free model
 
         # Rate limiting for free tier (20 requests/minute)
         self.last_request_time = 0
@@ -121,16 +121,17 @@ Summary:"""
                 for phrase in unwanted_phrases:
                     if summary.lower().startswith(phrase.lower()):
                         # Find the first sentence after the unwanted opening
-                        sentences = summary.split('. ')
+                        sentences = summary.split(". ")
                         if len(sentences) > 1:
-                            summary = '. '.join(sentences[1:])
+                            summary = ". ".join(sentences[1:])
                         break
 
                 # Preserve complete thoughts - only truncate if absolutely necessary
                 if len(summary) > max_length:
                     # Split into sentences
                     import re
-                    sentences = re.split(r'(?<=[.!?])\s+', summary)
+
+                    sentences = re.split(r"(?<=[.!?])\s+", summary)
                     truncated = ""
 
                     for sentence in sentences:
@@ -143,12 +144,18 @@ Summary:"""
                     # Clean up and ensure proper ending
                     summary = truncated.strip()
                     # Only add period if we have content and it doesn't end properly
-                    if summary and not summary.endswith(('.', '!', '?')):
+                    if summary and not summary.endswith((".", "!", "?")):
                         summary += "."
 
                     # If truncation resulted in too short content, keep more of original
-                    if len(summary) < max_length * 0.7:  # Less than 70% of allowed space
-                        summary = summary[:max_length-3] + "..." if len(summary) > max_length else summary
+                    if (
+                        len(summary) < max_length * 0.7
+                    ):  # Less than 70% of allowed space
+                        summary = (
+                            summary[: max_length - 3] + "..."
+                            if len(summary) > max_length
+                            else summary
+                        )
 
                 return summary
             else:
@@ -303,7 +310,7 @@ Choose the most appropriate category. Respond with ONLY ONE WORD: technology, so
             "society": 0,  # Default fallback
         }
 
-        return max(scores, key=scores.get) or "society"
+        return max(scores, key=lambda k: scores[k]) or "society"
 
     async def _rate_limit_delay(self):
         """Ensure we don't exceed rate limits by adding delays between requests."""
