@@ -272,6 +272,8 @@ def health() -> None:
 def config() -> None:
     """Display current configuration (without sensitive values)."""
     try:
+        from src.models.settings import Settings
+
         settings = Settings()
 
         click.echo("\n📋 Newsletter Bot Configuration\n")

@@ -121,7 +121,7 @@ class ContentSanitizer:
             return text, []
 
         issues = []
-        original_text = text
+        # Store original for comparison if needed
 
         # Check for AI refusal strings with more aggressive removal
         refusal_matches = self.refusal_regex.findall(text)
@@ -360,7 +360,7 @@ class ContentSanitizer:
                         issues.append(f"Non-canonical URL ({proxy_domain}): {url}")
                         # For known problematic domains, mark as severe issue
                         if proxy_domain in ["feedbinusercontent.com", "substackcdn.com", "list-manage.com"]:
-                            issues.append(f"CRITICAL: Using CDN URL instead of original source")
+                            issues.append("CRITICAL: Using CDN URL instead of original source")
 
             # Validate URL structure
             parsed_canonical = urlparse(canonical_url)
