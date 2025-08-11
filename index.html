@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Newsletter Bot Status</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 40px; background: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .header { text-align: center; margin-bottom: 30px; }
+        .status { display: flex; justify-content: space-between; align-items: center; padding: 15px; margin: 10px 0; border-radius: 6px; }
+        .status.success { background: #d4edda; border-left: 4px solid #28a745; }
+        .status.failure { background: #f8d7da; border-left: 4px solid #dc3545; }
+        .status.unknown { background: #fff3cd; border-left: 4px solid #ffc107; }
+        .links { margin-top: 30px; }
+        .links a { display: inline-block; margin: 5px 10px; padding: 8px 16px; background: #007bff; color: white; text-decoration: none; border-radius: 4px; }
+        .timestamp { color: #6c757d; font-size: 0.9em; }
+        .badge { padding: 2px 8px; border-radius: 12px; font-size: 0.8em; font-weight: bold; }
+        .badge.success { background: #28a745; color: white; }
+        .badge.failure { background: #dc3545; color: white; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📧 Newsletter Bot Status</h1>
+            <p>Automated newsletter generation system</p>
+        </div>
+
+        <div class="status failure">
+            <div>
+                <strong>Last Newsletter Generation</strong>
+                <div class="timestamp">2025-08-11 23:00:58 UTC</div>
+            </div>
+            <div>
+                <span class="badge failure">
+                    ❌ Failed
+                </span>
+            </div>
+        </div>
+
+        <div class="status success">
+            <div>
+                <strong>Next Scheduled Run</strong>
+                <div class="timestamp">Every Saturday at 9:00 AM UTC</div>
+            </div>
+            <div>⏰ Scheduled</div>
+        </div>
+
+        <div class="links">
+            <h3>🔗 Quick Actions</h3>
+            <a href="https://github.com/nycterent/thefilter/actions/workflows/newsletter.yml">🔄 Manual Run</a>
+            <a href="https://github.com/nycterent/thefilter/actions">📊 All Workflows</a>
+            <a href="https://github.com/nycterent/thefilter/issues?q=label%3Anewsletter">📋 Newsletter Issues</a>
+            <a href="https://github.com/nycterent/thefilter">📁 Repository</a>
+        </div>
+
+        <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #dee2e6; text-align: center; color: #6c757d;">
+            <small>Last updated: 2025-08-11 23:00:58 UTC | Workflow #1</small>
+        </div>
+    </div>
+</body>
+</html>
