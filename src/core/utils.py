@@ -73,7 +73,9 @@ def clean_article_title(title: str) -> str:
     cleaned = re.sub(r"^(Fwd:|Re:|FW:)\s*", "", cleaned, flags=re.IGNORECASE)
     cleaned = " ".join(cleaned.split())
 
-    if len(cleaned) < 5 or any(g in cleaned.lower() for g in ["untitled", "no subject", "fwd", "firehose"]):
+    if len(cleaned) < 5 or any(
+        g in cleaned.lower() for g in ["untitled", "no subject", "fwd", "firehose"]
+    ):
         return "Article Commentary"
 
     return cleaned.strip()

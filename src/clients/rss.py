@@ -246,9 +246,7 @@ class RSSClient:
         clean_title = clean_article_title(title)
 
         # Extract actual source from article URL instead of using generic feed title
-        actual_source = (
-            extract_source_from_url(original_url) if original_url else None
-        )
+        actual_source = extract_source_from_url(original_url) if original_url else None
 
         # Note: Web search fallback would go here but requires async context
         # TODO: Implement web search fallback for better source detection
