@@ -3,7 +3,21 @@
 import logging
 from typing import Dict, Optional
 
-from infisical_sdk import InfisicalSDKClient  # type: ignore
+# The official Infisical SDK is optional. Import it lazily and provide a
+# tiny fallback so that the rest of the code (and tests) can run without
+# the package being installed.
+try:  # pragma: no cover - behaviour is trivial
+    from infisical_sdk import InfisicalSDKClient  # type: ignore
+except ModuleNotFoundError:  # pragma: no cover - only used in tests
+    class InfisicalSDKClient:  # type: ignore
+        """Fallback Infisical client used when the real SDK is unavailable.
+
+        The test suite replaces this placeholder with a mock, allowing the
+        rest of the module to be imported without the external dependency.
+        """
+        def __init__(self, *args, **kwargs) -> None:  # pragma: no cover - trivial
+            pass
+
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
