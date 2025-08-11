@@ -111,6 +111,31 @@ jobs:
         OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         UNSPLASH_API_KEY: ${{ secrets.UNSPLASH_API_KEY }}
     
+    - name: Validate Generated Newsletter
+      if: inputs.action == 'generate-newsletter'
+      run: |
+        echo "🔍 Running newsletter quality validation..."
+        echo "Fetching latest newsletter from Buttondown..."
+        
+        # Get the latest newsletter URL from Buttondown API
+        LATEST_URL=$(curl -s -H "Authorization: Token ${{ secrets.BUTTONDOWN_API_KEY }}" \
+          "https://api.buttondown.email/v1/newsletters" | \
+          jq -r '.results[0].secondary_id' | \
+          xargs -I {} echo "https://buttondown.com/filter/archive/{}")
+        
+        echo "Latest newsletter URL: $LATEST_URL"
+        
+        # Run validation
+        python check_briefing.py "$LATEST_URL" --verbose || {
+          echo "❌ Newsletter validation failed! Issues detected."
+          echo "Please review the output above and consider regenerating the newsletter."
+          exit 1
+        }
+        
+        echo "✅ Newsletter validation passed!"
+      env:
+        BUTTONDOWN_API_KEY: ${{ secrets.BUTTONDOWN_API_KEY }}
+    
     - name: Create status comment
       if: always()
       uses: actions/github-script@v7

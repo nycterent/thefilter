@@ -99,6 +99,34 @@ jobs:
         OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         UNSPLASH_API_KEY: ${{ secrets.UNSPLASH_API_KEY }}
     
+    - name: Validate Generated Newsletter
+      if: steps.generate.outputs.generation_status == 'success' && inputs.dry_run != 'true'
+      id: validate
+      run: |
+        echo "🔍 Running newsletter quality validation..."
+        echo "Fetching latest newsletter from Buttondown..."
+        
+        # Get the latest newsletter URL from Buttondown API
+        LATEST_URL=$(curl -s -H "Authorization: Token ${{ secrets.BUTTONDOWN_API_KEY }}" \
+          "https://api.buttondown.email/v1/newsletters" | \
+          jq -r '.results[0].secondary_id' | \
+          xargs -I {} echo "https://buttondown.com/filter/archive/{}")
+        
+        echo "Latest newsletter URL: $LATEST_URL"
+        
+        # Run validation
+        if python check_briefing.py "$LATEST_URL" --verbose > validation_output.log 2>&1; then
+          echo "validation_status=passed" >> $GITHUB_OUTPUT
+          echo "✅ Newsletter validation passed!"
+        else
+          echo "validation_status=failed" >> $GITHUB_OUTPUT
+          echo "❌ Newsletter validation failed! Issues detected."
+          cat validation_output.log
+          # Don't exit 1 here so we can still create the issue with results
+        fi
+      env:
+        BUTTONDOWN_API_KEY: ${{ secrets.BUTTONDOWN_API_KEY }}
+    
     - name: Upload newsletter output
       uses: actions/upload-artifact@v3
       if: always()
@@ -115,12 +143,32 @@ jobs:
           const fs = require('fs');
           const output = fs.readFileSync('newsletter_output.log', 'utf8');
           
+          let validationResults = '';
+          try {
+            const validationOutput = fs.readFileSync('validation_output.log', 'utf8');
+            const validationStatus = '${{ steps.validate.outputs.validation_status }}';
+            validationResults = `
+          ### 🔍 Newsletter Quality Validation
+          
+          **Status:** ${validationStatus === 'passed' ? '✅ Passed' : validationStatus === 'failed' ? '❌ Failed' : '⚠️ Skipped (dry run)'}
+          
+          ${validationStatus !== '' ? `\`\`\`
+          ${validationOutput}
+          \`\`\`` : ''}`;
+          } catch (e) {
+            validationResults = `
+          ### 🔍 Newsletter Quality Validation
+          
+          **Status:** ⚠️ Skipped (dry run mode)`;
+          }
+          
           const issueBody = `## 📧 Newsletter Generation Completed Successfully
           
           **Timestamp:** ${new Date().toISOString()}
           **Workflow Run:** [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
           **Dry Run:** ${{ inputs.dry_run }}
           **Debug Mode:** ${{ inputs.debug }}
+          ${validationResults}
           
           ### 📊 Execution Details
           
