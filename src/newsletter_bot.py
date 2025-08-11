@@ -5,8 +5,11 @@ import logging
 
 import click
 
-from src.core.newsletter import NewsletterGenerator
-from src.models.settings import Settings
+# Import heavy dependencies lazily within command functions to avoid
+# requiring optional packages (like pydantic and aiohttp) just to load
+# the CLI module.  This keeps ``cli`` importable in environments where
+# the full runtime dependencies aren't installed – for example during
+# basic tests that only check command registration.
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +39,11 @@ def generate(ctx: click.Context, dry_run: bool) -> None:
 
     async def _generate():
         try:
+            # Lazy imports to avoid importing heavy dependencies when the
+            # CLI module is merely imported (e.g. during tests).
+            from src.models.settings import Settings
+            from src.core.newsletter import NewsletterGenerator
+
             settings = Settings(debug=ctx.obj.get("debug", False))
             logger.info("Starting newsletter generation...")
 
@@ -190,6 +198,11 @@ def generate(ctx: click.Context, dry_run: bool) -> None:
 def health() -> None:
     """Check system health and configuration."""
     try:
+        # Import Settings lazily to avoid requiring optional dependencies
+        # when merely importing the CLI module.
+        from src.models.settings import Settings
+        from src.core.newsletter import NewsletterGenerator
+
         settings = Settings()
         logger.info("🔍 Checking system health...")
 
