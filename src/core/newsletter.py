@@ -2357,9 +2357,11 @@ class NewsletterGenerator:
         Returns:
             True if published successfully
         """
-        import aiohttp
         import json
         from pathlib import Path
+
+        import aiohttp
+
         from src.core.qacheck import run_checks
 
         try:
