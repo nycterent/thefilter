@@ -598,7 +598,9 @@ class NewsletterGenerator:
                 "No content sources available. Please configure at least one API key or RSS feed."
             )
         else:
-            logger.info(f"✅ {active_sources} content source(s) configured successfully")
+            logger.info(
+                f"✅ {active_sources} content source(s) configured successfully"
+            )
 
     def _init_readwise_client(self, settings: Settings):
         """Initialize Readwise client with validation."""
@@ -767,10 +769,12 @@ class NewsletterGenerator:
         editorial_metadata = {
             "editorial_stats": {
                 **self.editorial_stats,
-                "avg_editor_score": sum(self.editorial_stats["editor_scores"])
-                / len(self.editorial_stats["editor_scores"])
-                if self.editorial_stats["editor_scores"]
-                else None,
+                "avg_editor_score": (
+                    sum(self.editorial_stats["editor_scores"])
+                    / len(self.editorial_stats["editor_scores"])
+                    if self.editorial_stats["editor_scores"]
+                    else None
+                ),
             },
             "processing_time": processing_time,
         }
@@ -1158,15 +1162,38 @@ class NewsletterGenerator:
                 item.content, enhanced_title, item.source
             )
 
-            # For RSS content with user insights, use the new editorial workflow
-            if item.source == "rss" and self._is_curated_insights(enhanced_content):
-                # This is curated content - use the full editorial workflow
-                enhanced_content = await self._editorial_workflow(
-                    item, enhanced_content, enhanced_title
-                )
-                logger.debug(
-                    f"Applied editorial workflow to RSS content: {enhanced_title}"
-                )
+            # For RSS content, use LLM to detect if it contains user commentary
+            if item.source == "rss" and self.openrouter_client:
+                try:
+                    # Use LLM to detect if this contains user commentary/insights
+                    has_user_commentary = (
+                        await self.openrouter_client.detect_user_commentary(
+                            enhanced_content, enhanced_title
+                        )
+                    )
+
+                    if has_user_commentary:
+                        logger.debug(
+                            f"LLM detected user commentary in: {enhanced_title}"
+                        )
+                        # This is curated content - use the full editorial workflow
+                        enhanced_content = await self._editorial_workflow(
+                            item, enhanced_content, enhanced_title
+                        )
+                        logger.debug(
+                            f"Applied editorial workflow to RSS content: {enhanced_title}"
+                        )
+                    else:
+                        logger.debug(
+                            f"LLM detected no user commentary in: {enhanced_title}"
+                        )
+
+                except Exception as e:
+                    logger.error(f"Editorial workflow failed for {enhanced_title}: {e}")
+                    # Keep the formatted content as fallback
+                    enhanced_content = self._format_user_insights(
+                        enhanced_content, enhanced_title
+                    )
             elif (
                 self.openrouter_client
                 and len(enhanced_content) > 200
@@ -1540,7 +1567,7 @@ class NewsletterGenerator:
         if not content:
             return ""
 
-        # For RSS content (user's curated insights), preserve structure and prioritize insights
+        # For RSS content, format user insights (this is now a fallback path)
         if source == "rss" and self._is_curated_insights(content):
             return self._format_user_insights(content, title)
 
@@ -1563,11 +1590,15 @@ class NewsletterGenerator:
         return self._ensure_complete_sentences(content)
 
     def _is_curated_insights(self, content: str) -> bool:
-        """Check if content contains user's curated insights (from RSS email forwarding)."""
+        """Legacy fallback method for detecting curated insights.
+
+        Note: This is now primarily used as a fallback when LLM detection is not available.
+        The main detection is now done by OpenRouter LLM in detect_user_commentary().
+        """
         if not content:
             return False
 
-        # Look for indicators of curated insights
+        # Look for obvious indicators of curated insights
         insight_indicators = [
             "•",  # Bullet points
             "📚",
@@ -1576,21 +1607,19 @@ class NewsletterGenerator:
             "⚔️",
             "🌍",
             "🏛️",
-            "✊",  # Common emojis in insights
-            "**",  # Bold formatting from user highlights
+            "✊",  # Emojis
+            "**",  # Bold formatting
             "Trend",
             "Issue",
             "Insights",
-            "Call to Action",  # Common insight themes
+            "Call to Action",
         ]
 
-        # Check if content has multiple insight indicators
+        # Simple fallback detection - if multiple indicators present
         indicator_count = sum(
             1 for indicator in insight_indicators if indicator in content
         )
-        return (
-            indicator_count >= 2
-        )  # Must have at least 2 indicators to be considered curated insights
+        return indicator_count >= 2
 
     def _format_user_insights(self, content: str, title: str) -> str:
         """Format user's curated insights for newsletter display."""
@@ -1702,6 +1731,10 @@ class NewsletterGenerator:
             max_revisions = 2  # Limit revisions to avoid infinite loops
             revision_count = 0
             article_was_revised = False
+            min_improvement_threshold = (
+                1  # Require at least 1 point improvement to continue revising
+            )
+            last_score = 0
 
             while revision_count < max_revisions:
                 # Get editorial feedback
@@ -1713,13 +1746,26 @@ class NewsletterGenerator:
                 )
 
                 # Track editor score
-                self.editorial_stats["editor_scores"].append(review["score"])
+                current_score = review["score"]
+                self.editorial_stats["editor_scores"].append(current_score)
 
                 if review["approved"]:
                     logger.info(
-                        f"✅ Editor approved article (score: {review['score']}/10)"
+                        f"✅ Editor approved article (score: {current_score}/10)"
                     )
                     break
+
+                # Check if we're making progress - stop if score isn't improving
+                if (
+                    revision_count > 0
+                    and current_score <= last_score + min_improvement_threshold
+                ):
+                    logger.warning(
+                        f"⚠️ No significant improvement in editor score ({last_score} -> {current_score}), stopping revisions"
+                    )
+                    break
+
+                last_score = current_score
 
                 # Revise based on feedback
                 logger.warning(

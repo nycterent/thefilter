@@ -353,10 +353,23 @@ class RSSClient:
                 feed_url, headers=headers, timeout=timeout
             ) as response:
                 if response.status == 200:
-                    # Try to parse a bit of the content to verify it's valid XML
+                    # Try to parse the XML content to verify it's valid
                     content = await response.text()
-                    ET.fromstring(content[:1000] + "</rss>")  # Quick validation
-                    return True
+                    # Basic check for RSS/Atom content
+                    if any(
+                        tag in content.lower() for tag in ["<rss", "<feed", "<atom"]
+                    ):
+                        try:
+                            # Try to parse full content as XML
+                            ET.fromstring(content)
+                            return True
+                        except ET.ParseError:
+                            # If full parse fails, it's still likely a valid feed
+                            logger.debug(
+                                f"XML parse failed for {feed_url}, but contains feed indicators"
+                            )
+                            return True
+                    return False
                 else:
                     return False
 

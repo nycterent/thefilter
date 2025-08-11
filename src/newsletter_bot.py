@@ -124,29 +124,40 @@ def generate(ctx: click.Context, dry_run: bool) -> None:
                 # Show editorial workflow stats
                 if newsletter.metadata.get("editorial_stats"):
                     stats = newsletter.metadata["editorial_stats"]
-                    logger.info("🎭 Editorial Workflow Results:")
-                    logger.info(
-                        f"   - Articles processed: {stats.get('articles_processed', 0)}"
-                    )
-                    logger.info(
-                        f"   - Articles revised: {stats.get('articles_revised', 0)}"
-                    )
-                    logger.info(
-                        f"   - Average editor score: {stats.get('avg_editor_score', 'N/A')}/10"
-                    )
-                    if stats.get("newsletter_editor_score"):
-                        logger.info(
-                            f"   - Newsletter editor score: {stats['newsletter_editor_score']}/10"
-                        )
-                    if stats.get("total_revisions"):
-                        logger.info(
-                            f"   - Total revisions made: {stats['total_revisions']}"
-                        )
+                    articles_processed = stats.get("articles_processed", 0)
 
-                    # Show any editorial feedback summaries
-                    if stats.get("common_feedback_themes"):
+                    if articles_processed > 0:
+                        logger.info("🎭 Editorial Workflow Results:")
+                        logger.info(f"   - Articles processed: {articles_processed}")
                         logger.info(
-                            f"   - Common editor feedback: {', '.join(stats['common_feedback_themes'])}"
+                            f"   - Articles revised: {stats.get('articles_revised', 0)}"
+                        )
+                        logger.info(
+                            f"   - Average editor score: {stats.get('avg_editor_score', 'N/A')}/10"
+                        )
+                        if stats.get("newsletter_editor_score"):
+                            logger.info(
+                                f"   - Newsletter editor score: {stats['newsletter_editor_score']}/10"
+                            )
+                        if stats.get("total_revisions"):
+                            logger.info(
+                                f"   - Total revisions made: {stats['total_revisions']}"
+                            )
+
+                        # Show any editorial feedback summaries
+                        if stats.get("common_feedback_themes"):
+                            logger.info(
+                                f"   - Common editor feedback: {', '.join(stats['common_feedback_themes'])}"
+                            )
+                    else:
+                        logger.info(
+                            "🎭 Editorial Workflow: ⚠️  Skipped (OpenRouter API key not configured)"
+                        )
+                        logger.info(
+                            "   - Set OPENROUTER_API_KEY to enable AI-powered editorial review and revision"
+                        )
+                        logger.info(
+                            "   - Content processed using basic formatting without AI enhancement"
                         )
 
                 if newsletter.metadata.get("processing_time"):

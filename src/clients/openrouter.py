@@ -38,6 +38,8 @@ class OpenRouterClient:
         self.min_request_interval = (
             3.2  # 3.2 seconds between requests = ~18.75 requests/minute (safe buffer)
         )
+        self.consecutive_failures = 0
+        self.backoff_multiplier = 1.0
 
     async def enhance_content_summary(
         self, title: str, content: str, max_length: int = 160
@@ -218,8 +220,11 @@ Choose the most appropriate category. Respond with only the category name."""
         current_time = time.time()
         time_since_last = current_time - self.last_request_time
 
-        if time_since_last < self.min_request_interval:
-            delay = self.min_request_interval - time_since_last
+        # Apply exponential backoff if we've had consecutive failures
+        effective_interval = self.min_request_interval * self.backoff_multiplier
+
+        if time_since_last < effective_interval:
+            delay = effective_interval - time_since_last
             logger.debug(
                 f"Rate limiting: waiting {delay:.1f}s before next OpenRouter request"
             )
@@ -260,7 +265,20 @@ Choose the most appropriate category. Respond with only the category name."""
                     timeout=aiohttp.ClientTimeout(total=30),
                 ) as response:
                     if response.status == 200:
+                        # Reset backoff on successful request
+                        self.consecutive_failures = 0
+                        self.backoff_multiplier = 1.0
                         return await response.json()
+                    elif response.status == 429:
+                        # Rate limit hit - increase backoff
+                        self.consecutive_failures += 1
+                        self.backoff_multiplier = min(
+                            8.0, 2.0**self.consecutive_failures
+                        )
+                        logger.warning(
+                            f"Rate limit hit, backing off to {self.backoff_multiplier:.1f}x delay"
+                        )
+                        return None
                     else:
                         error_text = await response.text()
                         logger.error(
@@ -510,3 +528,39 @@ Revised content:"""
         except Exception as e:
             logger.error(f"Error revising content: {e}")
             return original_content
+
+    async def detect_user_commentary(self, content: str, title: str = "") -> bool:
+        """Use LLM to detect if content contains user commentary/insights that should trigger editorial workflow."""
+        if not self.api_key:
+            return False
+
+        try:
+            prompt = f"""Analyze this RSS feed content to determine if it contains personal commentary, insights, or reactions from the user.
+
+TITLE: {title}
+CONTENT: {content}
+
+Look for:
+- Personal opinions or reactions ("fuck, still need exercise", "damn this is good")
+- Informal commentary or notes
+- Emotional responses or personal reflections
+- User's own insights or takeaways
+- Casual/informal language suggesting personal thoughts
+
+Ignore:
+- Pure article excerpts or formal summaries
+- Generic descriptions without personal opinion
+- Purely informational content
+
+Respond with only: YES (contains user commentary) or NO (pure article content)"""
+
+            response = await self._make_request(prompt, max_tokens=5, temperature=0.1)
+            if response and "choices" in response and len(response["choices"]) > 0:
+                result = response["choices"][0]["message"]["content"].strip().upper()
+                return result == "YES"
+            else:
+                return False
+
+        except Exception as e:
+            logger.error(f"Error detecting user commentary: {e}")
+            return False
