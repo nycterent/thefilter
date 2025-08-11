@@ -1164,7 +1164,7 @@ class NewsletterGenerator:
             enhanced_title = self._extract_better_title(item)
 
             # Improve source attribution
-            enhanced_source = self._improve_source_attribution(item)
+            enhanced_source = await self._improve_source_attribution(item)
 
             # Enhance content summary with AI if available (pass source to prioritize RSS insights)
             enhanced_content = self._improve_summary_quality(
@@ -1346,7 +1346,7 @@ class NewsletterGenerator:
             and sum(1 for c in title if c.isalnum()) >= 5  # Has meaningful content
         )
 
-    def _improve_source_attribution(self, item: ContentItem) -> dict:
+    async def _improve_source_attribution(self, item: ContentItem) -> dict:
         """Improve source attribution to avoid 'Unknown' sources."""
         import re
         from urllib.parse import urlparse
@@ -1356,14 +1356,30 @@ class NewsletterGenerator:
         # If source_title is generic, missing, or uninformative, improve it
         needs_improvement = (
             not item.source_title
-            or item.source_title in ["Unknown", "Unknown Source"]
+            or item.source_title in ["Unknown", "Unknown Source", "Starred Articles"]
             or "featured articles" in item.source_title.lower()
+            or "starred articles" in item.source_title.lower()
             or "untitled" in item.source_title.lower()
             or len(item.source_title.strip()) < 3
         )
 
         if needs_improvement and item.url:
             improved_source = self._extract_source_from_url(item.url)
+
+            # If URL extraction still fails, try web search fallback
+            if not improved_source and item.title:
+                try:
+                    search_result = await self._search_for_source_name(
+                        item.title, str(item.url)
+                    )
+                    if search_result:
+                        improved_source = search_result
+                        logger.debug(
+                            f"Web search found source: '{search_result}' for {item.title[:50]}..."
+                        )
+                except Exception as e:
+                    logger.debug(f"Web search fallback failed: {e}")
+
             if improved_source:
                 result["source_title"] = improved_source
                 logger.debug(
@@ -1390,9 +1406,9 @@ class NewsletterGenerator:
             if not domain:
                 return ""
 
-            # Handle Readwise Reader URLs specially
+            # Skip Readwise Reader URLs - these are proxy URLs, not the actual source
             if "readwise.io" in domain:
-                return "Readwise Reader"
+                return ""
 
             # Remove common prefixes and suffixes
             domain = re.sub(r"^(www\.|m\.|mobile\.)", "", domain)
@@ -1456,6 +1472,14 @@ class NewsletterGenerator:
         except Exception as e:
             logger.debug(f"Error extracting source from URL {url}: {e}")
             return ""
+
+    async def _search_for_source_name(
+        self, article_title: str, article_url: str
+    ) -> str:
+        """Search the web to find the actual source/publication name for an article."""
+        # For now, return empty string - web search fallback can be implemented later
+        # This would require integration with search APIs or scraping
+        return ""
 
     def _ensure_content_diversity(
         self, content_items: List[ContentItem]

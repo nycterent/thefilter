@@ -75,12 +75,22 @@ TASK: Write a compelling summary that:
 
 Write an engaging summary that attracts and retains readers:"""
 
-            response = await self._make_request(prompt, max_tokens=50)
+            response = await self._make_request(
+                prompt, max_tokens=100
+            )  # Increased for better summaries
             if response and "choices" in response and len(response["choices"]) > 0:
                 summary = response["choices"][0]["message"]["content"].strip()
-                # Ensure we don't exceed max_length
+                # Ensure we don't exceed max_length but don't cut mid-word
                 if len(summary) > max_length:
-                    summary = summary[: max_length - 3] + "..."
+                    # Find the last complete word within the limit
+                    truncated = summary[: max_length - 3]
+                    last_space = truncated.rfind(" ")
+                    if (
+                        last_space > max_length * 0.8
+                    ):  # Only truncate at word boundary if it's reasonable
+                        summary = truncated[:last_space] + "..."
+                    else:
+                        summary = truncated + "..."
                 return summary
             else:
                 logger.warning("OpenRouter returned no content")
@@ -407,16 +417,28 @@ Choose the most appropriate category. Respond with ONLY ONE WORD: technology, so
             return user_highlights  # Fallback to highlights
 
         try:
-            # Simplified, more effective prompt for free models
-            prompt = f"""You are a skilled newsletter writer. Write a 2-3 paragraph commentary about this article.
+            # Enhanced prompt to use user comments as editorial angles
+            prompt = f"""You are a skilled newsletter writer. The user has curated this article with their own perspective/commentary. Use their angle as the foundation for your commentary.
 
 ARTICLE: {article_title}
 
 CONTENT: {article_content[:2000]}
 
-USER HIGHLIGHTS: {user_highlights}
+USER'S EDITORIAL ANGLE/COMMENTARY: {user_highlights}
 
-Focus on the key themes from the article and user highlights. Use a conversational tone and explain why this matters. Keep under 300 words."""
+TASK: Write a 2-3 paragraph commentary that:
+- Uses the user's perspective as your starting point and editorial angle
+- Transforms their raw thoughts into polished newsletter prose
+- Builds on their insights with additional analysis
+- Maintains their core message while making it engaging for readers
+- Treats their comments as the "hook" or central thesis
+- If user includes "HINT TO AI:" or similar guidance, use that as your editorial direction
+
+Examples: 
+- "fuck, still need exercise" → write about how the real problem isn't the technology but our relationship with exercise itself
+- "HINT TO AI: focus on the privacy implications" → center your commentary on privacy concerns
+
+Keep under 300 words with a conversational, editorial tone."""
 
             response = await self._make_request(prompt, max_tokens=200, temperature=0.7)
             if response and "choices" in response and len(response["choices"]) > 0:

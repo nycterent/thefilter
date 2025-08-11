@@ -243,6 +243,18 @@ class RSSClient:
         # Clean up the title - remove garbage like [Firehose]
         clean_title = self._clean_article_title(title)
 
+        # Extract actual source from article URL instead of using generic feed title
+        actual_source = (
+            self._extract_source_from_url(original_url) if original_url else None
+        )
+
+        # Note: Web search fallback would go here but requires async context
+        # TODO: Implement web search fallback for better source detection
+
+        # Use actual source if available, otherwise fall back to feed title
+        # Skip generic feed titles like "Starred Articles" in favor of actual source
+        source_title = actual_source if actual_source else feed_title
+
         return {
             "id": guid or link,
             "title": clean_title,
@@ -253,13 +265,71 @@ class RSSClient:
                 else description_clean
             ),
             "source": "rss",
-            "source_title": feed_title,
+            "source_title": source_title,
             "source_url": feed_url,
             "url": original_url,  # Use extracted article URL instead of Feedbin redirect
             "author": author,
             "published_at": self._normalize_date(pub_date),
             "tags": [],  # RSS feeds typically don't have tags
         }
+
+    def _extract_source_from_url(self, url: str) -> str:
+        """Extract a meaningful source name from URL."""
+        import re
+        from urllib.parse import urlparse
+
+        try:
+            parsed = urlparse(url)
+            domain = parsed.netloc.lower()
+
+            if not domain:
+                return ""
+
+            # Remove common prefixes
+            domain = re.sub(r"^(www\.|m\.|mobile\.)", "", domain)
+            original_domain = domain
+            domain = re.sub(r"\.(com|org|net|edu|gov|io|co\.uk|ai)$", "", domain)
+
+            # Handle special cases for common domains
+            source_mapping = {
+                "nature": "Nature",
+                "techcrunch": "TechCrunch",
+                "arstechnica": "Ars Technica",
+                "wired": "WIRED",
+                "theverge": "The Verge",
+                "medium": "Medium",
+                "github": "GitHub",
+                "stackoverflow": "Stack Overflow",
+                "reddit": "Reddit",
+                "youtube": "YouTube",
+                "twitter": "Twitter",
+                "linkedin": "LinkedIn",
+                "openai": "OpenAI",
+                "anthropic": "Anthropic",
+                "google": "Google",
+                "microsoft": "Microsoft",
+                "apple": "Apple",
+                "meta": "Meta",
+            }
+
+            if domain in source_mapping:
+                return source_mapping[domain]
+
+            # For substack domains like "someone.substack.com"
+            if ".substack" in original_domain:
+                subdomain = original_domain.split(".")[0]
+                return f"{subdomain.title()} (Substack)"
+
+            # Clean up domain name for presentation
+            domain_parts = domain.split(".")
+            if len(domain_parts) > 0:
+                main_domain = domain_parts[0]
+                return main_domain.replace("-", " ").replace("_", " ").title()
+
+            return domain.title()
+
+        except Exception:
+            return ""
 
     def _get_text(self, element: Optional[ET.Element], default: str = "") -> str:
         """Safely get text from XML element.
