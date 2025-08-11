@@ -113,6 +113,18 @@ Choose the most appropriate category. Respond with ONLY ONE WORD: technology, so
             response = await self._make_request(prompt, max_tokens=10)
             if response and "choices" in response and len(response["choices"]) > 0:
                 category = response["choices"][0]["message"]["content"].strip().lower()
+
+                # Clean up common AI formatting issues
+                category = category.replace("**", "").replace(
+                    "*", ""
+                )  # Remove markdown
+                category = category.replace(
+                    ":", ""
+                ).strip()  # Remove colons and extra spaces
+                category = (
+                    category.split()[-1] if category.split() else ""
+                )  # Take last word if multiple
+
                 # Validate category
                 valid_categories = ["technology", "society", "art", "business"]
                 if category in valid_categories:
