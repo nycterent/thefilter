@@ -3,10 +3,14 @@
 
 import asyncio
 import os
+
+import pytest
+
 from src.core.newsletter import NewsletterGenerator
 from src.models.settings import Settings
 
 
+@pytest.mark.asyncio
 async def test_newsletter():
     # Set RSS feeds
     os.environ["RSS_FEEDS"] = (
@@ -26,7 +30,3 @@ async def test_newsletter():
     print("\n=== END PREVIEW ===")
 
     return newsletter
-
-
-if __name__ == "__main__":
-    newsletter = asyncio.run(test_newsletter())
