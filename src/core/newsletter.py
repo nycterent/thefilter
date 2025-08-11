@@ -52,10 +52,12 @@ class NewsletterGenerator:
             """Get dynamic image using Unsplash API or fallback to curated images."""
             if self.unsplash_client:
                 try:
-                    return await self.unsplash_client.get_category_image(category, topic_hint)
+                    return await self.unsplash_client.get_category_image(
+                        category, topic_hint
+                    )
                 except Exception as e:
                     logger.debug(f"Unsplash API failed, using fallback: {e}")
-            
+
             # Fallback to curated professional images
             curated_images = {
                 "technology": "https://images.unsplash.com/photo-1518709268805-4e9042af2176?w=370&h=150&fit=crop&crop=entropy&auto=format&q=80",
@@ -71,20 +73,20 @@ class NewsletterGenerator:
         out.append(
             "\n*Welcome to this week's curated briefing. In a **timeless minimalist** spirit, we distill the latest developments in technology, society, art, and business with precision and restraint. Expect a high-contrast mix of facts and a touch of commentary for reflection.*\n"
         )
-        
+
         # Dynamic intro based on top stories
         top_stories = []
         for category, items in categories.items():
             if items:
                 top_stories.append((category, items[0]))
-        
+
         if len(top_stories) >= 2:
             intro_items = []
             for category, item in top_stories[:3]:  # Top 3 stories
                 src = item.source_title or item.source or "Unknown"
                 intro_items.append(f"**{item.title}** from {src}")
             out.append(f"\n*Today's highlights: {' • '.join(intro_items)}*\n")
-        
+
         out.append("\n---\n")
         out.append("\n---\n")
 
@@ -126,14 +128,14 @@ class NewsletterGenerator:
         # TECHNOLOGY SPOTLIGHT
         out.append("## 🔬 TECHNOLOGY\n")
         tech_items = categories["technology"][2:5]  # Get 2-4 additional tech items
-        
+
         for i, item in enumerate(tech_items):
             if item:
                 img = await get_unsplash_image("technology", item.title)
                 src = item.source_title or item.source or "Unknown"
                 url = item.url or ""
                 summary = item.content[:150].replace("\n", " ")
-                
+
                 out.append(f"### {item.title}\n")
                 out.append(f"![{item.title}]({img})\n")
                 out.append(f"{summary}\n")
@@ -145,57 +147,57 @@ class NewsletterGenerator:
         # SOCIETY & CULTURE
         out.append("## 🌍 SOCIETY & CULTURE\n")
         soc_items = categories["society"][:3]  # Get up to 3 society items
-        
+
         for i, item in enumerate(soc_items):
             if item:
                 img = await get_unsplash_image("society", item.title)
                 src = item.source_title or item.source or "Unknown"
                 url = item.url or ""
                 summary = item.content[:180].replace("\n", " ")
-                
+
                 # Use bullet points for a more organic feel
                 out.append(f"**• {item.title}**\n")
                 if i == 0:  # Only show image for first item to avoid clutter
                     out.append(f"![{item.title}]({img})\n")
                 out.append(f"{summary} *([{src}]({url}))*\n")
-        
+
         out.append("\n---\n")
 
         # ARTS & CULTURE
         out.append("## 🎨 ARTS & CULTURE\n")
         art_items = categories["art"][:2]  # Get up to 2 art items
-        
+
         for item in art_items:
             if item:
                 img = await get_unsplash_image("art", item.title)
                 src = item.source_title or item.source or "Unknown"
                 url = item.url or ""
                 summary = item.content[:150].replace("\n", " ")
-                
+
                 out.append(f"**{item.title}**\n")
                 out.append(f"![{item.title}]({img})\n")
                 out.append(f"{summary} *([{src}]({url}))*\n\n")
-        
+
         if not art_items or all(item is None for item in art_items):
             out.append("*No arts & culture stories this week.*\n\n")
-        
+
         out.append("---\n")
 
         # BUSINESS & ECONOMY
         out.append("## 💼 BUSINESS & ECONOMY\n")
         bus_items = categories["business"][:2]  # Get up to 2 business items
-        
+
         for item in bus_items:
             if item:
                 img = await get_unsplash_image("business", item.title)
                 src = item.source_title or item.source or "Unknown"
                 url = item.url or ""
                 summary = item.content[:150].replace("\n", " ")
-                
+
                 out.append(f"**{item.title}**\n")
                 out.append(f"![{item.title}]({img})\n")
                 out.append(f"{summary} *([{src}]({url}))*\n\n")
-        
+
         if not bus_items or all(item is None for item in bus_items):
             out.append("*No business stories this week.*\n\n")
 
@@ -208,16 +210,22 @@ class NewsletterGenerator:
             # Collect unique sources to avoid repetition, but only include items with valid URLs and sources
             source_map = {}
             for item in categories[cat]:
-                if item.url and str(item.url).startswith(('http://', 'https://')):
+                if item.url and str(item.url).startswith(("http://", "https://")):
                     src_name = item.source_title or item.source
                     # Skip if source name is missing or generic
-                    if not src_name or src_name in ['Unknown', 'Unknown Source', 'readwise', 'rss', 'glasp']:
+                    if not src_name or src_name in [
+                        "Unknown",
+                        "Unknown Source",
+                        "readwise",
+                        "rss",
+                        "glasp",
+                    ]:
                         # Try to extract source from URL instead
-                        if hasattr(self, '_extract_source_from_url'):
+                        if hasattr(self, "_extract_source_from_url"):
                             src_name = self._extract_source_from_url(str(item.url))
                         if not src_name:
                             continue  # Skip items without identifiable sources
-                    
+
                     # For RSS feeds with same source name, use article title as differentiator
                     if src_name in source_map and item.source == "rss":
                         # Create shorter, more specific name from article title
@@ -233,8 +241,10 @@ class NewsletterGenerator:
 
             if not source_map:
                 return "*No valid sources with URLs available for this section*"
-            
-            return " • ".join([f"[{src}]({url})" for src, url in source_map.items()][:5])  # Limit to 5 sources per section
+
+            return " • ".join(
+                [f"[{src}]({url})" for src, url in source_map.items()][:5]
+            )  # Limit to 5 sources per section
 
         out.append(f"**Technology:** {sources_line('technology')}")
         out.append(f"\n**Society:** {sources_line('society')}")
@@ -251,11 +261,27 @@ class NewsletterGenerator:
         if item.source == "rss" and self._is_curated_insights(item.content):
             logger.debug(f"Using keyword categorization for RSS insights: {item.title}")
         # Try AI categorization for complex/ambiguous content only
-        elif (self.openrouter_client and 
-              len(item.content) > 100 and 
-              not any(clear_keyword in (item.title + " " + item.content).lower() 
-                     for clear_keyword in ['technology', 'tech', 'ai', 'business', 'finance', 'economy', 
-                                         'politics', 'government', 'art', 'culture', 'music', 'film'])):
+        elif (
+            self.openrouter_client
+            and len(item.content) > 100
+            and not any(
+                clear_keyword in (item.title + " " + item.content).lower()
+                for clear_keyword in [
+                    "technology",
+                    "tech",
+                    "ai",
+                    "business",
+                    "finance",
+                    "economy",
+                    "politics",
+                    "government",
+                    "art",
+                    "culture",
+                    "music",
+                    "film",
+                ]
+            )
+        ):
             try:
                 ai_category = await self.openrouter_client.categorize_content(
                     item.title, item.content, item.tags
@@ -265,95 +291,169 @@ class NewsletterGenerator:
                     return ai_category
             except Exception as e:
                 logger.debug(f"AI categorization failed, using fallback: {e}")
-        
+
         # Use keyword-based categorization (primary method to reduce API calls)
         tags_lower = [tag.lower() for tag in item.tags]
-        
+
         # Technology keywords (including pure science/physics)
-        tech_keywords = ['technology', 'tech', 'ai', 'artificial intelligence', 'machine learning', 
-                        'software', 'computer', 'digital', 'internet', 'data', 'algorithm',
-                        'programming', 'code', 'cybersecurity', 'blockchain', 'crypto',
-                        'quantum', 'physics', 'science', 'research', 'discovery', 'experiment']
-        
-        # Society keywords (explicitly exclude pure science/physics)  
-        society_keywords = ['politics', 'government', 'policy', 'law', 'society', 'social',
-                           'democracy', 'election', 'war', 'conflict', 'human rights', 'justice',
-                           'community', 'culture', 'education', 'healthcare', 'environment']
-        
+        tech_keywords = [
+            "technology",
+            "tech",
+            "ai",
+            "artificial intelligence",
+            "machine learning",
+            "software",
+            "computer",
+            "digital",
+            "internet",
+            "data",
+            "algorithm",
+            "programming",
+            "code",
+            "cybersecurity",
+            "blockchain",
+            "crypto",
+            "quantum",
+            "physics",
+            "science",
+            "research",
+            "discovery",
+            "experiment",
+        ]
+
+        # Society keywords (explicitly exclude pure science/physics)
+        society_keywords = [
+            "politics",
+            "government",
+            "policy",
+            "law",
+            "society",
+            "social",
+            "democracy",
+            "election",
+            "war",
+            "conflict",
+            "human rights",
+            "justice",
+            "community",
+            "culture",
+            "education",
+            "healthcare",
+            "environment",
+        ]
+
         # Art keywords
-        art_keywords = ['art', 'culture', 'media', 'film', 'music', 'book', 'literature',
-                       'design', 'creative', 'artist', 'entertainment', 'museum']
-        
+        art_keywords = [
+            "art",
+            "culture",
+            "media",
+            "film",
+            "music",
+            "book",
+            "literature",
+            "design",
+            "creative",
+            "artist",
+            "entertainment",
+            "museum",
+        ]
+
         # Business keywords
-        business_keywords = ['business', 'economy', 'economic', 'finance', 'market', 'company',
-                            'startup', 'investment', 'money', 'trade', 'commerce', 'industry']
-        
+        business_keywords = [
+            "business",
+            "economy",
+            "economic",
+            "finance",
+            "market",
+            "company",
+            "startup",
+            "investment",
+            "money",
+            "trade",
+            "commerce",
+            "industry",
+        ]
+
         # Check content and title for keywords
         content_text = f"{item.title} {item.content}".lower()
-        
+
         # Count keyword matches
         tech_score = sum(1 for keyword in tech_keywords if keyword in content_text)
-        society_score = sum(1 for keyword in society_keywords if keyword in content_text)
+        society_score = sum(
+            1 for keyword in society_keywords if keyword in content_text
+        )
         art_score = sum(1 for keyword in art_keywords if keyword in content_text)
-        business_score = sum(1 for keyword in business_keywords if keyword in content_text)
-        
+        business_score = sum(
+            1 for keyword in business_keywords if keyword in content_text
+        )
+
         # Add tag-based scoring
-        tech_score += sum(1 for tag in tags_lower if any(kw in tag for kw in tech_keywords))
-        society_score += sum(1 for tag in tags_lower if any(kw in tag for kw in society_keywords))
-        art_score += sum(1 for tag in tags_lower if any(kw in tag for kw in art_keywords))
-        business_score += sum(1 for tag in tags_lower if any(kw in tag for kw in business_keywords))
-        
+        tech_score += sum(
+            1 for tag in tags_lower if any(kw in tag for kw in tech_keywords)
+        )
+        society_score += sum(
+            1 for tag in tags_lower if any(kw in tag for kw in society_keywords)
+        )
+        art_score += sum(
+            1 for tag in tags_lower if any(kw in tag for kw in art_keywords)
+        )
+        business_score += sum(
+            1 for tag in tags_lower if any(kw in tag for kw in business_keywords)
+        )
+
         # Determine category based on highest score
         scores = {
-            'technology': tech_score,
-            'society': society_score, 
-            'art': art_score,
-            'business': business_score
+            "technology": tech_score,
+            "society": society_score,
+            "art": art_score,
+            "business": business_score,
         }
-        
+
         best_category = max(scores, key=scores.get)
-        
+
         # If no clear winner (all scores 0), use source-based fallback
         if scores[best_category] == 0:
             if item.source in ["readwise", "glasp"]:
                 return "technology"
             else:
                 return "society"
-                
+
         return best_category
-    
+
     def _balance_categories(self, categories: dict) -> None:
         """Ensure balanced distribution of content across categories."""
         total_items = sum(len(items) for items in categories.values())
-        
+
         if total_items == 0:
             logger.warning("No content items to balance across categories")
             return
-            
+
         # Template requirements: technology(4), society(3), art(2), business(2) = 11 minimum
         template_requirements = {
-            'technology': 4,  # Headlines + technology desk  
-            'society': 3,     # Society section
-            'art': 2,         # Arts section
-            'business': 2     # Business section
+            "technology": 4,  # Headlines + technology desk
+            "society": 3,  # Society section
+            "art": 2,  # Arts section
+            "business": 2,  # Business section
         }
-        
+
         # Scale down requirements if we don't have enough total items
         total_required = sum(template_requirements.values())  # 11
         if total_items < total_required:
             scale_factor = total_items / total_required
             for cat in template_requirements:
-                template_requirements[cat] = max(1, int(template_requirements[cat] * scale_factor))
-        
+                template_requirements[cat] = max(
+                    1, int(template_requirements[cat] * scale_factor)
+                )
+
         min_per_category = template_requirements
-        
+
         # Find categories that need items
         categories_needing_items = []
         for cat, items in categories.items():
             needed = max(0, min_per_category[cat] - len(items))
             if needed > 0:
                 categories_needing_items.extend([cat] * needed)
-        
+
         if categories_needing_items:
             # Find categories with excess items (more than their requirement)
             donor_items = []
@@ -365,14 +465,16 @@ class NewsletterGenerator:
                     for _ in range(min(excess, len(categories_needing_items))):
                         if items:  # Safety check
                             donor_items.append((cat, items.pop()))
-            
+
             # Distribute donor items to categories that need them
             for i, category_needing in enumerate(categories_needing_items):
                 if i < len(donor_items):
                     donor_cat, item = donor_items[i]
                     categories[category_needing].append(item)
-                    logger.debug(f"Rebalanced: moved item from {donor_cat} to {category_needing}")
-        
+                    logger.debug(
+                        f"Rebalanced: moved item from {donor_cat} to {category_needing}"
+                    )
+
         # Log final distribution
         distribution = {cat: len(items) for cat, items in categories.items()}
         logger.info(f"Category distribution after balancing: {distribution}")
@@ -496,16 +598,14 @@ class NewsletterGenerator:
                 "No content sources available. Please configure at least one API key or RSS feed."
             )
         else:
-            logger.info(
-                f"✅ {active_sources} content source(s) configured successfully"
-            )
+            logger.info(f"✅ {active_sources} content source(s) configured successfully")
 
     def _init_readwise_client(self, settings: Settings):
         """Initialize Readwise client with validation."""
         if not settings.readwise_api_key or not settings.readwise_api_key.strip():
             logger.info("🔧 Readwise disabled: READWISE_API_KEY not set or empty")
             return None
-        
+
         try:
             return ReadwiseClient(settings.readwise_api_key.strip())
         except Exception as e:
@@ -517,9 +617,11 @@ class NewsletterGenerator:
         if not settings.glasp_api_key or not settings.glasp_api_key.strip():
             logger.info("🔧 Glasp disabled: GLASP_API_KEY not set or empty")
             return None
-        
+
         try:
-            GlaspClient = __import__("src.clients.glasp", fromlist=["GlaspClient"]).GlaspClient
+            GlaspClient = __import__(
+                "src.clients.glasp", fromlist=["GlaspClient"]
+            ).GlaspClient
             return GlaspClient(settings.glasp_api_key.strip())
         except Exception as e:
             logger.error(f"❌ Failed to initialize Glasp client: {e}")
@@ -530,7 +632,7 @@ class NewsletterGenerator:
         if not settings.rss_feeds or not settings.rss_feeds.strip():
             logger.info("🔧 RSS disabled: RSS_FEEDS not set or empty")
             return None
-        
+
         # Parse and validate RSS feeds
         rss_feeds = []
         for url in settings.rss_feeds.split(","):
@@ -540,11 +642,11 @@ class NewsletterGenerator:
                     rss_feeds.append(url)
                 else:
                     logger.warning(f"⚠️ Invalid RSS URL skipped: {url}")
-        
+
         if not rss_feeds:
             logger.warning("🔧 RSS disabled: No valid RSS feed URLs found")
             return None
-        
+
         try:
             logger.info(f"🔧 RSS enabled with {len(rss_feeds)} feed(s)")
             return RSSClient(rss_feeds)
@@ -557,7 +659,7 @@ class NewsletterGenerator:
         if not settings.openrouter_api_key or not settings.openrouter_api_key.strip():
             logger.info("🔧 OpenRouter disabled: OPENROUTER_API_KEY not set or empty")
             return None
-        
+
         try:
             logger.info("🔧 OpenRouter enabled for AI content processing")
             return OpenRouterClient(settings.openrouter_api_key)
@@ -570,7 +672,7 @@ class NewsletterGenerator:
         if not settings.unsplash_api_key or not settings.unsplash_api_key.strip():
             logger.info("🔧 Unsplash disabled: UNSPLASH_API_KEY not set or empty")
             return None
-        
+
         try:
             logger.info("🔧 Unsplash enabled for dynamic newsletter images")
             return UnsplashClient(settings.unsplash_api_key)
@@ -581,7 +683,8 @@ class NewsletterGenerator:
     def _is_valid_rss_url(self, url: str) -> bool:
         """Basic validation for RSS URL format."""
         import re
-        url_pattern = r'^https?://[^\s/$.?#].[^\s]*$'
+
+        url_pattern = r"^https?://[^\s/$.?#].[^\s]*$"
         return bool(re.match(url_pattern, url))
 
     async def generate_newsletter(self, dry_run: bool = False) -> NewsletterDraft:
@@ -593,6 +696,20 @@ class NewsletterGenerator:
         Returns:
             Generated newsletter draft
         """
+        import time
+
+        start_time = time.time()
+
+        # Initialize editorial statistics
+        self.editorial_stats = {
+            "articles_processed": 0,
+            "articles_revised": 0,
+            "total_revisions": 0,
+            "editor_scores": [],
+            "newsletter_editor_score": None,
+            "common_feedback_themes": [],
+        }
+
         logger.info(f"Starting newsletter generation (dry_run={dry_run})")
 
         # Check if we have any configured sources before proceeding
@@ -631,19 +748,38 @@ class NewsletterGenerator:
 
         # Step 2: Process and organize content
         processed_content = await self._process_content(content_items)
-        
-        # Step 2.5: Enhance content quality
+
+        # Step 2.5: Enhance content quality (includes editorial workflow)
         enhanced_content = await self._enhance_content_quality(processed_content)
-        
+
         # Step 2.7: Filter for content diversity to prevent repetitive themes
         diverse_content = self._ensure_content_diversity(enhanced_content)
 
         # Step 3: Generate newsletter draft
         newsletter = await self._create_newsletter_draft(diverse_content)
-        
+
         # Step 4: Editorial review of full newsletter
         if self.openrouter_client:
             newsletter = await self._newsletter_editorial_review(newsletter)
+
+        # Add editorial statistics to newsletter metadata
+        processing_time = time.time() - start_time
+        editorial_metadata = {
+            "editorial_stats": {
+                **self.editorial_stats,
+                "avg_editor_score": sum(self.editorial_stats["editor_scores"])
+                / len(self.editorial_stats["editor_scores"])
+                if self.editorial_stats["editor_scores"]
+                else None,
+            },
+            "processing_time": processing_time,
+        }
+
+        # Merge with existing metadata
+        if newsletter.metadata:
+            newsletter.metadata.update(editorial_metadata)
+        else:
+            newsletter.metadata = editorial_metadata
 
         # Step 4: Publish (if not dry run)
         if not dry_run and self.settings.buttondown_api_key:
@@ -752,7 +888,7 @@ class NewsletterGenerator:
                 # Parse document timestamps
                 created_at_raw = doc.get("created_at") or doc.get("updated_at")
                 created_at = None
-                
+
                 if created_at_raw:
                     try:
                         created_at = datetime.fromisoformat(
@@ -762,7 +898,7 @@ class NewsletterGenerator:
                         created_at = datetime.now(timezone.utc)
                 else:
                     created_at = datetime.now(timezone.utc)
-                    
+
                 if created_at.tzinfo is None:
                     created_at = created_at.replace(tzinfo=timezone.utc)
 
@@ -775,7 +911,7 @@ class NewsletterGenerator:
                     url = doc.get("url", "")
                     word_count = doc.get("word_count")
                     reading_progress = doc.get("reading_progress")
-                    
+
                     # Handle tags - Reader API returns dict instead of list
                     tags_raw = doc.get("tags", [])
                     tags = []
@@ -784,19 +920,21 @@ class NewsletterGenerator:
                     elif isinstance(tags_raw, dict):
                         # Extract tag names from dict if available
                         tags = list(tags_raw.keys()) if tags_raw else []
-                    
+
                     # Clean and validate URL
                     clean_url = None
                     if url and isinstance(url, str) and url.strip():
                         clean_url = url.strip()
                         # Ensure it's a valid URL format
-                        if not clean_url.startswith(('http://', 'https://')):
+                        if not clean_url.startswith(("http://", "https://")):
                             clean_url = None
-                    
+
                     # Debug URL issues
                     if not clean_url:
-                        logger.debug(f"Invalid/missing URL for '{title[:50]}...': '{url}'") 
-                    
+                        logger.debug(
+                            f"Invalid/missing URL for '{title[:50]}...': '{url}'"
+                        )
+
                     # Create content from summary or metadata
                     content_parts = []
                     if summary:
@@ -808,9 +946,13 @@ class NewsletterGenerator:
                     if reading_progress is not None and reading_progress > 0:
                         progress_pct = min(100, int(reading_progress * 100))
                         content_parts.append(f"{progress_pct}% read")
-                        
-                    content = " • ".join(content_parts) if content_parts else "Recent document from Reader"
-                    
+
+                    content = (
+                        " • ".join(content_parts)
+                        if content_parts
+                        else "Recent document from Reader"
+                    )
+
                     # Clean up title and author for better presentation
                     clean_title = title.strip() if title else "Untitled Document"
                     if not clean_title:
@@ -831,7 +973,7 @@ class NewsletterGenerator:
                             "location": doc.get("location", ""),
                             "word_count": word_count,
                             "reading_progress": reading_progress,
-                            "reader_doc_id": doc.get("id")
+                            "reader_doc_id": doc.get("id"),
                         },
                     )
                     content_items.append(item)
@@ -843,7 +985,9 @@ class NewsletterGenerator:
                     )
                     continue
 
-            logger.info(f"Retrieved {len(content_items)} recent documents from Readwise Reader")
+            logger.info(
+                f"Retrieved {len(content_items)} recent documents from Readwise Reader"
+            )
             return content_items
 
         except Exception as e:
@@ -969,65 +1113,77 @@ class NewsletterGenerator:
             "art": [],
             "business": [],
         }
-        
+
         for item in content_items:
             category = await self._categorize_content(item)
             categorized_items[category].append(item)
-        
+
         # Sort each category by date (newest first)
         for category in categorized_items:
             categorized_items[category] = sorted(
-                categorized_items[category], 
-                key=lambda x: x.created_at or "", 
-                reverse=True
+                categorized_items[category],
+                key=lambda x: x.created_at or "",
+                reverse=True,
             )
-        
+
         # Balance categories to meet template requirements
         self._balance_categories(categorized_items)
-        
+
         # Select items from balanced categories (max 20 total)
         final_items = []
         for category, items in categorized_items.items():
             final_items.extend(items)
-        
+
         # Sort final selection by date and limit to 20
-        final_items = sorted(final_items, key=lambda x: x.created_at or "", reverse=True)
+        final_items = sorted(
+            final_items, key=lambda x: x.created_at or "", reverse=True
+        )
         return final_items[:20]
-    
-    async def _enhance_content_quality(self, content_items: List[ContentItem]) -> List[ContentItem]:
+
+    async def _enhance_content_quality(
+        self, content_items: List[ContentItem]
+    ) -> List[ContentItem]:
         """Enhance content quality by improving titles, sources, and filtering with AI when available."""
         enhanced_items = []
-        
+
         for item in content_items:
             # Extract better title from content if current title is generic
             enhanced_title = self._extract_better_title(item)
-            
+
             # Improve source attribution
             enhanced_source = self._improve_source_attribution(item)
-            
+
             # Enhance content summary with AI if available (pass source to prioritize RSS insights)
-            enhanced_content = self._improve_summary_quality(item.content, enhanced_title, item.source)
-            
+            enhanced_content = self._improve_summary_quality(
+                item.content, enhanced_title, item.source
+            )
+
             # For RSS content with user insights, use the new editorial workflow
-            if (item.source == "rss" and self._is_curated_insights(enhanced_content)):
+            if item.source == "rss" and self._is_curated_insights(enhanced_content):
                 # This is curated content - use the full editorial workflow
                 enhanced_content = await self._editorial_workflow(
                     item, enhanced_content, enhanced_title
                 )
-                logger.debug(f"Applied editorial workflow to RSS content: {enhanced_title}")
-            elif (self.openrouter_client and 
-                  len(enhanced_content) > 200 and 
-                  not self._is_curated_insights(enhanced_content) and
-                  item.source != "rss"):  # Only process non-RSS content with AI to reduce API calls
+                logger.debug(
+                    f"Applied editorial workflow to RSS content: {enhanced_title}"
+                )
+            elif (
+                self.openrouter_client
+                and len(enhanced_content) > 200
+                and not self._is_curated_insights(enhanced_content)
+                and item.source != "rss"
+            ):  # Only process non-RSS content with AI to reduce API calls
                 try:
-                    enhanced_content = await self.openrouter_client.enhance_content_summary(
-                        enhanced_title, enhanced_content, max_length=160
+                    enhanced_content = (
+                        await self.openrouter_client.enhance_content_summary(
+                            enhanced_title, enhanced_content, max_length=160
+                        )
                     )
                     logger.debug(f"Enhanced content with AI: {enhanced_title}")
                 except Exception as e:
                     logger.debug(f"AI content enhancement failed, using fallback: {e}")
                     # Keep our improved summary as fallback
-            
+
             # Create enhanced item
             enhanced_item = ContentItem(
                 id=item.id,
@@ -1035,465 +1191,600 @@ class NewsletterGenerator:
                 content=enhanced_content,
                 source=item.source,
                 url=item.url,
-                author=item.author or enhanced_source.get('author', ''),
-                source_title=enhanced_source.get('source_title', item.source_title),
+                author=item.author or enhanced_source.get("author", ""),
+                source_title=enhanced_source.get("source_title", item.source_title),
                 tags=item.tags,
                 created_at=item.created_at,
-                metadata=item.metadata
+                metadata=item.metadata,
             )
-            
+
             # Only include items with sufficient quality
             if self._meets_quality_standards(enhanced_item):
                 enhanced_items.append(enhanced_item)
             else:
                 logger.debug(f"Filtered out low-quality item: {enhanced_title[:50]}...")
-        
-        logger.info(f"Enhanced and filtered content: {len(enhanced_items)}/{len(content_items)} items passed quality check")
+
+        logger.info(
+            f"Enhanced and filtered content: {len(enhanced_items)}/{len(content_items)} items passed quality check"
+        )
         return enhanced_items
-    
+
     def _extract_better_title(self, item: ContentItem) -> str:
         """Extract a better title from content if the current one is generic."""
         import re
+
         current_title = item.title.strip()
-        
+
         # Skip if title is already meaningful
         if self._is_meaningful_title(current_title):
             return current_title
-            
+
         # Try to extract better title from content
         if not item.content or len(item.content) < 30:
             return current_title
-            
+
         # Look for potential titles in content
         better_title = self._find_title_in_content(item.content)
         if better_title:
             logger.debug(f"Improved title: '{current_title}' -> '{better_title}'")
             return better_title
-            
+
         return current_title
 
     def _is_meaningful_title(self, title: str) -> bool:
         """Check if a title is meaningful and specific."""
         if len(title) < 10:
             return False
-            
+
         # Generic patterns that indicate a poor title
         import re
+
         generic_patterns = [
-            r'.*featured article.*',
-            r'untitled.*',
-            r'^(article|post|highlight|note)\s*\d*$',
-            r'^\w+\s+\d+\s*$',  # Date-based titles
-            r'^(the|a|an)\s+\w+\s+\d+$'  # "The January 5" type titles
+            r".*featured article.*",
+            r"untitled.*",
+            r"^(article|post|highlight|note)\s*\d*$",
+            r"^\w+\s+\d+\s*$",  # Date-based titles
+            r"^(the|a|an)\s+\w+\s+\d+$",  # "The January 5" type titles
         ]
-        
+
         return not any(re.match(pattern, title.lower()) for pattern in generic_patterns)
-        
+
     def _find_title_in_content(self, content: str) -> str:
         """Find a good title within content text."""
         import re
-        
+
         # Try different strategies to find a good title
         strategies = [
             self._extract_from_sentences,
             self._extract_from_first_line,
-            self._extract_from_capitalized_phrases
+            self._extract_from_capitalized_phrases,
         ]
-        
+
         for strategy in strategies:
             title = strategy(content)
             if title and self._is_good_extracted_title(title):
                 return title[:80]  # Limit length
-                
+
         return ""
-        
+
     def _extract_from_sentences(self, content: str) -> str:
         """Extract title from well-formed sentences."""
         import re
-        sentences = re.split(r'[.!?]\s+', content[:500])
-        
+
+        sentences = re.split(r"[.!?]\s+", content[:500])
+
         for sentence in sentences[:3]:
             sentence = sentence.strip()
             if 15 <= len(sentence) <= 100 and self._looks_like_title(sentence):
                 return sentence
         return ""
-        
+
     def _extract_from_first_line(self, content: str) -> str:
         """Extract title from first content line."""
-        lines = content.strip().split('\n')
+        lines = content.strip().split("\n")
         if lines:
             first_line = lines[0].strip()
             if 10 <= len(first_line) <= 100 and self._looks_like_title(first_line):
                 return first_line
         return ""
-        
+
     def _extract_from_capitalized_phrases(self, content: str) -> str:
         """Extract title from capitalized phrases."""
         import re
+
         # Look for phrases that start with capital and have good length
         words = content.split()[:15]
         if len(words) >= 4:
-            phrase = ' '.join(words)
+            phrase = " ".join(words)
             if phrase and phrase[0].isupper():
                 return phrase + "..."
         return ""
-        
+
     def _looks_like_title(self, text: str) -> bool:
         """Check if text looks like it could be a good title."""
         import re
+
         return (
-            text[0].isupper() and
-            not text.lower().startswith(('this', 'that', 'it', 'in', 'on', 'at', 'the', 'a', 'an')) and
-            not text.endswith((':')) and
-            not re.match(r'^https?://', text.lower()) and
-            len([c for c in text if c.isupper()]) >= 2  # Has some capitalization
+            text[0].isupper()
+            and not text.lower().startswith(
+                ("this", "that", "it", "in", "on", "at", "the", "a", "an")
+            )
+            and not text.endswith((":"))
+            and not re.match(r"^https?://", text.lower())
+            and len([c for c in text if c.isupper()]) >= 2  # Has some capitalization
         )
-        
+
     def _is_good_extracted_title(self, title: str) -> bool:
         """Final check if extracted title is good quality."""
         return (
-            10 <= len(title) <= 100 and
-            title.strip() and
-            not title.lower().startswith('http') and
-            sum(1 for c in title if c.isalnum()) >= 5  # Has meaningful content
+            10 <= len(title) <= 100
+            and title.strip()
+            and not title.lower().startswith("http")
+            and sum(1 for c in title if c.isalnum()) >= 5  # Has meaningful content
         )
-    
+
     def _improve_source_attribution(self, item: ContentItem) -> dict:
         """Improve source attribution to avoid 'Unknown' sources."""
         import re
         from urllib.parse import urlparse
-        
-        result = {
-            'source_title': item.source_title,
-            'author': item.author
-        }
-        
+
+        result = {"source_title": item.source_title, "author": item.author}
+
         # If source_title is generic, missing, or uninformative, improve it
         needs_improvement = (
-            not item.source_title or 
-            item.source_title in ['Unknown', 'Unknown Source'] or
-            'featured articles' in item.source_title.lower() or
-            'untitled' in item.source_title.lower() or
-            len(item.source_title.strip()) < 3
+            not item.source_title
+            or item.source_title in ["Unknown", "Unknown Source"]
+            or "featured articles" in item.source_title.lower()
+            or "untitled" in item.source_title.lower()
+            or len(item.source_title.strip()) < 3
         )
-        
+
         if needs_improvement and item.url:
             improved_source = self._extract_source_from_url(item.url)
             if improved_source:
-                result['source_title'] = improved_source
-                logger.debug(f"Improved source: '{item.source_title}' -> '{improved_source}'")
-        
+                result["source_title"] = improved_source
+                logger.debug(
+                    f"Improved source: '{item.source_title}' -> '{improved_source}'"
+                )
+
         # Try to improve author if missing
-        if not result['author'] and item.url:
+        if not result["author"] and item.url:
             # Some URLs contain author info that we could extract
             # This is a placeholder for future enhancement
             pass
-        
+
         return result
-        
+
     def _extract_source_from_url(self, url: str) -> str:
         """Extract a meaningful source name from URL."""
         import re
         from urllib.parse import urlparse
-        
+
         try:
             parsed = urlparse(url)
             domain = parsed.netloc.lower()
-            
+
             if not domain:
                 return ""
-            
+
             # Handle Readwise Reader URLs specially
-            if 'readwise.io' in domain:
+            if "readwise.io" in domain:
                 return "Readwise Reader"
-            
+
             # Remove common prefixes and suffixes
-            domain = re.sub(r'^(www\.|m\.|mobile\.)', '', domain)
+            domain = re.sub(r"^(www\.|m\.|mobile\.)", "", domain)
             original_domain = domain
-            domain = re.sub(r'\.(com|org|net|edu|gov|io|co\.uk|ai)$', '', domain)
-            
+            domain = re.sub(r"\.(com|org|net|edu|gov|io|co\.uk|ai)$", "", domain)
+
             # Handle special cases for common domains
             source_mapping = {
-                'nature': 'Nature',
-                'techcrunch': 'TechCrunch', 
-                'arstechnica': 'Ars Technica',
-                'wired': 'WIRED',
-                'theverge': 'The Verge',
-                'medium': 'Medium',
-                'substack': 'Substack',
-                'github': 'GitHub',
-                'stackoverflow': 'Stack Overflow',
-                'reddit': 'Reddit',
-                'youtube': 'YouTube',
-                'twitter': 'Twitter',
-                'linkedin': 'LinkedIn',
-                'hackernews': 'Hacker News',
-                'ycombinator': 'Y Combinator',
-                'tailscale': 'Tailscale',
-                'openai': 'OpenAI',
-                'anthropic': 'Anthropic',
-                'google': 'Google',
-                'microsoft': 'Microsoft',
-                'producthacker': 'ProductHacker',
-                'pragmaticengineer': 'The Pragmatic Engineer',
-                'newsletter': 'Newsletter',
-                'blog': 'Blog',
-                'news': 'News',
-                'apple': 'Apple',
-                'meta': 'Meta',
-                'stripe': 'Stripe',
+                "nature": "Nature",
+                "techcrunch": "TechCrunch",
+                "arstechnica": "Ars Technica",
+                "wired": "WIRED",
+                "theverge": "The Verge",
+                "medium": "Medium",
+                "substack": "Substack",
+                "github": "GitHub",
+                "stackoverflow": "Stack Overflow",
+                "reddit": "Reddit",
+                "youtube": "YouTube",
+                "twitter": "Twitter",
+                "linkedin": "LinkedIn",
+                "hackernews": "Hacker News",
+                "ycombinator": "Y Combinator",
+                "tailscale": "Tailscale",
+                "openai": "OpenAI",
+                "anthropic": "Anthropic",
+                "google": "Google",
+                "microsoft": "Microsoft",
+                "producthacker": "ProductHacker",
+                "pragmaticengineer": "The Pragmatic Engineer",
+                "newsletter": "Newsletter",
+                "blog": "Blog",
+                "news": "News",
+                "apple": "Apple",
+                "meta": "Meta",
+                "stripe": "Stripe",
             }
-            
+
             if domain in source_mapping:
                 return source_mapping[domain]
-            
+
             # For substack domains like "someone.substack.com"
-            if '.substack' in original_domain:
-                subdomain = original_domain.split('.')[0]
+            if ".substack" in original_domain:
+                subdomain = original_domain.split(".")[0]
                 return f"{subdomain.title()} (Substack)"
-            
-            # For github.io domains like "someone.github.io" 
-            if '.github' in original_domain:
-                subdomain = original_domain.split('.')[0]
+
+            # For github.io domains like "someone.github.io"
+            if ".github" in original_domain:
+                subdomain = original_domain.split(".")[0]
                 return f"{subdomain.title()} (GitHub Pages)"
-            
+
             # Clean up domain name for presentation
-            domain_parts = domain.split('.')
+            domain_parts = domain.split(".")
             if len(domain_parts) > 0:
                 main_domain = domain_parts[0]
                 # Capitalize and clean up
-                return main_domain.replace('-', ' ').replace('_', ' ').title()
-            
+                return main_domain.replace("-", " ").replace("_", " ").title()
+
             return domain.title()
-            
+
         except Exception as e:
             logger.debug(f"Error extracting source from URL {url}: {e}")
             return ""
-    
-    def _ensure_content_diversity(self, content_items: List[ContentItem]) -> List[ContentItem]:
+
+    def _ensure_content_diversity(
+        self, content_items: List[ContentItem]
+    ) -> List[ContentItem]:
         """Filter content to ensure diversity and prevent repetitive themes."""
         if len(content_items) <= 10:
             return content_items  # Too few items to filter
-        
+
         # Group content by similar themes using title/content analysis
         diverse_items = []
-        
+
         # Common words to ignore when detecting similarity
-        stopwords = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'is', 'are', 'was', 'were', 'be', 'been', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should'}
-        
+        stopwords = {
+            "the",
+            "a",
+            "an",
+            "and",
+            "or",
+            "but",
+            "in",
+            "on",
+            "at",
+            "to",
+            "for",
+            "of",
+            "with",
+            "by",
+            "is",
+            "are",
+            "was",
+            "were",
+            "be",
+            "been",
+            "have",
+            "has",
+            "had",
+            "do",
+            "does",
+            "did",
+            "will",
+            "would",
+            "could",
+            "should",
+        }
+
         for item in content_items:
             # Extract key theme words from title and content
-            title_words = set(word.lower().strip('.,!?()[]{}"') 
-                            for word in item.title.split() 
-                            if len(word) > 3 and word.lower() not in stopwords)
-            content_words = set(word.lower().strip('.,!?()[]{}"') 
-                              for word in item.content.split()[:50]  # First 50 words
-                              if len(word) > 4 and word.lower() not in stopwords)
-            
-            key_theme_words = (title_words | content_words)
-            
+            title_words = set(
+                word.lower().strip('.,!?()[]{}"')
+                for word in item.title.split()
+                if len(word) > 3 and word.lower() not in stopwords
+            )
+            content_words = set(
+                word.lower().strip('.,!?()[]{}"')
+                for word in item.content.split()[:50]  # First 50 words
+                if len(word) > 4 and word.lower() not in stopwords
+            )
+
+            key_theme_words = title_words | content_words
+
             # Check if this item is too similar to already selected items
             is_similar = False
-            for existing_item in diverse_items[-5:]:  # Check last 5 items for similarity
-                existing_title_words = set(word.lower().strip('.,!?()[]{}"') 
-                                         for word in existing_item.title.split() 
-                                         if len(word) > 3 and word.lower() not in stopwords)
-                existing_content_words = set(word.lower().strip('.,!?()[]{}"') 
-                                           for word in existing_item.content.split()[:50]
-                                           if len(word) > 4 and word.lower() not in stopwords)
+            for existing_item in diverse_items[
+                -5:
+            ]:  # Check last 5 items for similarity
+                existing_title_words = set(
+                    word.lower().strip('.,!?()[]{}"')
+                    for word in existing_item.title.split()
+                    if len(word) > 3 and word.lower() not in stopwords
+                )
+                existing_content_words = set(
+                    word.lower().strip('.,!?()[]{}"')
+                    for word in existing_item.content.split()[:50]
+                    if len(word) > 4 and word.lower() not in stopwords
+                )
                 existing_theme_words = existing_title_words | existing_content_words
-                
+
                 # Calculate similarity score
                 common_words = key_theme_words & existing_theme_words
                 total_words = len(key_theme_words | existing_theme_words)
-                
+
                 if total_words > 0:
                     similarity = len(common_words) / total_words
-                    
+
                     # If more than 40% similarity in key words, consider too similar
                     if similarity > 0.4:
-                        logger.debug(f"Filtering similar content: '{item.title[:50]}...' similar to '{existing_item.title[:50]}...' (similarity: {similarity:.2f})")
+                        logger.debug(
+                            f"Filtering similar content: '{item.title[:50]}...' similar to '{existing_item.title[:50]}...' (similarity: {similarity:.2f})"
+                        )
                         is_similar = True
                         break
-            
+
             if not is_similar:
                 diverse_items.append(item)
-        
-        logger.info(f"Content diversity filter: {len(content_items)} -> {len(diverse_items)} items (removed {len(content_items) - len(diverse_items)} similar items)")
+
+        logger.info(
+            f"Content diversity filter: {len(content_items)} -> {len(diverse_items)} items (removed {len(content_items) - len(diverse_items)} similar items)"
+        )
         return diverse_items
 
-    def _improve_summary_quality(self, content: str, title: str, source: str = "") -> str:
+    def _improve_summary_quality(
+        self, content: str, title: str, source: str = ""
+    ) -> str:
         """Improve summary quality through intelligent processing."""
         if not content:
             return ""
-        
+
         # For RSS content (user's curated insights), preserve structure and prioritize insights
         if source == "rss" and self._is_curated_insights(content):
             return self._format_user_insights(content, title)
-        
+
         # Handle list-based content (like ProductHacker)
-        if content.count('\n') > 3 and len(content) > 500:
+        if content.count("\n") > 3 and len(content) > 500:
             return self._extract_key_points_summary(content, title)
-        
+
         # Handle URL-heavy content
-        if content.startswith('https://') or content.startswith('http://'):
+        if content.startswith("https://") or content.startswith("http://"):
             return self._extract_meaningful_content(content)
-        
+
         # Handle social media link spam
-        if any(spam_word in content.lower()[:100] for spam_word in ['join', 'discord', 'instagram', 'patreon']):
+        if any(
+            spam_word in content.lower()[:100]
+            for spam_word in ["join", "discord", "instagram", "patreon"]
+        ):
             return self._skip_social_links(content)
-        
+
         # Ensure good sentence completion for truncation
         return self._ensure_complete_sentences(content)
-    
+
     def _is_curated_insights(self, content: str) -> bool:
         """Check if content contains user's curated insights (from RSS email forwarding)."""
         if not content:
             return False
-        
+
         # Look for indicators of curated insights
         insight_indicators = [
-            '•',  # Bullet points
-            '📚', '☕', '🤖', '⚔️', '🌍', '🏛️', '✊',  # Common emojis in insights
-            '**',  # Bold formatting from user highlights
-            'Trend', 'Issue', 'Insights', 'Call to Action'  # Common insight themes
+            "•",  # Bullet points
+            "📚",
+            "☕",
+            "🤖",
+            "⚔️",
+            "🌍",
+            "🏛️",
+            "✊",  # Common emojis in insights
+            "**",  # Bold formatting from user highlights
+            "Trend",
+            "Issue",
+            "Insights",
+            "Call to Action",  # Common insight themes
         ]
-        
+
         # Check if content has multiple insight indicators
-        indicator_count = sum(1 for indicator in insight_indicators if indicator in content)
-        return indicator_count >= 2  # Must have at least 2 indicators to be considered curated insights
-    
+        indicator_count = sum(
+            1 for indicator in insight_indicators if indicator in content
+        )
+        return (
+            indicator_count >= 2
+        )  # Must have at least 2 indicators to be considered curated insights
+
     def _format_user_insights(self, content: str, title: str) -> str:
         """Format user's curated insights for newsletter display."""
         if not content:
             return ""
-        
-        lines = [line.strip() for line in content.split('\n') if line.strip()]
-        
+
+        lines = [line.strip() for line in content.split("\n") if line.strip()]
+
         # Extract the most compelling insights (first 2-3 points)
         key_insights = []
         for line in lines:
             if len(key_insights) >= 3:  # Limit to top 3 insights
                 break
-                
+
             # Include lines with substance and structure
-            if (len(line) > 30 and 
-                (line.startswith('•') or line.startswith('-') or '**' in line or
-                 any(emoji in line for emoji in ['📚', '☕', '🤖', '⚔️', '🌍', '🏛️', '✊', '📊', '🏢', '👥', '🔄']))):
-                
+            if len(line) > 30 and (
+                line.startswith("•")
+                or line.startswith("-")
+                or "**" in line
+                or any(
+                    emoji in line
+                    for emoji in [
+                        "📚",
+                        "☕",
+                        "🤖",
+                        "⚔️",
+                        "🌍",
+                        "🏛️",
+                        "✊",
+                        "📊",
+                        "🏢",
+                        "👥",
+                        "🔄",
+                    ]
+                )
+            ):
                 # Clean up the line
-                clean_line = line.replace('•', '').replace('-', '').strip()
+                clean_line = line.replace("•", "").replace("-", "").strip()
                 # Remove redundant title repetition
-                if not any(word.lower() in clean_line.lower() for word in title.lower().split() if len(word) > 4):
+                if not any(
+                    word.lower() in clean_line.lower()
+                    for word in title.lower().split()
+                    if len(word) > 4
+                ):
                     key_insights.append(clean_line)
-                elif len(key_insights) == 0:  # Include first insight even if it repeats title info
+                elif (
+                    len(key_insights) == 0
+                ):  # Include first insight even if it repeats title info
                     key_insights.append(clean_line)
-        
+
         if key_insights:
             # Join insights with separator, ensuring good flow
-            summary = ' • '.join(key_insights)
-            
+            summary = " • ".join(key_insights)
+
             # Trim to reasonable newsletter length
             if len(summary) > 300:
                 # Find a good breaking point
                 truncated = summary[:280]
-                last_period = truncated.rfind('.')
+                last_period = truncated.rfind(".")
                 if last_period > 200:
-                    summary = truncated[:last_period + 1]
+                    summary = truncated[: last_period + 1]
                 else:
-                    summary = truncated + '...'
-            
+                    summary = truncated + "..."
+
             return summary
-        
+
         # Fallback: return first substantial line
         for line in lines:
             if len(line) > 50:
-                return line[:200] + '...' if len(line) > 200 else line
-                
-        return content[:200] + '...' if len(content) > 200 else content
-    
-    async def _editorial_workflow(self, item: ContentItem, user_highlights: str, title: str) -> str:
+                return line[:200] + "..." if len(line) > 200 else line
+
+        return content[:200] + "..." if len(content) > 200 else content
+
+    async def _editorial_workflow(
+        self, item: ContentItem, user_highlights: str, title: str
+    ) -> str:
         """Complete editorial workflow: fetch article, write commentary, get editor feedback, revise."""
         if not self.openrouter_client:
             logger.debug("No OpenRouter client - skipping editorial workflow")
             return self._format_user_insights(user_highlights, title)
-        
+
         try:
+            # Track that we're processing this article
+            self.editorial_stats["articles_processed"] += 1
+
             # Step 1: Fetch original article content if we have a URL
             article_content = ""
-            if item.url and str(item.url).startswith(('http://', 'https://')):
-                logger.debug(f"Fetching article content from: {item.url}")
-                article_content = await self.openrouter_client.fetch_article_content(str(item.url))
+            if item.url and str(item.url).startswith(("http://", "https://")):
+                logger.debug(f"🎭 Fetching article content from: {item.url}")
+                article_content = await self.openrouter_client.fetch_article_content(
+                    str(item.url)
+                )
                 if not article_content:
                     logger.warning(f"Failed to fetch article content for: {item.url}")
-            
+
             # Step 2: Generate initial commentary using article + user highlights
             if article_content:
-                logger.debug(f"Generating commentary using article content and user highlights")
+                logger.info(
+                    f"🎭 Writer agent: generating commentary for '{title[:50]}...'"
+                )
                 commentary = await self.openrouter_client.generate_commentary(
                     article_content, user_highlights, title
                 )
             else:
                 # Fallback to formatted highlights if article fetch failed
                 commentary = self._format_user_insights(user_highlights, title)
-            
+
             # Step 3: Editorial review and revision loop
             max_revisions = 2  # Limit revisions to avoid infinite loops
             revision_count = 0
-            
+            article_was_revised = False
+
             while revision_count < max_revisions:
                 # Get editorial feedback
-                logger.debug(f"Getting editorial feedback (revision {revision_count + 1})")
-                review = await self.openrouter_client.editorial_roast(commentary, "article")
-                
+                logger.info(
+                    f"🎭 Editor agent: reviewing article (attempt {revision_count + 1})"
+                )
+                review = await self.openrouter_client.editorial_roast(
+                    commentary, "article"
+                )
+
+                # Track editor score
+                self.editorial_stats["editor_scores"].append(review["score"])
+
                 if review["approved"]:
-                    logger.debug(f"Article approved by editor (score: {review['score']}/10)")
+                    logger.info(
+                        f"✅ Editor approved article (score: {review['score']}/10)"
+                    )
                     break
-                
+
                 # Revise based on feedback
-                logger.debug(f"Editor rejected article (score: {review['score']}/10): {review['feedback'][:100]}...")
+                logger.warning(
+                    f"❌ Editor rejected article (score: {review['score']}/10): {review['feedback'][:100]}..."
+                )
+                logger.info(f"🎭 Writer agent: revising based on editor feedback...")
                 commentary = await self.openrouter_client.revise_content(
                     commentary, review["feedback"], article_content, user_highlights
                 )
                 revision_count += 1
-            
+                article_was_revised = True
+                self.editorial_stats["total_revisions"] += 1
+
             if revision_count >= max_revisions:
-                logger.warning(f"Max revisions reached for article: {title}")
-            
+                logger.warning(f"⚠️ Max revisions reached for article: {title}")
+
+            if article_was_revised:
+                self.editorial_stats["articles_revised"] += 1
+
             return commentary
-            
+
         except Exception as e:
             logger.error(f"Error in editorial workflow for {title}: {e}")
             # Fallback to formatted user insights
             return self._format_user_insights(user_highlights, title)
-    
-    async def _newsletter_editorial_review(self, newsletter: 'NewsletterDraft') -> 'NewsletterDraft':
+
+    async def _newsletter_editorial_review(
+        self, newsletter: "NewsletterDraft"
+    ) -> "NewsletterDraft":
         """Editorial review and revision of the complete newsletter."""
         try:
             max_revisions = 1  # Limit newsletter revisions
             revision_count = 0
-            
+
             current_content = newsletter.content
-            
+
             while revision_count < max_revisions:
                 # Get editorial feedback on full newsletter
-                logger.debug(f"Getting newsletter editorial review (revision {revision_count + 1})")
-                review = await self.openrouter_client.editorial_roast(current_content, "newsletter")
-                
+                logger.info(f"🎭 Editor agent: reviewing complete newsletter")
+                review = await self.openrouter_client.editorial_roast(
+                    current_content, "newsletter"
+                )
+
+                # Track newsletter editor score
+                self.editorial_stats["newsletter_editor_score"] = review["score"]
+
                 if review["approved"]:
-                    logger.info(f"Newsletter approved by editor (score: {review['score']}/10)")
+                    logger.info(
+                        f"✅ Newsletter approved by editor (score: {review['score']}/10)"
+                    )
                     break
-                
+
                 # Newsletter-level revisions are complex, so just log the feedback for now
-                logger.warning(f"Newsletter needs improvement (score: {review['score']}/10): {review['feedback'][:200]}...")
-                
+                logger.warning(
+                    f"⚠️ Newsletter needs improvement (score: {review['score']}/10): {review['feedback'][:200]}..."
+                )
+
                 # For now, we'll accept the newsletter even if not perfect
                 # Full newsletter revision would require regenerating the entire structure
                 break
-            
+
             # Return potentially updated newsletter
             if current_content != newsletter.content:
                 from src.models.content import NewsletterDraft
+
                 return NewsletterDraft(
                     title=newsletter.title,
                     content=current_content,
@@ -1501,94 +1792,103 @@ class NewsletterGenerator:
                     created_at=newsletter.created_at,
                     image_url=newsletter.image_url,
                     draft_id=newsletter.draft_id,
-                    metadata=newsletter.metadata
+                    metadata=newsletter.metadata,
                 )
-            
+
             return newsletter
-            
+
         except Exception as e:
             logger.error(f"Error in newsletter editorial review: {e}")
             return newsletter
-    
+
     def _extract_key_points_summary(self, content: str, title: str) -> str:
         """Extract key points from list-heavy content."""
-        lines = [line.strip() for line in content.split('\n') if line.strip()]
-        
+        lines = [line.strip() for line in content.split("\n") if line.strip()]
+
         # Find meaningful content lines (not social links)
         meaningful_lines = []
         for line in lines:
-            if (not line.startswith('http') and 
-                not any(social in line.lower() for social in ['discord', 'instagram', 'patreon', 'join']) and
-                len(line) > 20 and
-                '–' in line):  # ProductHacker format
+            if (
+                not line.startswith("http")
+                and not any(
+                    social in line.lower()
+                    for social in ["discord", "instagram", "patreon", "join"]
+                )
+                and len(line) > 20
+                and "–" in line
+            ):  # ProductHacker format
                 meaningful_lines.append(line)
-        
+
         if meaningful_lines:
             # Take first 2-3 meaningful lines
             summary_lines = meaningful_lines[:2]
-            summary = ' • '.join(summary_lines)
+            summary = " • ".join(summary_lines)
             return summary[:160] + "..." if len(summary) > 160 else summary
-        
+
         # Fallback to first meaningful paragraph
         for line in lines:
-            if len(line) > 50 and not line.startswith('http'):
+            if len(line) > 50 and not line.startswith("http"):
                 return line[:160] + "..." if len(line) > 160 else line
-                
+
         return content[:160]
-    
+
     def _extract_meaningful_content(self, content: str) -> str:
         """Extract meaningful content from URL-heavy text."""
-        lines = content.split('\n')
+        lines = content.split("\n")
         for line in lines:
             line = line.strip()
-            if (len(line) > 30 and 
-                not line.startswith('http') and 
-                not line.startswith('www')):
+            if (
+                len(line) > 30
+                and not line.startswith("http")
+                and not line.startswith("www")
+            ):
                 return line[:160] + "..." if len(line) > 160 else line
         return content[:160]
-    
+
     def _skip_social_links(self, content: str) -> str:
         """Skip social media links and find actual content."""
-        lines = content.split('\n')
+        lines = content.split("\n")
         for line in lines[3:]:  # Skip first few lines with social links
             line = line.strip()
-            if (len(line) > 40 and 
-                not any(social in line.lower() for social in ['discord', 'instagram', 'patreon', 'twitter', 'facebook'])):
+            if len(line) > 40 and not any(
+                social in line.lower()
+                for social in ["discord", "instagram", "patreon", "twitter", "facebook"]
+            ):
                 return line[:160] + "..." if len(line) > 160 else line
         return content[:160]
-    
+
     def _ensure_complete_sentences(self, content: str) -> str:
         """Ensure summary ends at sentence boundary for better truncation."""
         if len(content) <= 160:
             return content
-            
+
         # Find last complete sentence within 160 chars
         truncated = content[:157]  # Leave room for "..."
-        last_period = truncated.rfind('.')
-        last_exclamation = truncated.rfind('!')
-        last_question = truncated.rfind('?')
-        
+        last_period = truncated.rfind(".")
+        last_exclamation = truncated.rfind("!")
+        last_question = truncated.rfind("?")
+
         sentence_end = max(last_period, last_exclamation, last_question)
-        
+
         if sentence_end > 80:  # Only use if we have substantial content
-            return content[:sentence_end + 1]
+            return content[: sentence_end + 1]
         else:
             return content[:160] + "..."
-    
+
     def _meets_quality_standards(self, item: ContentItem) -> bool:
         """Check if content item meets minimum quality standards."""
         # Minimum content length
         if not item.content or len(item.content.strip()) < 50:
             return False
-        
+
         # Must have a meaningful title
         if not item.title or len(item.title.strip()) < 10:
             return False
-        
+
         # Must have either URL or source info
         if not item.url and not item.source_title:
             return False
-        
+
         return True
 
     async def _create_newsletter_draft(

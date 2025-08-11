@@ -121,6 +121,39 @@ def generate(ctx: click.Context, dry_run: bool) -> None:
                         f"   - RSS articles: {newsletter.metadata['rss_items']}"
                     )
 
+                # Show editorial workflow stats
+                if newsletter.metadata.get("editorial_stats"):
+                    stats = newsletter.metadata["editorial_stats"]
+                    logger.info("🎭 Editorial Workflow Results:")
+                    logger.info(
+                        f"   - Articles processed: {stats.get('articles_processed', 0)}"
+                    )
+                    logger.info(
+                        f"   - Articles revised: {stats.get('articles_revised', 0)}"
+                    )
+                    logger.info(
+                        f"   - Average editor score: {stats.get('avg_editor_score', 'N/A')}/10"
+                    )
+                    if stats.get("newsletter_editor_score"):
+                        logger.info(
+                            f"   - Newsletter editor score: {stats['newsletter_editor_score']}/10"
+                        )
+                    if stats.get("total_revisions"):
+                        logger.info(
+                            f"   - Total revisions made: {stats['total_revisions']}"
+                        )
+
+                    # Show any editorial feedback summaries
+                    if stats.get("common_feedback_themes"):
+                        logger.info(
+                            f"   - Common editor feedback: {', '.join(stats['common_feedback_themes'])}"
+                        )
+
+                if newsletter.metadata.get("processing_time"):
+                    logger.info(
+                        f"   - Processing time: {newsletter.metadata['processing_time']:.1f}s"
+                    )
+
             # Show preview of content
             content_preview = (
                 newsletter.content[:200] + "..."

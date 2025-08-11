@@ -224,7 +224,7 @@ class RSSClient:
         # Extract user highlights and insights from HTML description
         user_insights = ""
         description_clean = ""
-        
+
         if description:
             user_insights = self._extract_user_insights(description)
             if user_insights:
@@ -233,12 +233,13 @@ class RSSClient:
             else:
                 # Fallback to basic HTML cleaning
                 import re
+
                 description_clean = re.sub(r"<[^>]+>", "", description)
                 description_clean = description_clean.strip()
-        
+
         # Extract original article URL from the content
         original_url = self._extract_article_url(description) or link
-        
+
         # Clean up the title - remove garbage like [Firehose]
         clean_title = self._clean_article_title(title)
 
@@ -361,160 +362,201 @@ class RSSClient:
 
         except Exception:
             return False
-    
+
     def _extract_user_insights(self, html_content: str) -> str:
         """Extract user's curated highlights and insights from Feedbin RSS description.
-        
+
         Args:
             html_content: HTML content from RSS description containing user highlights
-            
+
         Returns:
             Cleaned, structured summary based on user's insights
         """
         if not html_content:
             return ""
-            
+
         import re
         from html import unescape
-        
+
         try:
             # Remove HTML tags but preserve structure
-            text = re.sub(r'<div[^>]*>', '\n', html_content)
-            text = re.sub(r'</div>', '', text)
-            text = re.sub(r'<ul[^>]*>', '\n', text)
-            text = re.sub(r'</ul>', '', text)
-            text = re.sub(r'<li[^>]*>', '• ', text)
-            text = re.sub(r'</li>', '\n', text)
-            text = re.sub(r'<p[^>]*>', '', text)
-            text = re.sub(r'</p>', '\n', text)
-            text = re.sub(r'<br[^>]*>', '\n', text)
-            text = re.sub(r'<span[^>]*>', '', text)
-            text = re.sub(r'</span>', '', text)
-            text = re.sub(r'<b>', '**', text)
-            text = re.sub(r'</b>', '**', text)
-            text = re.sub(r'<strong>', '**', text)
-            text = re.sub(r'</strong>', '**', text)
-            
+            text = re.sub(r"<div[^>]*>", "\n", html_content)
+            text = re.sub(r"</div>", "", text)
+            text = re.sub(r"<ul[^>]*>", "\n", text)
+            text = re.sub(r"</ul>", "", text)
+            text = re.sub(r"<li[^>]*>", "• ", text)
+            text = re.sub(r"</li>", "\n", text)
+            text = re.sub(r"<p[^>]*>", "", text)
+            text = re.sub(r"</p>", "\n", text)
+            text = re.sub(r"<br[^>]*>", "\n", text)
+            text = re.sub(r"<span[^>]*>", "", text)
+            text = re.sub(r"</span>", "", text)
+            text = re.sub(r"<b>", "**", text)
+            text = re.sub(r"</b>", "**", text)
+            text = re.sub(r"<strong>", "**", text)
+            text = re.sub(r"</strong>", "**", text)
+
             # Remove any remaining HTML tags
-            text = re.sub(r'<[^>]+>', '', text)
-            
+            text = re.sub(r"<[^>]+>", "", text)
+
             # Unescape HTML entities
             text = unescape(text)
-            
+
             # Clean up whitespace and empty lines
-            lines = [line.strip() for line in text.split('\n') if line.strip()]
-            
+            lines = [line.strip() for line in text.split("\n") if line.strip()]
+
             # Filter out signature blocks and metadata
             filtered_lines = []
             for line in lines:
                 # Skip signature blocks, email metadata, and URLs at the end
-                if any(skip_phrase in line.lower() for skip_phrase in [
-                    'protonmail', 'signature_block', 'class=', 'style=', 'font-family',
-                    'https://feedbin', 'feedbinusercontent.com'
-                ]):
+                if any(
+                    skip_phrase in line.lower()
+                    for skip_phrase in [
+                        "protonmail",
+                        "signature_block",
+                        "class=",
+                        "style=",
+                        "font-family",
+                        "https://feedbin",
+                        "feedbinusercontent.com",
+                    ]
+                ):
                     continue
-                    
+
                 # Keep lines that start with bullet points, emojis, or are substantial insights
-                if (line.startswith('•') or line.startswith('-') or 
-                    any(emoji in line for emoji in ['📚', '☕', '🤖', '⚔️', '🌍', '🏛️', '✊', '📊', '🏢', '👥', '🔄', '🔍', '📱', '📜', '⚠️']) or
-                    (len(line) > 50 and '**' in line)):
+                if (
+                    line.startswith("•")
+                    or line.startswith("-")
+                    or any(
+                        emoji in line
+                        for emoji in [
+                            "📚",
+                            "☕",
+                            "🤖",
+                            "⚔️",
+                            "🌍",
+                            "🏛️",
+                            "✊",
+                            "📊",
+                            "🏢",
+                            "👥",
+                            "🔄",
+                            "🔍",
+                            "📱",
+                            "📜",
+                            "⚠️",
+                        ]
+                    )
+                    or (len(line) > 50 and "**" in line)
+                ):
                     filtered_lines.append(line)
-            
+
             # If we found structured insights, use them
             if filtered_lines:
-                insights = '\n'.join(filtered_lines)
+                insights = "\n".join(filtered_lines)
                 # Limit length for newsletter summary
                 if len(insights) > 500:
                     # Take first few insights and add continuation
-                    truncated = '\n'.join(filtered_lines[:3])
+                    truncated = "\n".join(filtered_lines[:3])
                     if len(truncated) > 400:
-                        truncated = truncated[:400] + '...'
+                        truncated = truncated[:400] + "..."
                     return truncated
                 return insights
-            
+
             # Fallback: return first substantial paragraph if no structured insights found
             for line in lines:
-                if len(line) > 100 and not line.startswith('http'):
-                    return line[:300] + '...' if len(line) > 300 else line
-                    
+                if len(line) > 100 and not line.startswith("http"):
+                    return line[:300] + "..." if len(line) > 300 else line
+
             return ""
-            
+
         except Exception as e:
             logger.debug(f"Error extracting user insights: {e}")
             return ""
-    
+
     def _extract_article_url(self, html_content: str) -> str:
         """Extract the original article URL from RSS content.
-        
+
         Args:
             html_content: HTML content from RSS description
-            
+
         Returns:
             Original article URL or empty string if not found
         """
         if not html_content:
             return ""
-            
+
         import re
-        
+
         try:
             # Look for URLs that are not Feedbin URLs
-            url_pattern = r'https?://[^\s<>"\']+'  
+            url_pattern = r'https?://[^\s<>"\']+'
             urls = re.findall(url_pattern, html_content)
-            
+
             for url in urls:
                 # Skip Feedbin internal URLs and email tracking
-                if any(skip_domain in url for skip_domain in [
-                    'feedbin.com', 'feedbinusercontent.com', 'protonmail.com',
-                    'sfmc_id=', 'utm_source=', 'utm_medium=email'
-                ]):
+                if any(
+                    skip_domain in url
+                    for skip_domain in [
+                        "feedbin.com",
+                        "feedbinusercontent.com",
+                        "protonmail.com",
+                        "sfmc_id=",
+                        "utm_source=",
+                        "utm_medium=email",
+                    ]
+                ):
                     continue
-                
+
                 # Clean up URL (remove trailing punctuation, URL parameters for tracking)
-                url = url.rstrip('.,;')  # Remove trailing punctuation
-                
+                url = url.rstrip(".,;")  # Remove trailing punctuation
+
                 # Remove common tracking parameters but keep essential ones
-                if '?' in url:
-                    base_url, params = url.split('?', 1)
+                if "?" in url:
+                    base_url, params = url.split("?", 1)
                     # Keep only essential parameters, remove tracking
                     essential_params = []
-                    for param in params.split('&'):
-                        if param.startswith(('v=', 'id=', 'p=', 'article=')) and not param.startswith(('utm_', 'sfmc_', 'j=')):
+                    for param in params.split("&"):
+                        if param.startswith(
+                            ("v=", "id=", "p=", "article=")
+                        ) and not param.startswith(("utm_", "sfmc_", "j=")):
                             essential_params.append(param)
-                    
+
                     if essential_params:
-                        url = base_url + '?' + '&'.join(essential_params)
+                        url = base_url + "?" + "&".join(essential_params)
                     else:
                         url = base_url
-                
+
                 return url
-                
+
             return ""
-            
+
         except Exception as e:
             logger.debug(f"Error extracting article URL: {e}")
             return ""
-    
+
     def _clean_article_title(self, title: str) -> str:
         """Clean up article title by removing garbage tags and prefixes."""
         if not title:
             return "Untitled Article"
-        
+
         # Remove common garbage patterns
         cleaned = title
-        
+
         # Remove [Firehose], [Newsletter], etc.
-        cleaned = re.sub(r'^\[.*?\]\s*', '', cleaned)
-        
+        cleaned = re.sub(r"^\[.*?\]\s*", "", cleaned)
+
         # Remove common email forward patterns
-        cleaned = re.sub(r'^(Fwd:|Re:|FW:)\s*', '', cleaned, flags=re.IGNORECASE)
-        
+        cleaned = re.sub(r"^(Fwd:|Re:|FW:)\s*", "", cleaned, flags=re.IGNORECASE)
+
         # Clean up whitespace
-        cleaned = ' '.join(cleaned.split())
-        
+        cleaned = " ".join(cleaned.split())
+
         # If title is still garbage or too short, try to generate from content
-        if (len(cleaned) < 5 or 
-            any(garbage in cleaned.lower() for garbage in ['untitled', 'no subject', 'fwd', 'firehose'])):
+        if len(cleaned) < 5 or any(
+            garbage in cleaned.lower()
+            for garbage in ["untitled", "no subject", "fwd", "firehose"]
+        ):
             return "Article Commentary"  # Generic fallback
-        
+
         return cleaned.strip()

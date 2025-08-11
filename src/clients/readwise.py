@@ -132,9 +132,11 @@ class ReadwiseClient:
             List of curated Reader document dictionaries
         """
         if not self.api_key:
-            logger.error("No Readwise API key provided. Cannot connect to Readwise Reader.")
+            logger.error(
+                "No Readwise API key provided. Cannot connect to Readwise Reader."
+            )
             return []
-            
+
         try:
             threshold_date = datetime.utcnow() - timedelta(days=days)
             updated_after = threshold_date.strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -162,7 +164,9 @@ class ReadwiseClient:
                             )
                             try:
                                 error_detail = await response.text()
-                                logger.error(f"Readwise Reader error detail: {error_detail}")
+                                logger.error(
+                                    f"Readwise Reader error detail: {error_detail}"
+                                )
                             except Exception:
                                 pass
                             break
@@ -185,54 +189,63 @@ class ReadwiseClient:
 
             # Filter for high-quality curated articles
             curated_documents = self._filter_curated_articles(all_documents)
-            
-            logger.info(f"Retrieved {len(curated_documents)} curated articles from {len(all_documents)} total documents")
+
+            logger.info(
+                f"Retrieved {len(curated_documents)} curated articles from {len(all_documents)} total documents"
+            )
             return curated_documents
 
         except Exception as e:
             logger.error(f"Error fetching Readwise Reader documents: {e}")
             return []
 
-    def _filter_curated_articles(self, documents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _filter_curated_articles(
+        self, documents: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
         """Filter documents to only include curated articles (fully read or 'twiar' tagged).
-        
+
         Args:
             documents: All documents from API
-            
+
         Returns:
             Filtered list of curated articles
         """
         curated = []
-        
+
         for doc in documents:
-            reading_progress = doc.get('reading_progress', 0)
-            tags = doc.get('tags', {})
-            
+            reading_progress = doc.get("reading_progress", 0)
+            tags = doc.get("tags", {})
+
             is_fully_read = reading_progress and reading_progress >= 1.0
             has_twiar_tag = self._has_twiar_tag(tags)
-            
+
             # Include if fully read OR has twiar tag
             if is_fully_read or has_twiar_tag:
                 curated.append(doc)
-        
+
         # Sort by reading progress (fully read first) then by date
-        curated.sort(key=lambda x: (
-            -(x.get('reading_progress', 0) or 0),  # Fully read first
-            x.get('created_at', '') or ''  # Then by date
-        ), reverse=True)
-        
+        curated.sort(
+            key=lambda x: (
+                -(x.get("reading_progress", 0) or 0),  # Fully read first
+                x.get("created_at", "") or "",  # Then by date
+            ),
+            reverse=True,
+        )
+
         return curated
-    
+
     def _has_twiar_tag(self, tags) -> bool:
         """Check if document has 'twiar' tag (case-insensitive)."""
         if not tags:
             return False
-            
+
         if isinstance(tags, dict):
-            return any('twiar' in tag_name.lower() for tag_name in tags.keys() if tag_name)
+            return any(
+                "twiar" in tag_name.lower() for tag_name in tags.keys() if tag_name
+            )
         elif isinstance(tags, list):
-            return any('twiar' in str(tag).lower() for tag in tags if tag)
-        
+            return any("twiar" in str(tag).lower() for tag in tags if tag)
+
         return False
 
     async def get_books(self, days: int = 30) -> List[Dict[str, Any]]:

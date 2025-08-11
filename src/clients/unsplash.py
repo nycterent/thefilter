@@ -26,7 +26,7 @@ class UnsplashClient:
             "Authorization": f"Client-ID {api_key}",
             "Content-Type": "application/json",
         }
-        
+
         # Curated fallback images (high quality)
         self.fallback_images = {
             "technology": [
@@ -68,7 +68,7 @@ class UnsplashClient:
         try:
             # Enhanced query with category context
             search_query = self._enhance_search_query(query, category)
-            
+
             url = f"{self.base_url}/search/photos"
             params = {
                 "query": search_query,
@@ -84,15 +84,19 @@ class UnsplashClient:
                     if response.status == 200:
                         data = await response.json()
                         results = data.get("results", [])
-                        
+
                         if results:
                             # Pick a random image from the results for variety
                             chosen_image = random.choice(results)
                             image_url = self._format_image_url(chosen_image)
-                            logger.debug(f"Found Unsplash image for '{query}': {image_url}")
+                            logger.debug(
+                                f"Found Unsplash image for '{query}': {image_url}"
+                            )
                             return image_url
                         else:
-                            logger.debug(f"No Unsplash results for '{query}' - using fallback")
+                            logger.debug(
+                                f"No Unsplash results for '{query}' - using fallback"
+                            )
                             return self._get_fallback_image(category)
                     else:
                         logger.warning(f"Unsplash API error: {response.status}")
@@ -114,32 +118,34 @@ class UnsplashClient:
             "art": ["art", "creative", "artistic", "design"],
             "business": ["business", "professional", "corporate", "work"],
         }
-        
+
         # Limit query length and add relevant keywords
         base_query = query[:30]  # Keep reasonable length
         category_terms = enhancements.get(category, [])
-        
+
         if category_terms:
             # Add one relevant category term
             enhanced_query = f"{base_query} {category_terms[0]}"
         else:
             enhanced_query = base_query
-            
+
         return enhanced_query
 
     def _format_image_url(self, image_data: Dict) -> str:
         """Format Unsplash image URL with appropriate parameters."""
         # Use the 'regular' size and add newsletter-optimized parameters
         base_url = image_data["urls"]["regular"]
-        
+
         # Add parameters for newsletter optimization
         params = "?w=370&h=150&fit=crop&crop=entropy&auto=format&q=80"
-        
+
         return f"{base_url}{params}"
 
     def _get_fallback_image(self, category: str) -> str:
         """Get a fallback image for the category."""
-        category_images = self.fallback_images.get(category, self.fallback_images["technology"])
+        category_images = self.fallback_images.get(
+            category, self.fallback_images["technology"]
+        )
         return random.choice(category_images)
 
     async def get_category_image(self, category: str, topic_hint: str = "") -> str:
@@ -159,14 +165,14 @@ class UnsplashClient:
             "art": ["art", "creative", "painting", "design", "artistic"],
             "business": ["business", "office", "professional", "finance", "corporate"],
         }
-        
+
         # Use topic hint or fallback to category terms
         if topic_hint:
             query = topic_hint[:20]  # Limit hint length
         else:
             terms = search_terms.get(category, search_terms["technology"])
             query = random.choice(terms)
-        
+
         return await self.search_image(query, category)
 
     async def test_connection(self) -> bool:
@@ -191,7 +197,9 @@ class UnsplashClient:
                         logger.info("Unsplash API connection successful")
                         return True
                     else:
-                        logger.error(f"Unsplash API connection failed: {response.status}")
+                        logger.error(
+                            f"Unsplash API connection failed: {response.status}"
+                        )
                         return False
 
         except Exception as e:
