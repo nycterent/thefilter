@@ -91,18 +91,36 @@ class NewsletterGenerator:
         def generate_image_alt_text(category: str, topic_hint: str = "") -> str:
             """Generate descriptive alt text for images based on category and topic."""
             if topic_hint:
-                # Extract key terms from topic hint for more specific alt text
-                clean_topic = topic_hint[:50].replace("\n", " ").strip()
-                return f"Illustration related to {clean_topic} in the context of {category}"
+                # Extract key terms and create more specific, contextual descriptions
+                clean_topic = topic_hint[:50].replace("\n", " ").strip().lower()
 
-            # Fallback alt text based on category
+                # Create more specific alt text based on topic keywords
+                if "ai" in clean_topic or "artificial intelligence" in clean_topic:
+                    return "Artistic visualization of artificial intelligence and machine learning concepts"
+                elif "climate" in clean_topic or "environment" in clean_topic:
+                    return "Environmental scene depicting climate change and sustainability themes"
+                elif "health" in clean_topic or "medical" in clean_topic:
+                    return "Healthcare and medical innovation visualization"
+                elif "crypto" in clean_topic or "blockchain" in clean_topic:
+                    return "Digital currency and blockchain technology representation"
+                elif "social" in clean_topic or "culture" in clean_topic:
+                    return "Social dynamics and cultural interaction imagery"
+                elif "work" in clean_topic or "employment" in clean_topic:
+                    return "Modern workplace and professional environment"
+                else:
+                    # More specific fallback based on category and topic
+                    return f"Professional illustration depicting {clean_topic[:30]} in {category} context"
+
+            # Enhanced fallback alt text based on category
             category_descriptions = {
-                "technology": "Technology and innovation related imagery",
-                "society": "Social and cultural themes illustration",
-                "art": "Artistic and creative content representation",
-                "business": "Business and economic topics visualization",
+                "technology": "Modern digital workspace with screens, code, and innovative tech elements",
+                "society": "Diverse people interacting in contemporary urban and social settings",
+                "art": "Creative composition with artistic elements, colors, and cultural expressions",
+                "business": "Professional business environment with modern architecture and corporate elements",
             }
-            return category_descriptions.get(category, "Content-related illustration")
+            return category_descriptions.get(
+                category, "Professional editorial illustration"
+            )
 
         today = datetime.now(timezone.utc).strftime("%A, %B %d, %Y")
         out = []
@@ -1275,8 +1293,15 @@ class NewsletterGenerator:
                         logger.debug(f"  {field}: {issue}")
                         total_issues.append(f"{field}: {issue}")
 
-                # Filter out content with critical issues
-                critical_issues = ["AI refusal detected", "Prompt leakage detected"]
+                # Filter out content with critical issues - expanded criteria
+                critical_issues = [
+                    "AI refusal detected",
+                    "Prompt leakage detected",
+                    "Content appears truncated",
+                    "Headline appears to merge multiple stories",
+                    "CDN/proxy domain used as source",
+                    "Generic URL-style source",
+                ]
                 has_critical_issues = any(
                     any(critical in issue for critical in critical_issues)
                     for issue_list in issues.values()

@@ -11,9 +11,10 @@ logger = logging.getLogger(__name__)
 class ContentSanitizer:
     """Handles content sanitization, validation, and quality checks."""
 
-    # AI refusal patterns to detect and remove
+    # AI refusal patterns to detect and remove - expanded for more coverage
     AI_REFUSAL_PATTERNS = [
         r"I can't provide information or guidance on harmful or illegal activities",
+        r"I can't provide information or guidance on illegal or harmful activities",
         r"I cannot help with that request",
         r"I'm not able to assist with",
         r"I cannot provide information that could be used to harm",
@@ -21,6 +22,11 @@ class ContentSanitizer:
         r"As an AI assistant, I cannot",
         r"I don't feel comfortable",
         r"I cannot and will not provide",
+        r"I'm not able to provide",
+        r"I cannot assist with",
+        r"I'm unable to help",
+        r"I can't help with",
+        r"I don't have the ability to",
     ]
 
     # Prompt leakage patterns
@@ -40,13 +46,18 @@ class ContentSanitizer:
         r"create a",
     ]
 
-    # CDN and proxy domains to canonicalize
+    # CDN and proxy domains to canonicalize - expanded from 027 issues
     PROXY_DOMAINS = {
         "feedbinusercontent.com",
         "substackcdn.com",
+        "eotrx.substackcdn.com",  # Specific CDN from 027
         "readwise.io",
         "cdn.substack.com",
         "medium.com/_/stat",
+        "mailchimp.com",
+        "us-east-1.amazonaws.com",
+        "cloudfront.net",
+        "wp.com",
     }
 
     def __init__(self) -> None:
@@ -107,9 +118,24 @@ class ContentSanitizer:
             )
             return issues
 
-        # Check for truncated sentences
-        if text.endswith(("...", "..", " ", "concerni", "paint a concerni")):
-            issues.append("Content appears truncated or incomplete")
+        # Enhanced truncation detection - check for various incomplete patterns
+        truncation_patterns = [
+            r"\.{2,}$",  # Ends with two or more dots
+            r"…$",  # Ends with ellipsis character
+            r" $",  # Ends with space
+            r"without a secon$",  # Specific pattern from 027
+            r"their interp$",  # Specific pattern from 027
+            r"perfectionism$",  # Incomplete word pattern
+            r"harsh reali$",  # Specific pattern from 027
+            r"has sl$",  # Specific pattern from 027
+            r"\w+\.\.\.$",  # Word followed by three dots
+            r"\w{3,}$(?<!\w{6,})",  # Short incomplete word at end (less than 6 chars)
+        ]
+
+        for pattern in truncation_patterns:
+            if re.search(pattern, text.strip()):
+                issues.append(f"Content appears truncated: matches pattern '{pattern}'")
+                break  # Only report first truncation pattern found
 
         # Check for placeholder content
         placeholder_patterns = [
@@ -152,10 +178,44 @@ class ContentSanitizer:
         if len(headline.strip()) < 5:
             issues.append(f"Headline too short: '{headline}'")
 
-        # Check for inconsistent casing (should be title case for quality)
-        words = headline.split()
-        if len(words) > 1 and all(word.islower() for word in words[:2]):
+        # Check for merged/garbled headlines (multiple story indicators)
+        merged_indicators = [
+            r"\.{3,}",  # Multiple dots suggesting concatenation
+            r"[A-Z]{3,}\.\.\.[A-Z]{3,}",  # All caps with dots between
+            r"WHO DOES NOT SEND.*COFFEE BADGING",  # Specific pattern from 027
+            r"[A-Z\s]{10,}\.\.\.[A-Z\s]{10,}",  # Long caps strings with dots
+        ]
+
+        for pattern in merged_indicators:
+            if re.search(pattern, headline):
+                issues.append(
+                    f"Headline appears to merge multiple stories: '{headline}'"
+                )
+                break
+
+        # Check for inconsistent casing
+        if headline.isupper() and len(headline) > 30:
+            issues.append(f"Headline is all caps (should be title case): '{headline}'")
+        elif len(headline.split()) > 1 and all(
+            word.islower() for word in headline.split()[:3]
+        ):
             issues.append(f"Headline not properly capitalized: '{headline}'")
+
+        # Check for inappropriate content in headlines
+        profanity_patterns = [
+            r"\bfuck\b",
+            r"\bshit\b",
+            r"\bbitch\b",
+            r"\bdamn\b",
+            r"\bass\b",
+        ]
+
+        for pattern in profanity_patterns:
+            if re.search(pattern, headline, re.IGNORECASE):
+                issues.append(
+                    f"Headline contains potentially inappropriate language: '{headline}'"
+                )
+                break
 
         return issues
 
@@ -240,7 +300,7 @@ class ContentSanitizer:
         """Validate source attribution quality."""
         issues = []
 
-        # Check for placeholder source titles
+        # Check for placeholder source titles - expanded from 027 issues
         placeholder_sources = [
             "unknown",
             "unknown source",
@@ -249,19 +309,45 @@ class ContentSanitizer:
             "url",
             "link",
             "source",
+            "mailchimp",  # From 027 issues
         ]
 
         if not source_title or source_title.lower().strip() in placeholder_sources:
             issues.append(f"Placeholder source title: '{source_title}'")
 
-        # Check for generic patterns like "Url3396"
-        if re.match(r"^url\d+$", source_title.lower().strip()):
-            issues.append(f"Generic URL-style source: '{source_title}'")
+        # Check for generic patterns like "Url3396" - more comprehensive
+        url_patterns = [
+            r"^url\d+$",
+            r"^link\d+$",
+            r"^source\d+$",
+            r"^item\d+$",
+        ]
+
+        for pattern in url_patterns:
+            if source_title and re.match(pattern, source_title.lower().strip()):
+                issues.append(f"Generic URL-style source: '{source_title}'")
+                break
 
         # Check if source title is just a single word that might be a category
         single_word_sources = ["justice", "technology", "business", "art", "society"]
         if source_title and source_title.lower().strip() in single_word_sources:
             issues.append(f"Category used as source: '{source_title}'")
+
+        # Check if source is a CDN domain
+        if source_title and url:
+            from urllib.parse import urlparse
+
+            try:
+                parsed = urlparse(url)
+                domain = parsed.netloc.lower()
+                for proxy_domain in self.PROXY_DOMAINS:
+                    if proxy_domain in domain or proxy_domain in source_title.lower():
+                        issues.append(
+                            f"CDN/proxy domain used as source: '{source_title}'"
+                        )
+                        break
+            except:
+                pass
 
         return issues
 
@@ -377,18 +463,42 @@ class ContentSanitizer:
         if re.search(r"---\s*\n\s*---", newsletter_content):
             issues.append("Double separator blocks found (should be single ---)")
 
-        # Double spaces in headers
-        double_space_headers = re.findall(r"##\s\s+\w+", newsletter_content)
+        # Double spaces in headers - enhanced detection
+        double_space_headers = re.findall(r"##\s{2,}\w+", newsletter_content)
         if double_space_headers:
             issues.append(f"Double spaces in headers: {double_space_headers}")
 
-        # Raw URLs in body text
-        raw_url_pattern = r"(?<![\[\(])https?://[^\s\)]+(?![\]\)])"
-        raw_urls = re.findall(raw_url_pattern, newsletter_content)
-        if raw_urls:
+        # Raw URLs in body text - more comprehensive detection
+        raw_url_patterns = [
+            r"(?<![\[\(])https?://[^\s\)\]]+(?![\]\)])",  # Basic raw URLs
+            r"(?<![\[\(])www\.[^\s\)\]]+(?![\]\)])",  # www URLs without protocol
+            r"(?<!\[)[a-zA-Z0-9.-]+\.substack\.com(?!\])",  # Raw Substack domains
+            r"(?<!\[)x\.com/[^\s\)]+(?!\])",  # Raw X/Twitter links
+            r"(?<!\[)twitter\.com/[^\s\)]+(?!\])",  # Raw Twitter links
+        ]
+
+        raw_urls_found = []
+        for pattern in raw_url_patterns:
+            matches = re.findall(pattern, newsletter_content)
+            raw_urls_found.extend(matches)
+
+        if raw_urls_found:
             issues.append(
-                f"Raw URLs in body text (should be titled links): {len(raw_urls)} found"
+                f"Raw URLs in body text (should be titled links): {len(raw_urls_found)} found"
             )
+
+        # Check specifically for raw URLs in Headlines at a Glance section
+        headlines_section = re.search(
+            r"## HEADLINES AT A GLANCE(.*?)(?=##|\Z)",
+            newsletter_content,
+            re.DOTALL | re.IGNORECASE,
+        )
+        if headlines_section:
+            headlines_text = headlines_section.group(1)
+            for pattern in raw_url_patterns:
+                if re.search(pattern, headlines_text):
+                    issues.append("Raw URLs found in Headlines at a Glance section")
+                    break
 
         # Generic image captions
         generic_image_patterns = [
@@ -444,8 +554,8 @@ class ContentSanitizer:
         # Fix double separators
         newsletter_content = re.sub(r"---\s*\n\s*---", "---", newsletter_content)
 
-        # Fix double spaces in headers
-        newsletter_content = re.sub(r"(##)\s\s+", r"\1 ", newsletter_content)
+        # Fix double spaces in headers - more comprehensive
+        newsletter_content = re.sub(r"(##)\s{2,}", r"\1 ", newsletter_content)
 
         # Ensure consistent spacing after separators
         newsletter_content = re.sub(r"---\s*\n\s*", "---\n\n", newsletter_content)
@@ -455,7 +565,26 @@ class ContentSanitizer:
 
         # Ensure headers have proper spacing
         newsletter_content = re.sub(
-            r"\n(## [A-Z\s]+)\n", r"\n\n\1\n\n", newsletter_content
+            r"\n(## [A-Z\s&]+)\n", r"\n\n\1\n\n", newsletter_content
         )
+
+        # Convert basic raw URLs to placeholder links where possible
+        # This is a basic fallback - proper URL handling should happen earlier in the pipeline
+        newsletter_content = re.sub(
+            r"(?<![[\(])https?://([^\s\)\]]+)(?![\]\)])",
+            r"[\1](https://\1)",
+            newsletter_content,
+        )
+
+        # Fix common typos found in 027
+        typo_fixes = [
+            (r"\bshareers\b", "sharers"),  # Specific typo from 027
+            (r"\bdata shareers\b", "data sharers"),
+        ]
+
+        for typo, correction in typo_fixes:
+            newsletter_content = re.sub(
+                typo, correction, newsletter_content, flags=re.IGNORECASE
+            )
 
         return newsletter_content
