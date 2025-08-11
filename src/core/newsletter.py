@@ -924,9 +924,10 @@ class NewsletterGenerator:
 
         # Step 4: Publish (if not dry run)
         if not dry_run and self.settings.buttondown_api_key:
-            await self._publish_newsletter(newsletter)
+            await self._publish_newsletter(newsletter, dry_run=False)
             logger.info("Newsletter published successfully")
         else:
+            await self._publish_newsletter(newsletter, dry_run=True)
             logger.info(
                 "Newsletter generation completed (not published - dry run mode)"
             )
@@ -2348,14 +2349,15 @@ class NewsletterGenerator:
 
         return section
 
-    async def _publish_newsletter(self, newsletter: NewsletterDraft) -> bool:
+    async def _publish_newsletter(self, newsletter: NewsletterDraft, dry_run: bool = False) -> bool:
         """Publish newsletter to Buttondown.
 
         Args:
             newsletter: Newsletter draft to publish
+            dry_run: If True, skip QA checks and publishing
 
         Returns:
-            True if published successfully
+            True if published successfully or if dry run
         """
         import json
         from pathlib import Path
@@ -2365,7 +2367,29 @@ class NewsletterGenerator:
         from src.core.qacheck import run_checks
 
         try:
-            # QA check before publishing
+            if dry_run:
+                logger.info("DRY RUN MODE - Skipping QA checks and publishing")
+                # Still run QA checks for dry run to show results
+                logger.info("Running QA checks for dry run validation...")
+                qa_results = run_checks(newsletter.content)
+                
+                # Write QA results to output directory
+                out_dir = Path("out")
+                out_dir.mkdir(exist_ok=True)
+                qa_file = out_dir / "qa.json"
+                qa_file.write_text(
+                    json.dumps(qa_results, ensure_ascii=False, indent=2), encoding="utf-8"
+                )
+                
+                if not qa_results["passed"]:
+                    logger.warning("QA checks failed in dry run - newsletter would be blocked from publishing")
+                    logger.info(f"QA results written to {qa_file}")
+                else:
+                    logger.info("QA checks passed in dry run - newsletter would be published")
+                
+                return True  # Dry run always succeeds
+            
+            # QA check before publishing (only for real runs)
             logger.info("Running QA checks on newsletter content...")
             qa_results = run_checks(newsletter.content)
 
