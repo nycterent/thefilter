@@ -1765,7 +1765,7 @@ class NewsletterGenerator:
             # Skip complex editorial workflow for free models - single shot works better
             # For free Llama model, the initial commentary is already high quality
             logger.info(f"✅ Using single-shot commentary for free model")
-            
+
             # Add basic editorial stats for consistency
             self.editorial_stats["editor_scores"].append(8)  # Assume good quality
             self.editorial_stats["articles_revised"] += 0  # No revision needed

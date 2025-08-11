@@ -22,8 +22,8 @@ class Settings(BaseSettings):
     glasp_api_key: Optional[str] = Field(None, description="Glasp key")
     rss_feeds: Optional[str] = Field(None, description="RSS URLs")
     readwise_filter_tag: str = Field(
-        default="twiar", 
-        description="Tag to filter Readwise content for editorial workflow"
+        default="twiar",
+        description="Tag to filter Readwise content for editorial workflow",
     )
 
     # Newsletter Platform
