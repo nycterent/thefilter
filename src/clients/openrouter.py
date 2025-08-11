@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import time
 from typing import Any, Dict, List, Optional
 
 import aiohttp
@@ -29,6 +30,10 @@ class OpenRouterClient:
         }
         # Use free models only
         self.default_model = "google/gemma-2-9b-it:free"  # Free Gemma model
+        
+        # Rate limiting for free tier (20 requests/minute)
+        self.last_request_time = 0
+        self.min_request_interval = 3.2  # 3.2 seconds between requests = ~18.75 requests/minute (safe buffer)
 
     async def enhance_content_summary(
         self, title: str, content: str, max_length: int = 160
@@ -154,6 +159,18 @@ Choose the most appropriate category. Respond with only the category name."""
 
         return max(scores, key=scores.get) or "society"
 
+    async def _rate_limit_delay(self):
+        """Ensure we don't exceed rate limits by adding delays between requests."""
+        current_time = time.time()
+        time_since_last = current_time - self.last_request_time
+        
+        if time_since_last < self.min_request_interval:
+            delay = self.min_request_interval - time_since_last
+            logger.debug(f"Rate limiting: waiting {delay:.1f}s before next OpenRouter request")
+            await asyncio.sleep(delay)
+        
+        self.last_request_time = time.time()
+    
     async def _make_request(
         self, prompt: str, max_tokens: int = 100, temperature: float = 0.3
     ) -> Optional[Dict[str, Any]]:
@@ -181,6 +198,9 @@ Choose the most appropriate category. Respond with only the category name."""
         }
 
         try:
+            # Rate limiting to avoid 429 errors
+            await self._rate_limit_delay()
+            
             async with aiohttp.ClientSession() as session:
                 async with session.post(
                     f"{self.base_url}/chat/completions",
@@ -201,8 +221,14 @@ Choose the most appropriate category. Respond with only the category name."""
             logger.error("OpenRouter API request timed out")
             return None
         except Exception as e:
-            logger.error(f"OpenRouter API request failed: {e}")
-            return None
+            # Handle rate limiting with exponential backoff
+            if "429" in str(e) or "rate limit" in str(e).lower():
+                logger.warning(f"OpenRouter rate limit hit, will retry with longer delay: {e}")
+                await asyncio.sleep(10)  # Wait 10 seconds on rate limit
+                return None
+            else:
+                logger.error(f"OpenRouter API request failed: {e}")
+                return None
 
     async def test_connection(self) -> bool:
         """Test the OpenRouter API connection.

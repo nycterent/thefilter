@@ -247,18 +247,26 @@ class NewsletterGenerator:
 
     async def _categorize_content(self, item: ContentItem) -> str:
         """Intelligently categorize content using AI when available, fallback to keywords."""
-        # Try AI categorization first if OpenRouter is available
-        if self.openrouter_client:
+        # For RSS content with clear user insights, use keyword-based categorization to save API calls
+        if item.source == "rss" and self._is_curated_insights(item.content):
+            logger.debug(f"Using keyword categorization for RSS insights: {item.title}")
+        # Try AI categorization for complex/ambiguous content only
+        elif (self.openrouter_client and 
+              len(item.content) > 100 and 
+              not any(clear_keyword in (item.title + " " + item.content).lower() 
+                     for clear_keyword in ['technology', 'tech', 'ai', 'business', 'finance', 'economy', 
+                                         'politics', 'government', 'art', 'culture', 'music', 'film'])):
             try:
                 ai_category = await self.openrouter_client.categorize_content(
                     item.title, item.content, item.tags
                 )
                 if ai_category:
+                    logger.debug(f"AI categorized as {ai_category}: {item.title}")
                     return ai_category
             except Exception as e:
                 logger.debug(f"AI categorization failed, using fallback: {e}")
         
-        # Fallback to keyword-based categorization
+        # Use keyword-based categorization (primary method to reduce API calls)
         tags_lower = [tag.lower() for tag in item.tags]
         
         # Technology keywords (including pure science/physics)
@@ -1000,13 +1008,17 @@ class NewsletterGenerator:
             if (item.source == "rss" and self._is_curated_insights(enhanced_content)):
                 # User insights are already high quality - skip AI processing to preserve your angle
                 logger.debug(f"Preserving user insights for RSS content: {enhanced_title}")
-            elif self.openrouter_client and len(enhanced_content) > 200:
+            elif (self.openrouter_client and 
+                  len(enhanced_content) > 200 and 
+                  not self._is_curated_insights(enhanced_content) and
+                  item.source != "rss"):  # Only process non-RSS content with AI to reduce API calls
                 try:
                     enhanced_content = await self.openrouter_client.enhance_content_summary(
                         enhanced_title, enhanced_content, max_length=160
                     )
+                    logger.debug(f"Enhanced content with AI: {enhanced_title}")
                 except Exception as e:
-                    logger.debug(f"AI content enhancement failed: {e}")
+                    logger.debug(f"AI content enhancement failed, using fallback: {e}")
                     # Keep our improved summary as fallback
             
             # Create enhanced item
