@@ -26,6 +26,7 @@ class ContentSanitizer:
         r"I cannot assist with",
         r"I'm unable to help",
         r"I can't help with",
+        r"I can't provide assistance",
         r"I don't have the ability to",
     ]
 
