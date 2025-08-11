@@ -600,7 +600,9 @@ class NewsletterGenerator:
                 "No content sources available. Please configure at least one API key or RSS feed."
             )
         else:
-            logger.info(f"✅ {active_sources} content source(s) configured successfully")
+            logger.info(
+                f"✅ {active_sources} content source(s) configured successfully"
+            )
 
     def _init_readwise_client(self, settings: Settings):
         """Initialize Readwise client with validation."""
