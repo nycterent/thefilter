@@ -108,7 +108,7 @@ Title: {title}
 Content: {content[:500]}
 {tags_text}
 
-Choose the most appropriate category. Respond with only the category name."""
+Choose the most appropriate category. Respond with ONLY ONE WORD: technology, society, art, or business."""
 
             response = await self._make_request(prompt, max_tokens=10)
             if response and "choices" in response and len(response["choices"]) > 0:
@@ -386,20 +386,40 @@ Choose the most appropriate category. Respond with only the category name."""
             return user_highlights  # Fallback to highlights
 
         try:
-            prompt = f"""You are a skilled newsletter writer. Read this article and write a thoughtful commentary using the provided user highlights as your editorial angle and key insights.
+            # Check if we have substantial user highlights to work with
+            has_user_perspective = user_highlights and len(user_highlights.strip()) > 20
+
+            if has_user_perspective:
+                prompt = f"""You are a skilled newsletter writer. Read this article and write thoughtful commentary that incorporates the user's perspective and insights.
 
 ARTICLE TITLE: {article_title}
 
 ARTICLE CONTENT:
 {article_content[:3000]}
 
-USER'S KEY INSIGHTS/HIGHLIGHTS:
+USER'S PERSPECTIVE/HIGHLIGHTS:
 {user_highlights}
 
 TASK: Write a 2-3 paragraph commentary that:
-1. Incorporates the user's specific insights and statistics
-2. Uses the user's analytical angle (e.g. "silent revolt", "cultural shift")
-3. Provides thoughtful analysis beyond just restating facts
+1. Incorporates the user's specific insights, reactions, or perspective
+2. Uses the user's analytical angle or emotional response as a starting point
+3. Provides thoughtful analysis that builds on their viewpoint
+4. Sounds like an informed editorial take, not a news summary
+5. Keep it under 300 words for newsletter brevity
+
+Write the commentary:"""
+            else:
+                prompt = f"""You are a skilled newsletter writer. Read this article and write engaging commentary for a curated newsletter.
+
+ARTICLE TITLE: {article_title}
+
+ARTICLE CONTENT:
+{article_content[:3000]}
+
+TASK: Write a 2-3 paragraph commentary that:
+1. Identifies the most interesting or surprising aspects of this story
+2. Provides thoughtful analysis beyond just restating facts
+3. Explains why this matters to informed readers
 4. Sounds like an informed editorial take, not a news summary
 5. Keep it under 300 words for newsletter brevity
 
@@ -425,7 +445,7 @@ Write the commentary:"""
 
         try:
             if content_type == "article":
-                prompt = f"""You are a tough but fair newsletter editor. Your job is to ROAST this article commentary and provide brutal but constructive feedback.
+                prompt = f"""You are a tough but fair newsletter editor. Your job is to ROAST this article commentary and provide brutal but constructive feedback with specific improvement suggestions.
 
 COMMENTARY TO REVIEW:
 {content}
@@ -437,11 +457,11 @@ EVALUATE:
 4. Is it well-written and flow well?
 5. Would subscribers find this worth their time?
 
-Provide a ROAST with specific feedback. Rate 1-10 (7+ passes). Be tough - mediocre content gets rejected.
+Provide a ROAST with specific feedback AND concrete suggestions for improvement. Rate 1-10 (7+ passes). Be tough - mediocre content gets rejected, but always provide actionable advice for the next revision.
 
-Format: SCORE: X/10\nFEEDBACK: [your brutal but constructive roast]\nAPPROVED: YES/NO"""
+Format: SCORE: X/10\nFEEDBACK: [your brutal but constructive roast with specific suggestions for improvement]\nAPPROVED: YES/NO"""
             else:  # newsletter
-                prompt = f"""You are a tough newsletter editor reviewing the full newsletter. ROAST this newsletter and provide brutal feedback on overall quality, flow, and reader value.
+                prompt = f"""You are a tough newsletter editor reviewing the full newsletter. ROAST this newsletter and provide brutal feedback on overall quality, flow, and reader value with specific suggestions for improvement.
 
 NEWSLETTER TO REVIEW:
 {content[:2000]}...
@@ -453,9 +473,9 @@ EVALUATE:
 4. Reader engagement and value
 5. Professional newsletter standards
 
-Provide a ROAST with specific feedback. Rate 1-10 (8+ passes for full newsletter). Be merciless.
+Provide a ROAST with specific feedback AND concrete suggestions for improvement. Rate 1-10 (8+ passes for full newsletter). Be merciless but provide actionable advice.
 
-Format: SCORE: X/10\nFEEDBACK: [your comprehensive roast]\nAPPROVED: YES/NO"""
+Format: SCORE: X/10\nFEEDBACK: [your comprehensive roast with specific improvement suggestions]\nAPPROVED: YES/NO"""
 
             response = await self._make_request(prompt, max_tokens=150, temperature=0.8)
             if response and "choices" in response and len(response["choices"]) > 0:
@@ -503,20 +523,28 @@ Format: SCORE: X/10\nFEEDBACK: [your comprehensive roast]\nAPPROVED: YES/NO"""
             return original_content
 
         try:
-            prompt = f"""You are a newsletter writer revising your work based on tough editorial feedback.
+            # Check if we have user highlights to incorporate
+            has_user_context = user_highlights and len(user_highlights.strip()) > 20
+            context_section = (
+                f"USER INSIGHTS: {user_highlights}"
+                if has_user_context
+                else "USER CONTEXT: This is curated content from the user's RSS feed"
+            )
+
+            prompt = f"""You are a newsletter writer revising your work based on tough editorial feedback. Take the feedback seriously and implement ALL suggested improvements.
 
 ORIGINAL CONTENT:
 {original_content}
 
-EDITOR'S FEEDBACK:
+EDITOR'S DETAILED FEEDBACK AND SUGGESTIONS:
 {editor_feedback}
 
 ARTICLE CONTEXT: {article_content[:1000] if article_content else 'N/A'}
-USER INSIGHTS: {user_highlights if user_highlights else 'N/A'}
+{context_section}
 
-TASK: Rewrite the content addressing ALL the editor's concerns. Make it sharper, more insightful, and more engaging. Keep under 300 words.
+TASK: Completely rewrite the content addressing EVERY point in the editor's feedback. Implement all suggested improvements. Make it sharper, more insightful, and more engaging. {"Incorporate the user's perspective if provided." if has_user_context else "Focus on what makes this story compelling for informed readers."} Keep under 300 words.
 
-Revised content:"""
+Apply all editorial suggestions and create a substantially improved version:"""
 
             response = await self._make_request(prompt, max_tokens=200, temperature=0.6)
             if response and "choices" in response and len(response["choices"]) > 0:

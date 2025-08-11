@@ -216,18 +216,15 @@ class NewsletterGenerator:
                     if not src_name or src_name in [
                         "Unknown",
                         "Unknown Source",
-                        "readwise",
-                        "rss",
-                        "glasp",
-                    ]:
+                    ] or src_name.lower() == item.source.lower():
                         # Try to extract source from URL instead
                         if hasattr(self, "_extract_source_from_url"):
                             src_name = self._extract_source_from_url(str(item.url))
                         if not src_name:
                             continue  # Skip items without identifiable sources
 
-                    # For RSS feeds with same source name, use article title as differentiator
-                    if src_name in source_map and item.source == "rss":
+                    # For content with same source name, use article title as differentiator
+                    if src_name in source_map:
                         # Create shorter, more specific name from article title
                         short_title = (
                             item.title[:40] + "..."
@@ -257,9 +254,9 @@ class NewsletterGenerator:
 
     async def _categorize_content(self, item: ContentItem) -> str:
         """Intelligently categorize content using AI when available, fallback to keywords."""
-        # For RSS content with clear user insights, use keyword-based categorization to save API calls
-        if item.source == "rss" and self._is_curated_insights(item.content):
-            logger.debug(f"Using keyword categorization for RSS insights: {item.title}")
+        # For curated content with clear user insights, use keyword-based categorization to save API calls
+        if self._is_curated_content(item) and self._is_curated_insights(item.content):
+            logger.debug(f"Using keyword categorization for curated insights: {item.title}")
         # Try AI categorization for complex/ambiguous content only
         elif (
             self.openrouter_client
@@ -411,12 +408,10 @@ class NewsletterGenerator:
 
         best_category = max(scores, key=scores.get)
 
-        # If no clear winner (all scores 0), use source-based fallback
+        # If no clear winner (all scores 0), use content-based fallback
         if scores[best_category] == 0:
-            if item.source in ["readwise", "glasp"]:
-                return "technology"
-            else:
-                return "society"
+            # Default to society unless content suggests otherwise
+            return "society"
 
         return best_category
 
@@ -1162,32 +1157,19 @@ class NewsletterGenerator:
                 item.content, enhanced_title, item.source
             )
 
-            # For RSS content, use LLM to detect if it contains user commentary
-            if item.source == "rss" and self.openrouter_client:
+            # For content with user insights or curation, always use editorial workflow
+            if self._is_curated_content(item) and self.openrouter_client:
                 try:
-                    # Use LLM to detect if this contains user commentary/insights
-                    has_user_commentary = (
-                        await self.openrouter_client.detect_user_commentary(
-                            enhanced_content, enhanced_title
-                        )
+                    # Always run editorial workflow for curated content - incorporate user highlights if present
+                    logger.debug(
+                        f"Applying editorial workflow to curated content: {enhanced_title}"
                     )
-
-                    if has_user_commentary:
-                        logger.debug(
-                            f"LLM detected user commentary in: {enhanced_title}"
-                        )
-                        # This is curated content - use the full editorial workflow
-                        enhanced_content = await self._editorial_workflow(
-                            item, enhanced_content, enhanced_title
-                        )
-                        logger.debug(
-                            f"Applied editorial workflow to RSS content: {enhanced_title}"
-                        )
-                    else:
-                        logger.debug(
-                            f"LLM detected no user commentary in: {enhanced_title}"
-                        )
-
+                    enhanced_content = await self._editorial_workflow(
+                        item, enhanced_content, enhanced_title
+                    )
+                    logger.debug(
+                        f"Completed editorial workflow for curated content: {enhanced_title}"
+                    )
                 except Exception as e:
                     logger.error(f"Editorial workflow failed for {enhanced_title}: {e}")
                     # Keep the formatted content as fallback
@@ -1198,8 +1180,8 @@ class NewsletterGenerator:
                 self.openrouter_client
                 and len(enhanced_content) > 200
                 and not self._is_curated_insights(enhanced_content)
-                and item.source != "rss"
-            ):  # Only process non-RSS content with AI to reduce API calls
+                and not self._is_curated_content(item)
+            ):  # Only process non-curated content with AI to reduce API calls
                 try:
                     enhanced_content = (
                         await self.openrouter_client.enhance_content_summary(
@@ -1567,8 +1549,8 @@ class NewsletterGenerator:
         if not content:
             return ""
 
-        # For RSS content, format user insights (this is now a fallback path)
-        if source == "rss" and self._is_curated_insights(content):
+        # For curated content, format user insights (this is now a fallback path)
+        if self._is_curated_insights(content):
             return self._format_user_insights(content, title)
 
         # Handle list-based content (like ProductHacker)
@@ -1588,6 +1570,24 @@ class NewsletterGenerator:
 
         # Ensure good sentence completion for truncation
         return self._ensure_complete_sentences(content)
+
+    def _is_curated_content(self, item: ContentItem) -> bool:
+        """Determine if content item contains user curation or insights."""
+        # Check if content contains user insights/commentary
+        if self._is_curated_insights(item.content):
+            return True
+        
+        # Check if this is from a curated source (like RSS feeds)
+        # RSS feeds are typically curated by the user
+        if item.source == "rss":
+            return True
+        
+        # Check for other indicators of curation
+        # Could be expanded for other curated source types
+        if item.source and any(keyword in item.source.lower() for keyword in ["feed", "curated", "starred"]):
+            return True
+            
+        return False
 
     def _is_curated_insights(self, content: str) -> bool:
         """Legacy fallback method for detecting curated insights.
@@ -1728,7 +1728,7 @@ class NewsletterGenerator:
                 commentary = self._format_user_insights(user_highlights, title)
 
             # Step 3: Editorial review and revision loop
-            max_revisions = 2  # Limit revisions to avoid infinite loops
+            max_revisions = 3  # Three revisions for thorough editorial process
             revision_count = 0
             article_was_revised = False
             min_improvement_threshold = (
