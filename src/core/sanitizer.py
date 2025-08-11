@@ -28,6 +28,10 @@ class ContentSanitizer:
         r"I can't help with",
         r"I can't provide assistance",
         r"I don't have the ability to",
+        r"I am just an AI model",
+        r"not within my programming",
+        r"particularly when it involves minors",
+        r"contains or promotes harmful, illegal, or adult material",
     ]
 
     # Prompt leakage patterns
@@ -56,6 +60,7 @@ class ContentSanitizer:
         "cdn.substack.com",
         "medium.com/_/stat",
         "mailchimp.com",
+        "list-manage.com",
         "us-east-1.amazonaws.com",
         "cloudfront.net",
         "wp.com",
@@ -129,7 +134,9 @@ class ContentSanitizer:
             r"harsh reali$",  # Specific pattern from 027
             r"has sl$",  # Specific pattern from 027
             r"\w+\.\.\.$",  # Word followed by three dots
-            r"\w{3,5}$",  # Short incomplete word at end (3-5 chars)
+            r"\w{1,5}$",  # Short incomplete word at end (1-5 chars)
+            r":\s*$",  # Trailing colon with no continuation
+            r"\([^\)]*$",  # Unclosed parenthesis at end
         ]
 
         for pattern in truncation_patterns:
@@ -184,6 +191,7 @@ class ContentSanitizer:
             r"[A-Z]{3,}\.\.\.[A-Z]{3,}",  # All caps with dots between
             r"WHO DOES NOT SEND.*COFFEE BADGING",  # Specific pattern from 027
             r"[A-Z\s]{10,}\.\.\.[A-Z\s]{10,}",  # Long caps strings with dots
+            r"[A-Z]{2,}[^a-z]*,[^a-z]*[A-Z]{2,}",  # Two all-caps segments separated by comma
         ]
 
         for pattern in merged_indicators:
@@ -362,6 +370,7 @@ class ContentSanitizer:
             r"^picture$",
             r"^img$",
             r"^untitled$",
+            r"^image: professional illustration depicting",
         ]
 
         if alt_text:
@@ -372,8 +381,13 @@ class ContentSanitizer:
         else:
             issues.append("Missing alt text")
 
-        if caption and caption == alt_text:
-            issues.append("Caption and alt text are identical")
+        if caption:
+            if caption == alt_text:
+                issues.append("Caption and alt text are identical")
+            for pattern in generic_patterns:
+                if re.match(pattern, caption.lower().strip()):
+                    issues.append(f"Generic caption: '{caption}'")
+                    break
 
         return issues
 
@@ -475,6 +489,7 @@ class ContentSanitizer:
             r"[a-zA-Z0-9.-]+\.substack\.com(?![^\[\s]*\])",  # Raw Substack domains
             r"x\.com/[^\s\)]+(?![^\[\s]*\])",  # Raw X/Twitter links
             r"twitter\.com/[^\s\)]+(?![^\[\s]*\])",  # Raw Twitter links
+            r"(?<!\[)(?<!\()[a-zA-Z0-9.-]+\.[a-z]{2,}(?:/[^\s\)\]]+)?(?![\]\)])",  # Bare domains
         ]
 
         raw_urls_found = []
@@ -500,6 +515,19 @@ class ContentSanitizer:
                     issues.append("Raw URLs found in Headlines at a Glance section")
                     break
 
+            # Check for placeholder sources in Headlines at a Glance
+            placeholder_sources = [
+                r"newsletters",
+                r"readwise reader",
+                r"url\d+",
+            ]
+            for pattern in placeholder_sources:
+                if re.search(pattern, headlines_text, re.IGNORECASE):
+                    issues.append(
+                        "Placeholder source found in Headlines at a Glance section"
+                    )
+                    break
+
         # Generic image captions
         generic_image_patterns = [
             r"Image:\s*Image",
@@ -512,6 +540,14 @@ class ContentSanitizer:
         for pattern in generic_image_patterns:
             if re.search(pattern, newsletter_content, re.IGNORECASE):
                 issues.append(f"Generic image caption pattern found: {pattern}")
+
+        # Duplicate images
+        image_urls = re.findall(r"!\[[^\]]*\]\(([^)]+)\)", newsletter_content)
+        from collections import Counter
+
+        duplicates = [url for url, count in Counter(image_urls).items() if count > 1]
+        if duplicates:
+            issues.append(f"Duplicate images detected: {len(duplicates)} duplicates")
 
         # Check for placeholder or broken links in Sources section
         sources_section = re.search(
@@ -546,6 +582,10 @@ class ContentSanitizer:
                 if headline.strip().islower():
                     issues.append(f"Inconsistent headline casing: '{headline.strip()}'")
 
+        # Redundant top branding
+        if len(re.findall(r"# THE FILTER", newsletter_content, re.IGNORECASE)) > 1:
+            issues.append("Redundant top branding detected")
+
         return issues
 
     def fix_newsletter_formatting(self, newsletter_content: str) -> str:
@@ -573,6 +613,11 @@ class ContentSanitizer:
         newsletter_content = re.sub(
             r"(?<!\[)(?<!\()https?://([^\s\)\]]+)(?![\]\)])",
             r"[\1](https://\1)",
+            newsletter_content,
+        )
+        newsletter_content = re.sub(
+            r"(?<!\[)(?<!\()[a-zA-Z0-9.-]+\.[a-z]{2,}(?:/[^\s\)\]]+)?(?![\]\)])",
+            lambda m: f"[{m.group(0)}](https://{m.group(0)})",
             newsletter_content,
         )
 

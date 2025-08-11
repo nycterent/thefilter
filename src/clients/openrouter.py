@@ -29,8 +29,8 @@ class OpenRouterClient:
             "HTTP-Referer": "https://thefilter.buttondown.email",  # Required by OpenRouter
             "X-Title": "The Filter Newsletter",  # Optional title
         }
-        # Use free models only
-        self.default_model = "meta-llama/llama-3.2-3b-instruct:free"  # Free Llama model
+        # Use free models only - default to OpenRouter's Venice model
+        self.default_model = "openai/gpt-4o-mini:free"  # Venice free model
 
         # Rate limiting for free tier (20 requests/minute)
         self.last_request_time = 0
