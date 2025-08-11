@@ -365,7 +365,13 @@ Choose the most appropriate category. Respond with ONLY ONE WORD: technology, so
                     url, headers=headers, timeout=aiohttp.ClientTimeout(total=15)
                 ) as response:
                     if response.status == 200:
-                        html = await response.text()
+                        # Handle potential encoding issues gracefully
+                        try:
+                            html = await response.text()
+                        except UnicodeDecodeError:
+                            # Try with latin-1 encoding for problematic content
+                            raw_content = await response.read()
+                            html = raw_content.decode('latin-1', errors='ignore')
                         soup = BeautifulSoup(html, "html.parser")
 
                         # Remove script, style, nav, footer, ads
