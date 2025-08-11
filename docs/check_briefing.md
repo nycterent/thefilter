@@ -8,7 +8,7 @@ A small CLI tool to lint-check "Curated Briefing" newsletters before publishing.
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-python check_briefing.py --golden GOLDEN_URL_OR_FILE newsletter.html
+python scripts/check_briefing.py --golden GOLDEN_URL_OR_FILE newsletter.html
 ```
 
 ## Rules
@@ -27,7 +27,7 @@ python check_briefing.py --golden GOLDEN_URL_OR_FILE newsletter.html
 ## Example
 
 ```bash
-python check_briefing.py --golden https://buttondown.com/filter/archive/curated-briefing-001 \
+python scripts/check_briefing.py --golden https://buttondown.com/filter/archive/curated-briefing-001 \
     https://buttondown.com/filter/archive/curated-briefing-026/ \
     --json report.json
 ```
@@ -40,5 +40,5 @@ Add a job to your GitHub Actions workflow:
 - name: Lint Curated Briefing
   run: |
     pip install -r requirements.txt
-    python check_briefing.py --golden $GOLDEN_URL path/to/briefing.html
+    python scripts/check_briefing.py --golden $GOLDEN_URL path/to/briefing.html
 ```

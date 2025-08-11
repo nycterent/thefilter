@@ -37,6 +37,7 @@ venv.bak/
 # IDE
 .vscode/
 .idea/
+.ropeproject/
 *.swp
 *.swo
 *~
@@ -60,6 +61,12 @@ backups/
 
 # Docker
 .dockerignore
+
+# Testing and caching
+.mypy_cache/
+.pytest_cache/
+.coverage
+htmlcov/
 
 # Temporary files
 tmp/

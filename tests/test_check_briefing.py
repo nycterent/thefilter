@@ -1,6 +1,6 @@
 import pytest
 
-from check_briefing import (
+from scripts.check_briefing import (
     BriefingChecker,
     ParsedDocument,
     parse_html,
@@ -81,7 +81,7 @@ def test_image_alt_captions():
 
 
 def test_truncated_or_unbalanced_sentences():
-    html = "<main>This is a very long sentence that goes on and on without proper ending and should be flagged \"quote</main>"
+    html = '<main>This is a very long sentence that goes on and on without proper ending and should be flagged "quote</main>'
     doc = parse_html(html, "src")
     checker = BriefingChecker()
     result = checker.rule_truncated_or_unbalanced_sentences(doc)

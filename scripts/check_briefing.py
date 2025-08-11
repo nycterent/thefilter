@@ -359,7 +359,9 @@ def main() -> None:
     parser.add_argument("inputs", nargs="+", help="URLs or local HTML/MD files")
     parser.add_argument("--golden", help="URL or file of known good briefing")
     parser.add_argument("--json", dest="json_path", help="Path to save JSON report")
-    parser.add_argument("--verbose", "-v", action="store_true", help="Enable verbose output")
+    parser.add_argument(
+        "--verbose", "-v", action="store_true", help="Enable verbose output"
+    )
     args = parser.parse_args()
 
     golden_doc: Optional[ParsedDocument] = None
@@ -384,7 +386,9 @@ def main() -> None:
                 print(f"✅ Validation {'passed' if passed else 'failed'} for {src}")
                 for result in results:
                     if not result.passed and result.examples:
-                        print(f"  ⚠️  {result.name}: {result.examples[:3]}")  # Show first 3 examples
+                        print(
+                            f"  ⚠️  {result.name}: {result.examples[:3]}"
+                        )  # Show first 3 examples
             reports.append(
                 {
                     "source": src,

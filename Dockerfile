@@ -37,7 +37,7 @@ COPY --from=dependencies /usr/local/bin /usr/local/bin
 COPY --from=dependencies /app/src /app/src
 
 # Copy additional application files
-COPY check_briefing.py ./
+COPY scripts/check_briefing.py ./scripts/
 
 # Create non-root user for security
 RUN groupadd -r newsletter && useradd -r -g newsletter newsletter

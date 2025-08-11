@@ -11,9 +11,9 @@ def test_content_item_creation():
         id="test-123",
         title="Test Article",
         content="This is test content",
-        source="readwise"
+        source="readwise",
     )
-    
+
     assert item.id == "test-123"
     assert item.title == "Test Article"
     assert item.content == "This is test content"
@@ -32,9 +32,9 @@ def test_content_item_with_optional_fields():
         content="Premium content behind paywall",
         source="glasp",
         tags=["tech", "ai"],
-        is_paywalled=True
+        is_paywalled=True,
     )
-    
+
     assert str(item.url) == "https://example.com/article"
     assert item.tags == ["tech", "ai"]
     assert item.is_paywalled is True
@@ -44,15 +44,13 @@ def test_newsletter_draft_creation():
     """Test creating a NewsletterDraft."""
     items = [
         ContentItem(id="1", title="Article 1", content="Content 1", source="readwise"),
-        ContentItem(id="2", title="Article 2", content="Content 2", source="glasp")
+        ContentItem(id="2", title="Article 2", content="Content 2", source="glasp"),
     ]
-    
+
     draft = NewsletterDraft(
-        title="Weekly Digest",
-        content="Generated newsletter content here",
-        items=items
+        title="Weekly Digest", content="Generated newsletter content here", items=items
     )
-    
+
     assert draft.title == "Weekly Digest"
     assert draft.content == "Generated newsletter content here"
     assert len(draft.items) == 2
@@ -67,9 +65,9 @@ def test_newsletter_draft_with_image():
         content="Content with image",
         items=[],
         image_url="https://images.unsplash.com/photo-123",
-        draft_id="buttondown-456"
+        draft_id="buttondown-456",
     )
-    
+
     assert str(draft.image_url) == "https://images.unsplash.com/photo-123"
     assert draft.draft_id == "buttondown-456"
 
@@ -77,15 +75,15 @@ def test_newsletter_draft_with_image():
 def test_content_item_validation():
     """Test that ContentItem validates required fields."""
     from pydantic import ValidationError
-    
+
     with pytest.raises(ValidationError):
         ContentItem()  # Missing required fields
-    
+
     # Test that empty strings are still valid for title (Pydantic allows empty strings by default)
     item = ContentItem(
         id="test",
         title="",  # Empty title is actually valid in Pydantic
-        content="content", 
-        source="test"
+        content="content",
+        source="test",
     )
     assert item.title == ""
