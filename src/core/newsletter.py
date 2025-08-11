@@ -640,6 +640,10 @@ class NewsletterGenerator:
 
         # Step 3: Generate newsletter draft
         newsletter = await self._create_newsletter_draft(diverse_content)
+        
+        # Step 4: Editorial review of full newsletter
+        if self.openrouter_client:
+            newsletter = await self._newsletter_editorial_review(newsletter)
 
         # Step 4: Publish (if not dry run)
         if not dry_run and self.settings.buttondown_api_key:
@@ -1004,10 +1008,13 @@ class NewsletterGenerator:
             # Enhance content summary with AI if available (pass source to prioritize RSS insights)
             enhanced_content = self._improve_summary_quality(item.content, enhanced_title, item.source)
             
-            # For RSS content with user insights, preserve the insights and don't over-process with AI
+            # For RSS content with user insights, use the new editorial workflow
             if (item.source == "rss" and self._is_curated_insights(enhanced_content)):
-                # User insights are already high quality - skip AI processing to preserve your angle
-                logger.debug(f"Preserving user insights for RSS content: {enhanced_title}")
+                # This is curated content - use the full editorial workflow
+                enhanced_content = await self._editorial_workflow(
+                    item, enhanced_content, enhanced_title
+                )
+                logger.debug(f"Applied editorial workflow to RSS content: {enhanced_title}")
             elif (self.openrouter_client and 
                   len(enhanced_content) > 200 and 
                   not self._is_curated_insights(enhanced_content) and
@@ -1404,6 +1411,104 @@ class NewsletterGenerator:
                 return line[:200] + '...' if len(line) > 200 else line
                 
         return content[:200] + '...' if len(content) > 200 else content
+    
+    async def _editorial_workflow(self, item: ContentItem, user_highlights: str, title: str) -> str:
+        """Complete editorial workflow: fetch article, write commentary, get editor feedback, revise."""
+        if not self.openrouter_client:
+            logger.debug("No OpenRouter client - skipping editorial workflow")
+            return self._format_user_insights(user_highlights, title)
+        
+        try:
+            # Step 1: Fetch original article content if we have a URL
+            article_content = ""
+            if item.url and str(item.url).startswith(('http://', 'https://')):
+                logger.debug(f"Fetching article content from: {item.url}")
+                article_content = await self.openrouter_client.fetch_article_content(str(item.url))
+                if not article_content:
+                    logger.warning(f"Failed to fetch article content for: {item.url}")
+            
+            # Step 2: Generate initial commentary using article + user highlights
+            if article_content:
+                logger.debug(f"Generating commentary using article content and user highlights")
+                commentary = await self.openrouter_client.generate_commentary(
+                    article_content, user_highlights, title
+                )
+            else:
+                # Fallback to formatted highlights if article fetch failed
+                commentary = self._format_user_insights(user_highlights, title)
+            
+            # Step 3: Editorial review and revision loop
+            max_revisions = 2  # Limit revisions to avoid infinite loops
+            revision_count = 0
+            
+            while revision_count < max_revisions:
+                # Get editorial feedback
+                logger.debug(f"Getting editorial feedback (revision {revision_count + 1})")
+                review = await self.openrouter_client.editorial_roast(commentary, "article")
+                
+                if review["approved"]:
+                    logger.debug(f"Article approved by editor (score: {review['score']}/10)")
+                    break
+                
+                # Revise based on feedback
+                logger.debug(f"Editor rejected article (score: {review['score']}/10): {review['feedback'][:100]}...")
+                commentary = await self.openrouter_client.revise_content(
+                    commentary, review["feedback"], article_content, user_highlights
+                )
+                revision_count += 1
+            
+            if revision_count >= max_revisions:
+                logger.warning(f"Max revisions reached for article: {title}")
+            
+            return commentary
+            
+        except Exception as e:
+            logger.error(f"Error in editorial workflow for {title}: {e}")
+            # Fallback to formatted user insights
+            return self._format_user_insights(user_highlights, title)
+    
+    async def _newsletter_editorial_review(self, newsletter: 'NewsletterDraft') -> 'NewsletterDraft':
+        """Editorial review and revision of the complete newsletter."""
+        try:
+            max_revisions = 1  # Limit newsletter revisions
+            revision_count = 0
+            
+            current_content = newsletter.content
+            
+            while revision_count < max_revisions:
+                # Get editorial feedback on full newsletter
+                logger.debug(f"Getting newsletter editorial review (revision {revision_count + 1})")
+                review = await self.openrouter_client.editorial_roast(current_content, "newsletter")
+                
+                if review["approved"]:
+                    logger.info(f"Newsletter approved by editor (score: {review['score']}/10)")
+                    break
+                
+                # Newsletter-level revisions are complex, so just log the feedback for now
+                logger.warning(f"Newsletter needs improvement (score: {review['score']}/10): {review['feedback'][:200]}...")
+                
+                # For now, we'll accept the newsletter even if not perfect
+                # Full newsletter revision would require regenerating the entire structure
+                break
+            
+            # Return potentially updated newsletter
+            if current_content != newsletter.content:
+                from src.models.content import NewsletterDraft
+                return NewsletterDraft(
+                    title=newsletter.title,
+                    content=current_content,
+                    items=newsletter.items,
+                    created_at=newsletter.created_at,
+                    image_url=newsletter.image_url,
+                    draft_id=newsletter.draft_id,
+                    metadata=newsletter.metadata
+                )
+            
+            return newsletter
+            
+        except Exception as e:
+            logger.error(f"Error in newsletter editorial review: {e}")
+            return newsletter
     
     def _extract_key_points_summary(self, content: str, title: str) -> str:
         """Extract key points from list-heavy content."""

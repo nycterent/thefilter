@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import re
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
@@ -237,10 +238,13 @@ class RSSClient:
         
         # Extract original article URL from the content
         original_url = self._extract_article_url(description) or link
+        
+        # Clean up the title - remove garbage like [Firehose]
+        clean_title = self._clean_article_title(title)
 
         return {
             "id": guid or link,
-            "title": title,
+            "title": clean_title,
             "content": description,
             "summary": (
                 description_clean[:300] + "..."
@@ -490,3 +494,27 @@ class RSSClient:
         except Exception as e:
             logger.debug(f"Error extracting article URL: {e}")
             return ""
+    
+    def _clean_article_title(self, title: str) -> str:
+        """Clean up article title by removing garbage tags and prefixes."""
+        if not title:
+            return "Untitled Article"
+        
+        # Remove common garbage patterns
+        cleaned = title
+        
+        # Remove [Firehose], [Newsletter], etc.
+        cleaned = re.sub(r'^\[.*?\]\s*', '', cleaned)
+        
+        # Remove common email forward patterns
+        cleaned = re.sub(r'^(Fwd:|Re:|FW:)\s*', '', cleaned, flags=re.IGNORECASE)
+        
+        # Clean up whitespace
+        cleaned = ' '.join(cleaned.split())
+        
+        # If title is still garbage or too short, try to generate from content
+        if (len(cleaned) < 5 or 
+            any(garbage in cleaned.lower() for garbage in ['untitled', 'no subject', 'fwd', 'firehose'])):
+            return "Article Commentary"  # Generic fallback
+        
+        return cleaned.strip()
