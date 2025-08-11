@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  newsletter-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+      cache_from:
+        - newsletter-bot:latest
+    image: newsletter-bot:latest
+    container_name: newsletter-bot
+    environment:
+      - READWISE_API_KEY=${READWISE_API_KEY}
+      - GLASP_API_KEY=${GLASP_API_KEY}
+      - RSS_FEEDS=${RSS_FEEDS}
+      - BUTTONDOWN_API_KEY=${BUTTONDOWN_API_KEY}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - UNSPLASH_API_KEY=${UNSPLASH_API_KEY}
+    volumes:
+      - ./logs:/app/logs:rw
+    command: ["python", "-m", "src.newsletter_bot", "generate", "--dry-run"]
+    restart: unless-stopped
+
+  # Development service with hot reload
+  newsletter-bot-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: base
+    image: newsletter-bot:dev
+    container_name: newsletter-bot-dev
+    environment:
+      - READWISE_API_KEY=${READWISE_API_KEY}
+      - GLASP_API_KEY=${GLASP_API_KEY}
+      - RSS_FEEDS=${RSS_FEEDS}
+      - BUTTONDOWN_API_KEY=${BUTTONDOWN_API_KEY}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - UNSPLASH_API_KEY=${UNSPLASH_API_KEY}
+      - PYTHONPATH=/app
+    volumes:
+      - .:/app:ro
+      - ./logs:/app/logs:rw
+    working_dir: /app
+    command: ["python", "-m", "src.newsletter_bot", "health"]
+    profiles: ["dev"]
+
+  # Redis for caching (optional)
+  redis:
+    image: redis:7-alpine
+    container_name: newsletter-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    profiles: ["cache"]
+
+volumes:
+  redis_data:

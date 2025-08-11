@@ -1,0 +1,96 @@
+# Version control
+.git
+.gitignore
+
+# Python cache
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+.tox
+.pytest_cache
+.mypy_cache
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Test files
+tests/
+debug_*.py
+test_*.py
+
+# CI/CD
+.github/
+.travis.yml
+.circleci/
+
+# Development files
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+logs/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Docker
+Dockerfile*
+docker-compose*
+.dockerignore
+
+# Jupyter notebooks
+*.ipynb
+.ipynb_checkpoints/
+
+# Coverage reports
+.coverage
+htmlcov/
+.coverage.*
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+
+# Node.js (if any)
+node_modules/
+npm-debug.log*
+
+# Archive files
+*.zip
+*.tar.gz
+*.rar
+
+# Scheduler artifacts (if any)
+scheduler/logs/
+scheduler/tmp/
+
+# Web artifacts (if any) 
+web/logs/
+web/tmp/

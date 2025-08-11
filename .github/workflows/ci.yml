@@ -57,8 +57,19 @@ jobs:
     - name: Lint sample briefing
       run: python check_briefing.py tests/fixtures/good_briefing.html
     
-    - name: Build Docker image
-      run: docker build -t newsletter-bot:test .
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Build Docker image with cache
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./Dockerfile
+        target: production
+        tags: newsletter-bot:test
+        push: false
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
     
     - name: Test Docker image
       run: |
@@ -95,8 +106,22 @@ jobs:
         OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         UNSPLASH_API_KEY: ${{ secrets.UNSPLASH_API_KEY }}
     
-    - name: Build Docker image
+    - name: Set up Docker Buildx
       if: success()
-      run: |
-        docker build -t newsletter-bot:${{ github.sha }} .
-        echo "✅ Docker image built successfully"
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Build Docker image with cache
+      if: success()
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./Dockerfile
+        target: production
+        tags: newsletter-bot:${{ github.sha }}
+        push: false
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        
+    - name: Verify Docker build
+      if: success()
+      run: echo "✅ Docker image built successfully"

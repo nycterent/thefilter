@@ -106,23 +106,32 @@ jobs:
         echo "🔍 Running newsletter quality validation..."
         echo "Fetching latest newsletter from Buttondown..."
         
-        # Get the latest newsletter URL from Buttondown API
-        LATEST_URL=$(curl -s -H "Authorization: Token ${{ secrets.BUTTONDOWN_API_KEY }}" \
-          "https://api.buttondown.email/v1/newsletters" | \
-          jq -r '.results[0].secondary_id' | \
-          xargs -I {} echo "https://buttondown.com/filter/archive/{}")
+        # Get the latest newsletter URL from Buttondown API with better error handling
+        NEWSLETTER_RESPONSE=$(curl -s -H "Authorization: Token ${{ secrets.BUTTONDOWN_API_KEY }}" \
+          "https://api.buttondown.email/v1/newsletters")
         
-        echo "Latest newsletter URL: $LATEST_URL"
+        SECONDARY_ID=$(echo "$NEWSLETTER_RESPONSE" | jq -r '.results[0].secondary_id // empty')
         
-        # Run validation
-        if python check_briefing.py "$LATEST_URL" --verbose > validation_output.log 2>&1; then
-          echo "validation_status=passed" >> $GITHUB_OUTPUT
-          echo "✅ Newsletter validation passed!"
-        else
+        if [ -z "$SECONDARY_ID" ] || [ "$SECONDARY_ID" = "null" ]; then
+          echo "❌ No newsletter found or secondary_id is null" > validation_output.log
+          echo "This might indicate the newsletter generation didn't complete successfully" >> validation_output.log
           echo "validation_status=failed" >> $GITHUB_OUTPUT
-          echo "❌ Newsletter validation failed! Issues detected."
           cat validation_output.log
-          # Don't exit 1 here so we can still create the issue with results
+          # Don't exit here, continue to create issue with results
+        else
+          LATEST_URL="https://buttondown.com/filter/archive/$SECONDARY_ID"
+          echo "Latest newsletter URL: $LATEST_URL"
+          
+          # Run validation
+          if python check_briefing.py "$LATEST_URL" --verbose > validation_output.log 2>&1; then
+            echo "validation_status=passed" >> $GITHUB_OUTPUT
+            echo "✅ Newsletter validation passed!"
+          else
+            echo "validation_status=failed" >> $GITHUB_OUTPUT
+            echo "❌ Newsletter validation failed! Issues detected."
+            cat validation_output.log
+            # Don't exit 1 here so we can still create the issue with results
+          fi
         fi
       env:
         BUTTONDOWN_API_KEY: ${{ secrets.BUTTONDOWN_API_KEY }}

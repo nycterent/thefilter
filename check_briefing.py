@@ -323,6 +323,8 @@ class BriefingChecker:
 
 def load_source(source: str) -> ParsedDocument:
     if re.match(r"https?://", source):
+        if "null" in source.lower() or source.endswith("/null"):
+            raise ValueError(f"Invalid URL - contains 'null': {source}")
         resp = requests.get(source, timeout=30)
         resp.raise_for_status()
         return parse_html(resp.text, source)
@@ -357,6 +359,7 @@ def main() -> None:
     parser.add_argument("inputs", nargs="+", help="URLs or local HTML/MD files")
     parser.add_argument("--golden", help="URL or file of known good briefing")
     parser.add_argument("--json", dest="json_path", help="Path to save JSON report")
+    parser.add_argument("--verbose", "-v", action="store_true", help="Enable verbose output")
     args = parser.parse_args()
 
     golden_doc: Optional[ParsedDocument] = None
@@ -370,9 +373,18 @@ def main() -> None:
     reports = []
     for src in args.inputs:
         try:
+            if args.verbose:
+                print(f"📥 Loading source: {src}")
             doc = load_source(src)
+            if args.verbose:
+                print(f"📄 Document loaded: {len(doc.text)} characters")
             passed, results = checker.check(doc)
             print_report(src, passed, results)
+            if args.verbose:
+                print(f"✅ Validation {'passed' if passed else 'failed'} for {src}")
+                for result in results:
+                    if not result.passed and result.examples:
+                        print(f"  ⚠️  {result.name}: {result.examples[:3]}")  # Show first 3 examples
             reports.append(
                 {
                     "source": src,
