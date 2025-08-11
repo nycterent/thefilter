@@ -98,6 +98,12 @@ BUTTONDOWN_API_KEY=your_buttondown_token
 
 # AI Processing
 OPENROUTER_API_KEY=your_openrouter_key
+OPENROUTER_MODEL=cognitivecomputations/dolphin-mistral-24b-venice-edition:free
+LLM_TEMPERATURE=0.6
+LLM_MAX_TOKENS=600
+
+# Fallback Configuration
+FALLBACK_MODEL=meta-llama/llama-3.1-8b-instruct:free
 
 # Image Search
 UNSPLASH_API_KEY=your_unsplash_access_key

@@ -33,6 +33,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Gate by Europe/Madrid local time
+        run: |
+          python - <<'PY'
+          from datetime import datetime
+          from zoneinfo import ZoneInfo
+          now = datetime.now(ZoneInfo('Europe/Madrid'))
+          exit(0 if now.hour == 6 else 78)
+          PY
+
       - name: Set up Python 3.11
         uses: actions/setup-python@v4
         with:

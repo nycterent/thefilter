@@ -15,11 +15,12 @@ logger = logging.getLogger(__name__)
 class OpenRouterClient:
     """Client for OpenRouter API to process content with free models."""
 
-    def __init__(self, api_key: str):
+    def __init__(self, api_key: str, model: str = None):
         """Initialize OpenRouter client.
 
         Args:
             api_key: OpenRouter API key
+            model: Model to use (defaults to Venice if not specified)
         """
         self.api_key = api_key
         self.base_url = "https://openrouter.ai/api/v1"
@@ -30,7 +31,8 @@ class OpenRouterClient:
             "X-Title": "The Filter Newsletter",  # Optional title
         }
         # Use free models only - default to OpenRouter's Venice model
-        self.default_model = "cognitivecomputations/dolphin-mistral-24b-venice-edition:free"  # Venice free model
+        import os
+        self.default_model = model or os.getenv("OPENROUTER_MODEL", "cognitivecomputations/dolphin-mistral-24b-venice-edition:free")
 
         # Rate limiting for free tier (20 requests/minute)
         self.last_request_time = 0
