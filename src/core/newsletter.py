@@ -993,9 +993,14 @@ class NewsletterGenerator:
             # Improve source attribution
             enhanced_source = self._improve_source_attribution(item)
             
-            # Enhance content summary with AI if available
-            enhanced_content = self._improve_summary_quality(item.content, enhanced_title)
-            if self.openrouter_client and len(enhanced_content) > 200:
+            # Enhance content summary with AI if available (pass source to prioritize RSS insights)
+            enhanced_content = self._improve_summary_quality(item.content, enhanced_title, item.source)
+            
+            # For RSS content with user insights, preserve the insights and don't over-process with AI
+            if (item.source == "rss" and self._is_curated_insights(enhanced_content)):
+                # User insights are already high quality - skip AI processing to preserve your angle
+                logger.debug(f"Preserving user insights for RSS content: {enhanced_title}")
+            elif self.openrouter_client and len(enhanced_content) > 200:
                 try:
                     enhanced_content = await self.openrouter_client.enhance_content_summary(
                         enhanced_title, enhanced_content, max_length=160
@@ -1298,10 +1303,14 @@ class NewsletterGenerator:
         logger.info(f"Content diversity filter: {len(content_items)} -> {len(diverse_items)} items (removed {len(content_items) - len(diverse_items)} similar items)")
         return diverse_items
 
-    def _improve_summary_quality(self, content: str, title: str) -> str:
+    def _improve_summary_quality(self, content: str, title: str, source: str = "") -> str:
         """Improve summary quality through intelligent processing."""
         if not content:
             return ""
+        
+        # For RSS content (user's curated insights), preserve structure and prioritize insights
+        if source == "rss" and self._is_curated_insights(content):
+            return self._format_user_insights(content, title)
         
         # Handle list-based content (like ProductHacker)
         if content.count('\n') > 3 and len(content) > 500:
@@ -1317,6 +1326,72 @@ class NewsletterGenerator:
         
         # Ensure good sentence completion for truncation
         return self._ensure_complete_sentences(content)
+    
+    def _is_curated_insights(self, content: str) -> bool:
+        """Check if content contains user's curated insights (from RSS email forwarding)."""
+        if not content:
+            return False
+        
+        # Look for indicators of curated insights
+        insight_indicators = [
+            '•',  # Bullet points
+            '📚', '☕', '🤖', '⚔️', '🌍', '🏛️', '✊',  # Common emojis in insights
+            '**',  # Bold formatting from user highlights
+            'Trend', 'Issue', 'Insights', 'Call to Action'  # Common insight themes
+        ]
+        
+        # Check if content has multiple insight indicators
+        indicator_count = sum(1 for indicator in insight_indicators if indicator in content)
+        return indicator_count >= 2  # Must have at least 2 indicators to be considered curated insights
+    
+    def _format_user_insights(self, content: str, title: str) -> str:
+        """Format user's curated insights for newsletter display."""
+        if not content:
+            return ""
+        
+        lines = [line.strip() for line in content.split('\n') if line.strip()]
+        
+        # Extract the most compelling insights (first 2-3 points)
+        key_insights = []
+        for line in lines:
+            if len(key_insights) >= 3:  # Limit to top 3 insights
+                break
+                
+            # Include lines with substance and structure
+            if (len(line) > 30 and 
+                (line.startswith('•') or line.startswith('-') or '**' in line or
+                 any(emoji in line for emoji in ['📚', '☕', '🤖', '⚔️', '🌍', '🏛️', '✊', '📊', '🏢', '👥', '🔄']))):
+                
+                # Clean up the line
+                clean_line = line.replace('•', '').replace('-', '').strip()
+                # Remove redundant title repetition
+                if not any(word.lower() in clean_line.lower() for word in title.lower().split() if len(word) > 4):
+                    key_insights.append(clean_line)
+                elif len(key_insights) == 0:  # Include first insight even if it repeats title info
+                    key_insights.append(clean_line)
+        
+        if key_insights:
+            # Join insights with separator, ensuring good flow
+            summary = ' • '.join(key_insights)
+            
+            # Trim to reasonable newsletter length
+            if len(summary) > 300:
+                # Find a good breaking point
+                truncated = summary[:280]
+                last_period = truncated.rfind('.')
+                if last_period > 200:
+                    summary = truncated[:last_period + 1]
+                else:
+                    summary = truncated + '...'
+            
+            return summary
+        
+        # Fallback: return first substantial line
+        for line in lines:
+            if len(line) > 50:
+                return line[:200] + '...' if len(line) > 200 else line
+                
+        return content[:200] + '...' if len(content) > 200 else content
     
     def _extract_key_points_summary(self, content: str, title: str) -> str:
         """Extract key points from list-heavy content."""
