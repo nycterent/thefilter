@@ -129,7 +129,7 @@ class ContentSanitizer:
             r"harsh reali$",  # Specific pattern from 027
             r"has sl$",  # Specific pattern from 027
             r"\w+\.\.\.$",  # Word followed by three dots
-            r"\w{3,}$(?<!\w{6,})",  # Short incomplete word at end (less than 6 chars)
+            r"\w{3,5}$",  # Short incomplete word at end (3-5 chars)
         ]
 
         for pattern in truncation_patterns:
@@ -470,11 +470,11 @@ class ContentSanitizer:
 
         # Raw URLs in body text - more comprehensive detection
         raw_url_patterns = [
-            r"(?<![\[\(])https?://[^\s\)\]]+(?![\]\)])",  # Basic raw URLs
-            r"(?<![\[\(])www\.[^\s\)\]]+(?![\]\)])",  # www URLs without protocol
-            r"(?<!\[)[a-zA-Z0-9.-]+\.substack\.com(?!\])",  # Raw Substack domains
-            r"(?<!\[)x\.com/[^\s\)]+(?!\])",  # Raw X/Twitter links
-            r"(?<!\[)twitter\.com/[^\s\)]+(?!\])",  # Raw Twitter links
+            r"(?<!\[)(?<!\()https?://[^\s\)\]]+(?![\]\)])",  # Basic raw URLs
+            r"(?<!\[)(?<!\()www\.[^\s\)\]]+(?![\]\)])",  # www URLs without protocol
+            r"[a-zA-Z0-9.-]+\.substack\.com(?![^\[\s]*\])",  # Raw Substack domains
+            r"x\.com/[^\s\)]+(?![^\[\s]*\])",  # Raw X/Twitter links
+            r"twitter\.com/[^\s\)]+(?![^\[\s]*\])",  # Raw Twitter links
         ]
 
         raw_urls_found = []
@@ -571,7 +571,7 @@ class ContentSanitizer:
         # Convert basic raw URLs to placeholder links where possible
         # This is a basic fallback - proper URL handling should happen earlier in the pipeline
         newsletter_content = re.sub(
-            r"(?<![[\(])https?://([^\s\)\]]+)(?![\]\)])",
+            r"(?<!\[)(?<!\()https?://([^\s\)\]]+)(?![\]\)])",
             r"[\1](https://\1)",
             newsletter_content,
         )
