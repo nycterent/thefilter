@@ -32,7 +32,11 @@ class OpenRouterClient:
         }
         # Use free models only - default to OpenRouter's Venice model
         import os
-        self.default_model = model or os.getenv("OPENROUTER_MODEL", "cognitivecomputations/dolphin-mistral-24b-venice-edition:free")
+
+        self.default_model = model or os.getenv(
+            "OPENROUTER_MODEL",
+            "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
+        )
 
         # Rate limiting for free tier (20 requests/minute)
         self.last_request_time = 0

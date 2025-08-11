@@ -2366,20 +2366,22 @@ class NewsletterGenerator:
             # QA check before publishing
             logger.info("Running QA checks on newsletter content...")
             qa_results = run_checks(newsletter.content)
-            
+
             # Write QA results to output directory
             out_dir = Path("out")
             out_dir.mkdir(exist_ok=True)
             qa_file = out_dir / "qa.json"
-            qa_file.write_text(json.dumps(qa_results, ensure_ascii=False, indent=2), encoding="utf-8")
-            
+            qa_file.write_text(
+                json.dumps(qa_results, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+
             if not qa_results["passed"]:
                 logger.error("QA checks failed - newsletter blocked from publishing")
                 logger.error(f"QA results written to {qa_file}")
                 return False
-            
+
             logger.info("QA checks passed - proceeding with publication")
-            
+
             logger.info("Publishing newsletter to Buttondown...")
             api_key = self.settings.buttondown_api_key
             if not api_key:
