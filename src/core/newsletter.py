@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import re
 from datetime import datetime, timezone
 from typing import Dict, List
 
@@ -9,6 +10,7 @@ from src.clients.openrouter import OpenRouterClient
 from src.clients.readwise import ReadwiseClient
 from src.clients.rss import RSSClient
 from src.clients.unsplash import UnsplashClient
+from src.core.sanitizer import ContentSanitizer
 from src.models.content import ContentItem, NewsletterDraft
 from src.models.settings import Settings
 
@@ -47,25 +49,60 @@ class NewsletterGenerator:
         # Ensure balanced distribution across categories
         self._balance_categories(categories)
 
-        # Helper for dynamic Unsplash images
-        async def get_unsplash_image(category: str, topic_hint: str = "") -> str:
-            """Get dynamic image using Unsplash API or fallback to curated images."""
+        # Helper for dynamic Unsplash images with proper alt text
+        async def get_unsplash_image_with_alt(
+            category: str, topic_hint: str = ""
+        ) -> tuple[str, str]:
+            """Get dynamic image with descriptive alt text using Unsplash API or fallback."""
             if self.unsplash_client:
                 try:
-                    return await self.unsplash_client.get_category_image(
+                    image_url = await self.unsplash_client.get_category_image(
                         category, topic_hint
                     )
+                    # Generate descriptive alt text based on category and topic
+                    alt_text = generate_image_alt_text(category, topic_hint)
+                    return image_url, alt_text
                 except Exception as e:
                     logger.debug(f"Unsplash API failed, using fallback: {e}")
 
-            # Fallback to curated professional images
-            curated_images = {
-                "technology": "https://images.unsplash.com/photo-1518709268805-4e9042af2176?w=370&h=150&fit=crop&crop=entropy&auto=format&q=80",
-                "society": "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=370&h=150&fit=crop&crop=entropy&auto=format&q=80",
-                "art": "https://images.unsplash.com/photo-1541961017774-22349e4a1262?w=370&h=150&fit=crop&crop=entropy&auto=format&q=80",
-                "business": "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=370&h=150&fit=crop&crop=entropy&auto=format&q=80",
+            # Fallback to curated professional images with descriptive alt text
+            curated_images_with_alt = {
+                "technology": (
+                    "https://images.unsplash.com/photo-1518709268805-4e9042af2176?w=370&h=150&fit=crop&crop=entropy&auto=format&q=80",
+                    "Modern technology workspace with computer screens and digital interfaces",
+                ),
+                "society": (
+                    "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=370&h=150&fit=crop&crop=entropy&auto=format&q=80",
+                    "Diverse group of people in urban setting representing modern society",
+                ),
+                "art": (
+                    "https://images.unsplash.com/photo-1541961017774-22349e4a1262?w=370&h=150&fit=crop&crop=entropy&auto=format&q=80",
+                    "Abstract artistic composition with vibrant colors and creative elements",
+                ),
+                "business": (
+                    "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=370&h=150&fit=crop&crop=entropy&auto=format&q=80",
+                    "Professional business environment with modern office buildings",
+                ),
             }
-            return curated_images.get(category, curated_images["technology"])
+            return curated_images_with_alt.get(
+                category, curated_images_with_alt["technology"]
+            )
+
+        def generate_image_alt_text(category: str, topic_hint: str = "") -> str:
+            """Generate descriptive alt text for images based on category and topic."""
+            if topic_hint:
+                # Extract key terms from topic hint for more specific alt text
+                clean_topic = topic_hint[:50].replace("\n", " ").strip()
+                return f"Illustration related to {clean_topic} in the context of {category}"
+
+            # Fallback alt text based on category
+            category_descriptions = {
+                "technology": "Technology and innovation related imagery",
+                "society": "Social and cultural themes illustration",
+                "art": "Artistic and creative content representation",
+                "business": "Business and economic topics visualization",
+            }
+            return category_descriptions.get(category, "Content-related illustration")
 
         today = datetime.now(timezone.utc).strftime("%A, %B %d, %Y")
         out = []
@@ -88,6 +125,21 @@ class NewsletterGenerator:
             out.append(f"\n*Today's highlights: {' • '.join(intro_items)}*\n")
 
         out.append("\n---\n")
+
+        # Add Headlines at a Glance section (required for structure parity)
+        out.append("\n## HEADLINES AT A GLANCE\n")
+
+        # Generate quick headline list from all categories
+        all_headlines = []
+        for category, items in categories.items():
+            for item in items[:2]:  # Top 2 from each category
+                source = item.source_title or item.source or "Source"
+                all_headlines.append(f"• **{item.title}** ({source})")
+
+        if all_headlines:
+            out.append("\n".join(all_headlines[:8]))  # Limit to 8 headlines
+            out.append("\n")
+
         out.append("\n---\n")
 
         # LEAD STORIES
@@ -115,11 +167,11 @@ class NewsletterGenerator:
         async def lead_story(item, cat):
             if not item:
                 return " | "
-            img = await get_unsplash_image(cat)
+            img_url, alt_text = await get_unsplash_image_with_alt(cat, item.title)
             url = item.url or ""
             src = item.source_title or item.source or "Source Needed"
             summary = item.content[:300].replace("\n", " ")
-            return f"![Image]({img}) | ![Image]({img})\n| **{item.title}** {summary} [→ {src}]({url}) | "
+            return f"![{alt_text}]({img_url}) | ![{alt_text}]({img_url})\n| **{item.title}** {summary} [→ {src}]({url}) | "
 
         out.append(await lead_story(lead_tech, "technology"))
         out.append(await lead_story(lead_other, "society"))
@@ -131,13 +183,15 @@ class NewsletterGenerator:
 
         for i, item in enumerate(tech_items):
             if item:
-                img = await get_unsplash_image("technology", item.title)
+                img_url, alt_text = await get_unsplash_image_with_alt(
+                    "technology", item.title
+                )
                 src = item.source_title or item.source or "Unknown"
                 url = item.url or ""
                 summary = item.content[:150].replace("\n", " ")
 
                 out.append(f"### {item.title}\n")
-                out.append(f"![{item.title}]({img})\n")
+                out.append(f"![{alt_text}]({img_url})\n")
                 out.append(f"{summary}\n")
                 out.append(f"*Source: [{src}]({url})*\n")
                 if i < len(tech_items) - 1:  # Add separator except for last item
@@ -150,7 +204,9 @@ class NewsletterGenerator:
 
         for i, item in enumerate(soc_items):
             if item:
-                img = await get_unsplash_image("society", item.title)
+                img_url, alt_text = await get_unsplash_image_with_alt(
+                    "society", item.title
+                )
                 src = item.source_title or item.source or "Unknown"
                 url = item.url or ""
                 summary = item.content[:180].replace("\n", " ")
@@ -158,7 +214,7 @@ class NewsletterGenerator:
                 # Use bullet points for a more organic feel
                 out.append(f"**• {item.title}**\n")
                 if i == 0:  # Only show image for first item to avoid clutter
-                    out.append(f"![{item.title}]({img})\n")
+                    out.append(f"![{alt_text}]({img_url})\n")
                 out.append(f"{summary} *([{src}]({url}))*\n")
 
         out.append("\n---\n")
@@ -169,13 +225,13 @@ class NewsletterGenerator:
 
         for item in art_items:
             if item:
-                img = await get_unsplash_image("art", item.title)
+                img_url, alt_text = await get_unsplash_image_with_alt("art", item.title)
                 src = item.source_title or item.source or "Unknown"
                 url = item.url or ""
                 summary = item.content[:150].replace("\n", " ")
 
                 out.append(f"**{item.title}**\n")
-                out.append(f"![{item.title}]({img})\n")
+                out.append(f"![{alt_text}]({img_url})\n")
                 out.append(f"{summary} *([{src}]({url}))*\n\n")
 
         if not art_items or all(item is None for item in art_items):
@@ -189,13 +245,15 @@ class NewsletterGenerator:
 
         for item in bus_items:
             if item:
-                img = await get_unsplash_image("business", item.title)
+                img_url, alt_text = await get_unsplash_image_with_alt(
+                    "business", item.title
+                )
                 src = item.source_title or item.source or "Unknown"
                 url = item.url or ""
                 summary = item.content[:150].replace("\n", " ")
 
                 out.append(f"**{item.title}**\n")
-                out.append(f"![{item.title}]({img})\n")
+                out.append(f"![{alt_text}]({img_url})\n")
                 out.append(f"{summary} *([{src}]({url}))*\n\n")
 
         if not bus_items or all(item is None for item in bus_items):
@@ -213,19 +271,44 @@ class NewsletterGenerator:
                 if item.url and str(item.url).startswith(("http://", "https://")):
                     src_name = item.source_title or item.source
                     # Skip if source name is missing or generic
+                    problematic_sources = [
+                        "Unknown",
+                        "Unknown Source",
+                        "Newsletters",
+                        "Starred Articles",
+                        "Justice",
+                        "URL",
+                        "Link",
+                        "Source",
+                        "Placeholder",
+                    ]
+
+                    # Also check for URL-pattern sources like "Url3396"
+                    is_url_pattern = (
+                        re.match(r"^url\d+$", src_name.lower().strip())
+                        if src_name
+                        else False
+                    )
+
                     if (
                         not src_name
-                        or src_name
-                        in [
-                            "Unknown",
-                            "Unknown Source",
-                        ]
-                        or src_name.lower() == item.source.lower()
+                        or src_name in problematic_sources
+                        or src_name.lower().strip()
+                        in [s.lower() for s in problematic_sources]
+                        or is_url_pattern
+                        or (
+                            src_name.lower() == item.source.lower()
+                            if item.source
+                            else False
+                        )
                     ):
                         # Try to extract source from URL instead
                         if hasattr(self, "_extract_source_from_url"):
                             src_name = self._extract_source_from_url(str(item.url))
-                        if not src_name:
+                        if not src_name or src_name in problematic_sources:
+                            logger.debug(
+                                f"Skipping item with problematic source: '{src_name}' for {item.title[:30]}..."
+                            )
                             continue  # Skip items without identifiable sources
 
                     # For content with same source name, use article title as differentiator
@@ -561,6 +644,9 @@ class NewsletterGenerator:
         """
         self.settings = settings
 
+        # Initialize content sanitizer
+        self.sanitizer = ContentSanitizer()
+
         # Initialize content source clients with validation
         self.readwise_client = self._init_readwise_client(settings)
         self.glasp_client = self._init_glasp_client(settings)
@@ -753,8 +839,11 @@ class NewsletterGenerator:
         # Step 2: Process and organize content
         processed_content = await self._process_content(content_items)
 
+        # Step 2.3: Validate and sanitize content (critical quality gate)
+        validated_content = await self._validate_and_sanitize_content(processed_content)
+
         # Step 2.5: Enhance content quality (includes editorial workflow)
-        enhanced_content = await self._enhance_content_quality(processed_content)
+        enhanced_content = await self._enhance_content_quality(validated_content)
 
         # Step 2.7: Filter for content diversity to prevent repetitive themes
         diverse_content = self._ensure_content_diversity(enhanced_content)
@@ -1152,6 +1241,93 @@ class NewsletterGenerator:
             final_items, key=lambda x: x.created_at or "", reverse=True
         )
         return final_items[:20]
+
+    async def _validate_and_sanitize_content(
+        self, content_items: List[ContentItem]
+    ) -> List[ContentItem]:
+        """Validate and sanitize content items, filtering out problematic content."""
+        validated_items = []
+        total_issues = []
+
+        for item in content_items:
+            # Convert ContentItem to dict for sanitizer
+            content_dict = {
+                "title": item.title,
+                "summary": getattr(item, "summary", ""),
+                "description": item.content,
+                "commentary": getattr(item, "commentary", ""),
+                "source_title": item.source_title,
+                "url": item.url,
+            }
+
+            # Run comprehensive quality check
+            issues = self.sanitizer.check_content_quality(content_dict)
+
+            if issues:
+                issue_count = sum(len(issue_list) for issue_list in issues.values())
+                logger.warning(
+                    f"Content issues found for '{item.title[:50]}...': {issue_count} issues"
+                )
+
+                # Log specific issues for debugging
+                for field, field_issues in issues.items():
+                    for issue in field_issues:
+                        logger.debug(f"  {field}: {issue}")
+                        total_issues.append(f"{field}: {issue}")
+
+                # Filter out content with critical issues
+                critical_issues = ["AI refusal detected", "Prompt leakage detected"]
+                has_critical_issues = any(
+                    any(critical in issue for critical in critical_issues)
+                    for issue_list in issues.values()
+                    for issue in issue_list
+                )
+
+                if has_critical_issues:
+                    logger.error(
+                        f"Dropping content due to critical issues: {item.title}"
+                    )
+                    continue
+
+            # Update item with sanitized content
+            item.title = content_dict["title"]
+            if hasattr(item, "summary"):
+                item.summary = content_dict["summary"]
+            item.content = content_dict["description"]
+            if hasattr(item, "commentary"):
+                item.commentary = content_dict["commentary"]
+            # Update URL with canonical version
+            item.url = content_dict["url"]
+
+            validated_items.append(item)
+
+        # Log summary of issues found
+        if total_issues:
+            logger.warning(
+                f"Content validation found {len(total_issues)} total issues across {len(content_items)} items"
+            )
+
+            # Fail fast if too many critical issues
+            critical_count = sum(
+                1
+                for issue in total_issues
+                if any(
+                    critical in issue
+                    for critical in ["AI refusal", "Prompt leakage", "CDN/proxy URL"]
+                )
+            )
+
+            if (
+                critical_count > len(content_items) * 0.3
+            ):  # More than 30% have critical issues
+                raise ValueError(
+                    f"Too many critical content issues: {critical_count}/{len(content_items)}"
+                )
+
+        logger.info(
+            f"Content validation: {len(validated_items)}/{len(content_items)} items passed validation"
+        )
+        return validated_items
 
     async def _enhance_content_quality(
         self, content_items: List[ContentItem]
@@ -1966,6 +2142,23 @@ class NewsletterGenerator:
 
         # Generate markdown content
         newsletter_content = await self._generate_markdown_newsletter(enriched_items)
+
+        # Final template validation and formatting fixes
+        structure_issues = self.sanitizer.validate_newsletter_structure(
+            newsletter_content
+        )
+        if structure_issues:
+            logger.warning(
+                f"Newsletter structure issues found: {len(structure_issues)}"
+            )
+            for issue in structure_issues[:5]:  # Log first 5 issues
+                logger.warning(f"  - {issue}")
+
+            # Apply automatic formatting fixes
+            newsletter_content = self.sanitizer.fix_newsletter_formatting(
+                newsletter_content
+            )
+            logger.info("Applied automatic formatting fixes to newsletter")
 
         return NewsletterDraft(
             title=title,
