@@ -150,7 +150,10 @@ class BriefingChecker:
         patterns = [
             r"i['’]m sorry, but i can[’']t",
             r"i cannot comply",
-            r"i can['’]t provide[^.]*?(illegal|harmful|dangerous|weapons|self-harm|malware)",
+            r"i can['’]t provide[^.]*?(illegal|harmful|dangerous|weapons|self-harm|malware|adult)",
+            r"i am just an ai model",
+            r"not within my programming",
+            r"particularly when it involves minors",
         ]
         matches: List[str] = []
         for pat in patterns:
@@ -160,16 +163,37 @@ class BriefingChecker:
         return RuleResult("guardrail_refusals", not matches, len(matches), matches[:5])
 
     def rule_raw_urls_in_copy(self, doc: ParsedDocument) -> RuleResult:
-        url_pattern = re.compile(r"https?://\S+", re.IGNORECASE)
-        matches = [m.group(0) for m in url_pattern.finditer(doc.text)]
+        scheme_pattern = re.compile(r"https?://\S+", re.IGNORECASE)
+        domain_pattern = re.compile(r"\b[a-zA-Z0-9.-]+\.[a-z]{2,}/?\S*", re.IGNORECASE)
+        scheme_matches = [m.group(0) for m in scheme_pattern.finditer(doc.text)]
+        matches: List[str] = list(scheme_matches)
+        for m in domain_pattern.finditer(doc.text):
+            url = m.group(0)
+            if (
+                not url.startswith("http://")
+                and not url.startswith("https://")
+                and not url.startswith("www.")
+                and all(url not in s for s in scheme_matches)
+            ):
+                matches.append(url)
         for _, text in doc.anchors:
-            if url_pattern.fullmatch(text):
+            if scheme_pattern.fullmatch(text) or (
+                domain_pattern.fullmatch(text)
+                and not text.startswith("http://")
+                and not text.startswith("https://")
+                and not text.startswith("www.")
+            ):
                 if text not in matches:
                     matches.append(text)
         return RuleResult("raw_urls_in_copy", not matches, len(matches), matches[:5])
 
     def rule_non_canonical_links(self, doc: ParsedDocument) -> RuleResult:
-        bad_hosts = {"feedbinusercontent.com", "substackcdn.com", "cdn.substack.com"}
+        bad_hosts = {
+            "feedbinusercontent.com",
+            "substackcdn.com",
+            "cdn.substack.com",
+            "list-manage.com",
+        }
         matches: List[str] = []
         for href, _ in doc.anchors:
             host = urlparse(href).hostname or ""
@@ -210,6 +234,10 @@ class BriefingChecker:
                 continue
             if len(text.split()) <= 2 and len(text.replace(" ", "")) < 10:
                 matches.append(text)
+            if re.search(
+                r"\bfuck\b|\bshit\b|\bbitch\b|\bdamn\b|\bass\b", text, re.IGNORECASE
+            ):
+                matches.append(text)
         return RuleResult(
             "headline_style_inconsistencies", not matches, len(matches), matches[:5]
         )
@@ -221,14 +249,28 @@ class BriefingChecker:
         for raw in doc.raw_headings:
             if "  " in raw:
                 matches.append(raw)
-        return RuleResult("separators_and_spacing", not matches, len(matches), matches[:5])
+        return RuleResult(
+            "separators_and_spacing", not matches, len(matches), matches[:5]
+        )
 
     def rule_image_alt_captions(self, doc: ParsedDocument) -> RuleResult:
         generic = {"image", "photo", "picture", "graphic"}
         matches: List[str] = []
+        sources: List[str] = []
         for src, alt in doc.images:
-            if not alt or len(alt) < 5 or alt.lower() in generic:
+            sources.append(src)
+            if (
+                not alt
+                or len(alt) < 5
+                or alt.lower() in generic
+                or alt.lower().startswith("image: professional illustration depicting")
+            ):
                 matches.append(src or alt or "<missing>")
+        # Duplicate image sources
+        from collections import Counter
+
+        dupes = [url for url, count in Counter(sources).items() if count > 1]
+        matches.extend(dupes)
         return RuleResult("image_alt_captions", not matches, len(matches), matches[:5])
 
     def rule_truncated_or_unbalanced_sentences(self, doc: ParsedDocument) -> RuleResult:
@@ -239,6 +281,12 @@ class BriefingChecker:
             if not s:
                 continue
             if len(s) > 60 and not re.search(r"""[.!?]['")\]]?$""", s):
+                matches.append(s[:80])
+            if (
+                re.search(r":\s*$", s)
+                or re.search(r"\([^\)]*$", s)
+                or re.search(r"\b\w{1,2}$", s)
+            ):
                 matches.append(s[:80])
         if doc.text.count("(") != doc.text.count(")"):
             matches.append("unbalanced parentheses")
@@ -265,9 +313,7 @@ class BriefingChecker:
         for e in extra:
             examples.append(f"extra: {e}")
         count = len(missing) + len(extra)
-        return RuleResult(
-            "section_parity_with_golden", count == 0, count, examples[:5]
-        )
+        return RuleResult("section_parity_with_golden", count == 0, count, examples[:5])
 
     def check(self, doc: ParsedDocument) -> Tuple[bool, List[RuleResult]]:
         results = [rule(doc) for rule in self.rules]
@@ -305,7 +351,9 @@ def print_report(source: str, passed: bool, results: List[RuleResult]) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Lint-check Curated Briefing newsletters")
+    parser = argparse.ArgumentParser(
+        description="Lint-check Curated Briefing newsletters"
+    )
     parser.add_argument("inputs", nargs="+", help="URLs or local HTML/MD files")
     parser.add_argument("--golden", help="URL or file of known good briefing")
     parser.add_argument("--json", dest="json_path", help="Path to save JSON report")
