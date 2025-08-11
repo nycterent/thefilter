@@ -125,9 +125,54 @@ class NewsletterGenerator:
         today = datetime.now(timezone.utc).strftime("%A, %B %d, %Y")
         out = []
         out.append(f"# THE FILTER\n*Curated Briefing \u2022 {today}*\n")
-        out.append(
-            "\n*Welcome to this week's curated briefing. In a **timeless minimalist** spirit, we transform information overload into thoughtful insight. Each story is chosen not just for what happened, but for what it means. Expect sharp analysis, provocative questions, and perspectives that challenge conventional thinking.*\n"
-        )
+        
+        # Generate dynamic, engaging intro using LLM instead of generic template
+        if self.openrouter_client:
+            try:
+                # Create engaging intro based on actual content
+                intro_prompt = f"""Create an engaging, thought-provoking introduction for a newsletter called "The Filter" that covers these topics:
+
+{chr(10).join([f"- {item.title[:100]}..." for item in items[:5]])}
+
+Requirements:
+- Start with a compelling hook that makes readers want to continue
+- Reference specific themes from the actual content above
+- Use your voice: skeptical, pragmatic, no hype
+- Be provocative and challenge conventional thinking
+- Keep it under 100 words
+- Make it feel personal and curated, not generic
+
+Write the intro:"""
+
+                intro_response = await self.openrouter_client._make_request(intro_prompt, max_tokens=150, temperature=0.7)
+                if intro_response and "choices" in intro_response:
+                    dynamic_intro = intro_response["choices"][0]["message"]["content"].strip()
+                    out.append(f"\n*{dynamic_intro}*\n")
+                else:
+                    # Fallback to generic but better intro
+                    out.append(
+                        "\n*This week's briefing cuts through the noise to surface what actually matters. "
+                        f"From {categories.get('technology', [])[:1][0].title if categories.get('technology') else 'tech'} to "
+                        f"{categories.get('society', [])[:1][0].title if categories.get('society') else 'society'}, "
+                        "each story reveals deeper patterns worth your attention.*\n"
+                    )
+            except Exception as e:
+                logger.warning(f"Failed to generate dynamic intro: {e}")
+                # Fallback to generic but better intro
+                out.append(
+                    "\n*This week's briefing cuts through the noise to surface what actually matters. "
+                    f"From {categories.get('technology', [])[:1][0].title if categories.get('technology') else 'tech'} to "
+                    f"{categories.get('society', [])[:1][0].title if categories.get('society') else 'society'}, "
+                    "each story reveals deeper patterns worth your attention.*\n"
+                )
+        else:
+            # Fallback when no LLM available
+            out.append(
+                "\n*This week's briefing cuts through the noise to surface what actually matters. "
+                f"From {categories.get('technology', [])[:1][0].title if categories.get('technology') else 'tech'} to "
+                f"{categories.get('society', [])[:1][0].title if categories.get('society') else 'society'}, "
+                "each story reveals deeper patterns worth your attention.*\n"
+            )
 
         # Dynamic intro based on top stories
         top_stories = []
@@ -922,7 +967,27 @@ class NewsletterGenerator:
         else:
             newsletter.metadata = editorial_metadata
 
-        # Step 4: Publish (if not dry run)
+        # Step 4: Quality Check BEFORE publishing
+        logger.info("Running final QA checks on newsletter content...")
+        qa_results = run_checks(newsletter.content)
+        
+        # Write QA results to output directory
+        out_dir = Path("out")
+        out_dir.mkdir(exist_ok=True)
+        qa_file = out_dir / "qa.json"
+        qa_file.write_text(
+            json.dumps(qa_results, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        
+        if not qa_results["passed"]:
+            logger.error("QA checks failed - newsletter blocked from publishing")
+            logger.error(f"QA results written to {qa_file}")
+            logger.error("Content quality issues detected - newsletter generation failed")
+            return newsletter  # Return the draft but don't publish
+        
+        logger.info("QA checks passed - proceeding with publication")
+        
+        # Step 5: Publish (if not dry run and QA passed)
         if not dry_run and self.settings.buttondown_api_key:
             await self._publish_newsletter(newsletter, dry_run=False)
             logger.info("Newsletter published successfully")
