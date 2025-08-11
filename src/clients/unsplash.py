@@ -1,10 +1,9 @@
 """Unsplash API client for dynamic image fetching."""
 
 import asyncio
-import json
 import logging
 import random
-from typing import Dict, List, Optional
+from typing import Dict
 
 import aiohttp
 

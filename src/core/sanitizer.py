@@ -2,7 +2,7 @@
 
 import logging
 import re
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
@@ -79,7 +79,6 @@ class ContentSanitizer:
             return text, []
 
         issues = []
-        original_text = text
 
         # Check for AI refusal strings
         refusal_matches = self.refusal_regex.findall(text)
@@ -346,7 +345,7 @@ class ContentSanitizer:
                             f"CDN/proxy domain used as source: '{source_title}'"
                         )
                         break
-            except:
+            except Exception:
                 pass
 
         return issues

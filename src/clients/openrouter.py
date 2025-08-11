@@ -1,7 +1,6 @@
 """OpenRouter API client for AI processing and content enhancement."""
 
 import asyncio
-import json
 import logging
 import re
 import time
@@ -66,7 +65,7 @@ Content: {content[:600]}
 
 TASK: Write a compelling summary that:
 - Starts with a hook or intriguing question
-- Explains WHY this matters beyond surface facts  
+- Explains WHY this matters beyond surface facts
 - Highlights what's surprising or controversial
 - Uses conversational, storytelling tone
 - Encourages reader curiosity and engagement
@@ -371,7 +370,7 @@ Choose the most appropriate category. Respond with ONLY ONE WORD: technology, so
                         except UnicodeDecodeError:
                             # Try with latin-1 encoding for problematic content
                             raw_content = await response.read()
-                            html = raw_content.decode('latin-1', errors='ignore')
+                            html = raw_content.decode("latin-1", errors="ignore")
                         soup = BeautifulSoup(html, "html.parser")
 
                         # Remove script, style, nav, footer, ads
@@ -440,7 +439,7 @@ TASK: Write a 2-3 paragraph commentary that:
 - Treats their comments as the "hook" or central thesis
 - If user includes "HINT TO AI:" or similar guidance, use that as your editorial direction
 
-Examples: 
+Examples:
 - "fuck, still need exercise" → write about how the real problem isn't the technology but our relationship with exercise itself
 - "HINT TO AI: focus on the privacy implications" → center your commentary on privacy concerns
 
@@ -689,7 +688,7 @@ JOURNALISM QUALITY RUBRIC (Rate each 1-10):
 
 Provide detailed assessment in this format:
 ENGAGEMENT_SCORE: X/10
-INSIGHT_SCORE: X/10  
+INSIGHT_SCORE: X/10
 STORYTELLING_SCORE: X/10
 CRITICAL_THINKING_SCORE: X/10
 OVERALL_SCORE: X/10

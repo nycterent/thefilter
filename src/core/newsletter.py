@@ -323,18 +323,20 @@ class NewsletterGenerator:
                         # Try to extract source from URL instead
                         if hasattr(self, "_extract_source_from_url"):
                             src_name = self._extract_source_from_url(str(item.url))
-                        
+
                         # If still problematic, use a generic but acceptable fallback
                         if not src_name or src_name in problematic_sources:
                             # Use category-based fallback instead of skipping
                             category_sources = {
                                 "technology": "Tech News",
-                                "society": "Current Affairs", 
+                                "society": "Current Affairs",
                                 "art": "Arts & Culture",
-                                "business": "Business News"
+                                "business": "Business News",
                             }
                             # Get category for this item (simplified)
-                            src_name = category_sources.get("technology", "Curated Source")
+                            src_name = category_sources.get(
+                                "technology", "Curated Source"
+                            )
                             logger.debug(
                                 f"Using fallback source '{src_name}' for {item.title[:30]}..."
                             )
@@ -1308,7 +1310,7 @@ class NewsletterGenerator:
                     "AI refusal detected",
                     "Prompt leakage detected",
                 ]
-                
+
                 # Other issues (truncation, CDN sources, etc.) will be logged but content preserved
                 # The AI editor can handle and improve most content quality issues
                 has_critical_issues = any(
@@ -1444,7 +1446,6 @@ class NewsletterGenerator:
 
     def _extract_better_title(self, item: ContentItem) -> str:
         """Extract a better title from content if the current one is generic."""
-        import re
 
         current_title = item.title.strip()
 
@@ -1484,7 +1485,6 @@ class NewsletterGenerator:
 
     def _find_title_in_content(self, content: str) -> str:
         """Find a good title within content text."""
-        import re
 
         # Try different strategies to find a good title
         strategies = [
@@ -1523,7 +1523,6 @@ class NewsletterGenerator:
 
     def _extract_from_capitalized_phrases(self, content: str) -> str:
         """Extract title from capitalized phrases."""
-        import re
 
         # Look for phrases that start with capital and have good length
         words = content.split()[:15]
@@ -1558,8 +1557,6 @@ class NewsletterGenerator:
 
     async def _improve_source_attribution(self, item: ContentItem) -> dict:
         """Improve source attribution to avoid 'Unknown' sources."""
-        import re
-        from urllib.parse import urlparse
 
         result = {"source_title": item.source_title, "author": item.author}
 
@@ -1998,7 +1995,7 @@ class NewsletterGenerator:
 
             # Skip complex editorial workflow for free models - single shot works better
             # For free Llama model, the initial commentary is already high quality
-            logger.info(f"✅ Using single-shot commentary for free model")
+            logger.info("✅ Using single-shot commentary for free model")
 
             # Add basic editorial stats for consistency
             self.editorial_stats["editor_scores"].append(8)  # Assume good quality
@@ -2023,7 +2020,7 @@ class NewsletterGenerator:
 
             while revision_count < max_revisions:
                 # Get editorial feedback on full newsletter
-                logger.info(f"🎭 Editor agent: reviewing complete newsletter")
+                logger.info("🎭 Editor agent: reviewing complete newsletter")
                 review = await self.openrouter_client.editorial_roast(
                     current_content, "newsletter"
                 )
