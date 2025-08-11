@@ -969,6 +969,7 @@ Write the intro:"""
 
         # Step 4: Quality Check BEFORE publishing
         logger.info("Running final QA checks on newsletter content...")
+        from src.core.qacheck import run_checks
         qa_results = run_checks(newsletter.content)
         
         # Write QA results to output directory
