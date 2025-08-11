@@ -184,15 +184,24 @@ class NewsletterGenerator:
 
         async def lead_story(item, cat):
             if not item:
-                return " | "
+                return "| | |\n"
             img_url, alt_text = await get_unsplash_image_with_alt(cat, item.title)
             url = item.url or ""
             src = item.source_title or item.source or "Source Needed"
-            summary = item.content[:300].replace("\n", " ")
-            return f"![{alt_text}]({img_url}) | ![{alt_text}]({img_url})\n| **{item.title}** {summary} [→ {src}]({url}) | "
+            summary = item.content[:300].replace("\n", " ").strip()
 
-        out.append(await lead_story(lead_tech, "technology"))
-        out.append(await lead_story(lead_other, "society"))
+            # Create proper table row format matching Briefing 001
+            image_cell = f"![{alt_text}]({img_url})"
+            content_cell = f"**{item.title}** {summary} **[→ {src}]({url})**"
+
+            return f"| {image_cell} | {content_cell} |\n"
+
+        # Generate table rows properly
+        tech_row = await lead_story(lead_tech, "technology") if lead_tech else "| | |\n"
+        other_row = await lead_story(lead_other, "society") if lead_other else "| | |\n"
+
+        out.append(tech_row)
+        out.append(other_row)
         out.append("\n---\n")
 
         # TECHNOLOGY SPOTLIGHT
@@ -1411,7 +1420,7 @@ class NewsletterGenerator:
                 try:
                     enhanced_content = (
                         await self.openrouter_client.enhance_content_summary(
-                            enhanced_title, enhanced_content, max_length=160
+                            enhanced_title, enhanced_content, max_length=400
                         )
                     )
                     logger.debug(f"Enhanced content with AI: {enhanced_title}")
@@ -1986,10 +1995,31 @@ class NewsletterGenerator:
                 title,
             )
 
-            # Fallback only if AI generation completely fails
+            # Validate commentary quality - check for AI refusal patterns
+            if commentary:
+                commentary_lower = commentary.lower()
+                refusal_patterns = [
+                    "i cannot fulfill your request",
+                    "i am just an ai model",
+                    "i can't provide assistance",
+                    "i cannot create content",
+                    "it is not within my programming",
+                    "ethical guidelines",
+                    "i'm unable to",
+                    "as an ai",
+                ]
+
+                # If commentary contains refusal patterns, reject and use fallback
+                for pattern in refusal_patterns:
+                    if pattern in commentary_lower:
+                        logger.warning(f"AI refusal detected in commentary: {pattern}")
+                        commentary = None
+                        break
+
+            # Fallback only if AI generation completely fails or contains refusals
             if not commentary or commentary.strip() == user_highlights.strip():
                 logger.warning(
-                    "AI commentary generation failed, using formatted highlights as fallback"
+                    "AI commentary generation failed or contained refusals, using formatted highlights as fallback"
                 )
                 commentary = self._format_user_insights(user_highlights, title)
 
@@ -2150,6 +2180,65 @@ class NewsletterGenerator:
         # Must have either URL or source info
         if not item.url and not item.source_title:
             return False
+
+        # Check for complete sentences - no truncated content
+        if item.content.endswith(('...', '…')):
+            return False
+        if not item.content.endswith(('.', '!', '?')):
+            return False
+
+        # Check for AI refusal text and prompt leakage
+        content_lower = item.content.lower()
+        title_lower = item.title.lower()
+
+        # Critical AI refusal patterns
+        refusal_patterns = [
+            "i cannot fulfill your request",
+            "i am just an ai model",
+            "i can't provide assistance",
+            "i cannot create content",
+            "it is not within my programming",
+            "ethical guidelines",
+            "i'm unable to",
+            "i cannot help with",
+            "as an ai",
+            "i'm an ai",
+            "particularly when it involves",
+        ]
+
+        for pattern in refusal_patterns:
+            if pattern in content_lower or pattern in title_lower:
+                return False
+
+        # Check for conversational AI fluff
+        conversational_patterns = [
+            "i'll never tire of hearing",
+            "i couldn't help but",
+            "i can't help but",
+            "what's interesting is",
+            "it's fascinating",
+            "let me tell you",
+            "picture this",
+            "imagine if",
+        ]
+
+        for pattern in conversational_patterns:
+            if content_lower.startswith(pattern) or title_lower.startswith(pattern):
+                return False
+
+        # Check for non-canonical URLs
+        if item.url:
+            url_str = str(item.url).lower()
+            problematic_domains = [
+                "feedbinusercontent.com",
+                "substackcdn.com",
+                "list-manage.com",
+                "cdn.substack.com",
+            ]
+
+            for domain in problematic_domains:
+                if domain in url_str:
+                    return False
 
         return True
 

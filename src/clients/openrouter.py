@@ -41,7 +41,7 @@ class OpenRouterClient:
         self.backoff_multiplier = 1.0
 
     async def enhance_content_summary(
-        self, title: str, content: str, max_length: int = 160
+        self, title: str, content: str, max_length: int = 400
     ) -> str:
         """Enhance content summary using AI.
 
@@ -58,38 +58,98 @@ class OpenRouterClient:
             return content[:max_length]
 
         try:
-            prompt = f"""Create an engaging newsletter summary using journalism best practices. Focus on reader engagement and thought-provoking content.
+            prompt = f"""Write a clear, factual summary of this article for a newsletter. Focus on complete thoughts and professional reporting.
 
 Title: {title}
 Content: {content[:600]}
 
-TASK: Write a compelling summary that:
-- Starts with a hook or intriguing question
-- Explains WHY this matters beyond surface facts
-- Highlights what's surprising or controversial
-- Uses conversational, storytelling tone
-- Encourages reader curiosity and engagement
-- Keeps under {max_length} characters
-- Avoids starting with URLs or social links
+REQUIREMENTS:
+- Write in third person, factual tone
+- Start with the main fact or development
+- Explain what happened and why it matters
+- Write in complete paragraphs with full sentences
+- Maximum {max_length} characters
+- No conversational phrases, questions, or engagement tactics
+- No truncated thoughts or incomplete sentences
+- Professional news reporting style only
+- End with complete sentences, never with "..." or mid-thought
 
-Write an engaging summary that attracts and retains readers:"""
+Summary:"""
 
             response = await self._make_request(
-                prompt, max_tokens=100
-            )  # Increased for better summaries
+                prompt, max_tokens=150
+            )  # Allow longer summaries for complete sentences
             if response and "choices" in response and len(response["choices"]) > 0:
                 summary = response["choices"][0]["message"]["content"].strip()
-                # Ensure we don't exceed max_length but don't cut mid-word
+
+                # Remove common AI artifacts and unwanted phrases
+                unwanted_phrases = [
+                    "I'll never tire of hearing",
+                    "I couldn't help but",
+                    "It's a fascinating",
+                    "What's interesting",
+                    "What makes this",
+                    "Here's what",
+                    "Let me tell you",
+                    "Picture this",
+                    "Imagine if",
+                ]
+
+                # Check for critical AI refusal patterns first
+                refusal_patterns = [
+                    "I cannot fulfill your request",
+                    "I am just an AI model",
+                    "I can't provide assistance",
+                    "I cannot create content",
+                    "it is not within my programming",
+                    "ethical guidelines",
+                    "I'm unable to",
+                    "I cannot help with",
+                    "I'm not able to",
+                    "As an AI",
+                    "I'm an AI",
+                    "particularly when it involves",
+                ]
+
+                # If content contains refusal patterns, reject it entirely
+                summary_lower = summary.lower()
+                for pattern in refusal_patterns:
+                    if pattern.lower() in summary_lower:
+                        logger.warning(f"AI refusal detected in summary: {pattern}")
+                        return content[:max_length]  # Return original content instead
+
+                for phrase in unwanted_phrases:
+                    if summary.lower().startswith(phrase.lower()):
+                        # Find the first sentence after the unwanted opening
+                        sentences = summary.split('. ')
+                        if len(sentences) > 1:
+                            summary = '. '.join(sentences[1:])
+                        break
+
+                # Preserve complete thoughts - only truncate if absolutely necessary
                 if len(summary) > max_length:
-                    # Find the last complete word within the limit
-                    truncated = summary[: max_length - 3]
-                    last_space = truncated.rfind(" ")
-                    if (
-                        last_space > max_length * 0.8
-                    ):  # Only truncate at word boundary if it's reasonable
-                        summary = truncated[:last_space] + "..."
-                    else:
-                        summary = truncated + "..."
+                    # Split into sentences
+                    import re
+                    sentences = re.split(r'(?<=[.!?])\s+', summary)
+                    truncated = ""
+
+                    for sentence in sentences:
+                        # Allow more generous space for complete thoughts
+                        if len(truncated + sentence) <= max_length - 5:
+                            truncated += sentence + " "
+                        else:
+                            break
+
+                    # Clean up and ensure proper ending
+                    summary = truncated.strip()
+                    # Only add period if we have content and it doesn't end properly
+                    if summary and not summary.endswith(('.', '!', '?')):
+                        summary += "."
+
+                    # If truncation resulted in too short content, keep more of original
+                    if len(summary) < max_length * 0.7:  # Less than 70% of allowed space
+                        summary = summary[:max_length-3] + "..." if len(summary) > max_length else summary
+
                 return summary
             else:
                 logger.warning("OpenRouter returned no content")

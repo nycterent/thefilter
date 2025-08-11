@@ -11,8 +11,9 @@ logger = logging.getLogger(__name__)
 class ContentSanitizer:
     """Handles content sanitization, validation, and quality checks."""
 
-    # AI refusal patterns to detect and remove - expanded for more coverage
+    # AI refusal patterns to detect and remove - comprehensive coverage
     AI_REFUSAL_PATTERNS = [
+        # Direct refusal phrases
         r"I can't provide information or guidance on harmful or illegal activities",
         r"I can't provide information or guidance on illegal or harmful activities",
         r"I cannot help with that request",
@@ -32,6 +33,27 @@ class ContentSanitizer:
         r"not within my programming",
         r"particularly when it involves minors",
         r"contains or promotes harmful, illegal, or adult material",
+
+        # Common refusal variations found in production
+        r"I cannot fulfill your request",
+        r"I can't fulfill your request",
+        r"lfill your request",  # Truncated version
+        r"I'll never tire of hearing.*but.*",  # Fake engagement followed by refusal
+        r"I couldn't help but.*",  # Another fake engagement pattern
+        r"ethical guidelines",
+        r"programming or ethical",
+        r"or ethical guidelines",
+        r"harmful, illegal, or adult",
+        r"I can't provide assistance with creating",
+        r"I cannot provide assistance with creating",
+        r"I'm not able to create",
+        r"I don't have access to",
+        r"As an AI language model",
+        r"I'm an AI and",
+
+        # Catch partial/truncated refusals that appear in newsletters
+        r"(?:^|\.)\s*[A-Z][a-z]*\s+(?:can't|cannot|won't|will not|refuse|unable)",
+        r"(?:I|We)\s+(?:apologize|regret).*(?:cannot|can't|unable)",
     ]
 
     # Prompt leakage patterns
@@ -51,11 +73,11 @@ class ContentSanitizer:
         r"create a",
     ]
 
-    # CDN and proxy domains to canonicalize - expanded from 027 issues
+    # CDN and proxy domains to canonicalize - comprehensive list
     PROXY_DOMAINS = {
         "feedbinusercontent.com",
         "substackcdn.com",
-        "eotrx.substackcdn.com",  # Specific CDN from 027
+        "eotrx.substackcdn.com",
         "readwise.io",
         "cdn.substack.com",
         "medium.com/_/stat",
@@ -64,6 +86,20 @@ class ContentSanitizer:
         "us-east-1.amazonaws.com",
         "cloudfront.net",
         "wp.com",
+        # Additional tracking and proxy domains
+        "track.click",
+        "click.track",
+        "redirect.feedbin",
+        "proxy.feedbin",
+    }
+
+    # Mapping of known proxy patterns to extraction methods
+    CANONICALIZATION_PATTERNS = {
+        "feedbinusercontent.com": "extract_from_feedbin",
+        "substackcdn.com": "extract_from_substack",
+        "list-manage.com": "extract_from_mailchimp",
+        "track.click": "extract_from_query_param",
+        "readwise.io": "extract_from_readwise",
     }
 
     def __init__(self) -> None:
@@ -85,19 +121,36 @@ class ContentSanitizer:
             return text, []
 
         issues = []
+        original_text = text
 
-        # Check for AI refusal strings
+        # Check for AI refusal strings with more aggressive removal
         refusal_matches = self.refusal_regex.findall(text)
         if refusal_matches:
             for match in refusal_matches:
                 issues.append(f"AI refusal detected in {context}: '{match[:50]}...'")
-                # Remove the entire sentence containing the refusal
-                sentences = text.split(".")
+
+            # More aggressive removal - split by sentences and paragraphs
+            paragraphs = text.split('\n')
+            clean_paragraphs = []
+
+            for paragraph in paragraphs:
+                # Split paragraph into sentences
+                sentences = re.split(r'(?<=[.!?])\s+', paragraph)
                 clean_sentences = []
+
                 for sentence in sentences:
+                    # Skip entire sentence if it contains refusal patterns
                     if not self.refusal_regex.search(sentence):
                         clean_sentences.append(sentence)
-                text = ".".join(clean_sentences)
+                    else:
+                        issues.append(f"Removed refusal sentence: '{sentence[:60]}...'")
+
+                # Only keep paragraph if it has clean sentences
+                clean_para = ' '.join(clean_sentences).strip()
+                if clean_para and not self.refusal_regex.search(clean_para):
+                    clean_paragraphs.append(clean_para)
+
+            text = '\n'.join(clean_paragraphs)
 
         # Check for prompt leakage
         prompt_matches = self.prompt_leak_regex.findall(text)
@@ -107,9 +160,30 @@ class ContentSanitizer:
                 # Remove the leaked prompt text
                 text = self.prompt_leak_regex.sub("", text)
 
+        # Additional cleanup for common AI artifacts
+        # Remove incomplete sentences that start with common AI phrases
+        ai_artifacts = [
+            r"^\s*(?:I|We)\s+(?:understand|appreciate|recognize|acknowledge).*?(?:\.|$)",
+            r"^\s*(?:It's|It is)\s+important to note.*?(?:\.|$)",
+            r"^\s*(?:Please|Feel free to).*?(?:\.|$)",
+            r"^\s*(?:However|Nevertheless|Nonetheless),?\s*I.*?(?:\.|$)",
+        ]
+
+        for pattern in ai_artifacts:
+            if re.search(pattern, text, re.IGNORECASE | re.MULTILINE):
+                issues.append(f"Removed AI artifact in {context}")
+                text = re.sub(pattern, "", text, flags=re.IGNORECASE | re.MULTILINE)
+
         # Clean up whitespace and formatting issues
         text = re.sub(r"\s+", " ", text).strip()
         text = re.sub(r"\s*\.\s*\.", ".", text)  # Fix double periods
+        text = re.sub(r"^\s*\.\s*", "", text)    # Remove leading periods
+        text = re.sub(r"\s*\.\s*$", ".", text)   # Ensure proper ending
+
+        # If text is empty or too short after sanitization, mark as completely invalid
+        if not text.strip() or len(text.strip()) < 10:
+            issues.append(f"Content completely removed due to AI refusals in {context}")
+            return "", issues
 
         return text, issues
 
@@ -144,7 +218,7 @@ class ContentSanitizer:
                 issues.append(f"Content appears truncated: matches pattern '{pattern}'")
                 break  # Only report first truncation pattern found
 
-        # Check for placeholder content
+        # Check for placeholder content and quality issues
         placeholder_patterns = [
             r"lorem ipsum",
             r"placeholder",
@@ -152,7 +226,28 @@ class ContentSanitizer:
             r"FIXME",
             r"example\.com",
             r"test\d+",
+            r"I couldn't help but chuckle",  # AI-generated filler phrases
+            r"I'll never tire of hearing",   # Another AI filler pattern
+            r"Best of ProductHunt",          # Generic content
+            r"Title:",                       # Template artifacts
+            r"The latest data from",         # Generic openings
         ]
+
+        for pattern in placeholder_patterns:
+            if re.search(pattern, text, re.IGNORECASE):
+                issues.append(f"Placeholder or template content detected: '{pattern}'")
+
+        # Check for overly repetitive content (same phrase repeated)
+        words = text.lower().split()
+        if len(words) > 5:
+            # Look for phrases repeated within short text
+            for i in range(len(words) - 2):
+                phrase = " ".join(words[i:i+3])
+                if text.lower().count(phrase) > 2:
+                    issues.append(f"Repetitive content: phrase '{phrase}' appears multiple times")
+                    break
+
+        # Check for incomplete sentences
 
         for pattern in placeholder_patterns:
             if re.search(pattern, text, re.IGNORECASE):
@@ -253,11 +348,19 @@ class ContentSanitizer:
                     canonical_candidate = self._extract_canonical_url(url, proxy_domain)
                     if canonical_candidate and canonical_candidate != url:
                         canonical_url = canonical_candidate
-                        issues.append(f"Canonicalized to: {canonical_url}")
+                        issues.append(f"Canonicalized {proxy_domain} to: {canonical_candidate}")
+                        break
+                    elif canonical_candidate == "":
+                        # Empty return means we should reject this URL entirely
+                        canonical_url = ""
+                        issues.append(f"REJECTED non-canonical URL ({proxy_domain}): {url}")
                         break
                     else:
-                        # If we can't canonicalize, flag as problematic
-                        issues.append(f"Unable to canonicalize {proxy_domain} URL")
+                        # If we can't canonicalize, at least flag it as non-canonical
+                        issues.append(f"Non-canonical URL ({proxy_domain}): {url}")
+                        # For known problematic domains, mark as severe issue
+                        if proxy_domain in ["feedbinusercontent.com", "substackcdn.com", "list-manage.com"]:
+                            issues.append(f"CRITICAL: Using CDN URL instead of original source")
 
             # Validate URL structure
             parsed_canonical = urlparse(canonical_url)
@@ -273,34 +376,71 @@ class ContentSanitizer:
         """
         Extract canonical URL from known proxy URL patterns.
 
-        This is a best-effort approach for common proxy services.
+        Enhanced extraction for common proxy services with better pattern matching.
         """
+        from urllib.parse import unquote, parse_qs
+
         try:
-            # Feedbin proxy URLs often have the original URL embedded
+            parsed_url = urlparse(proxy_url)
+
+            # Feedbin proxy URLs - more aggressive extraction
             if "feedbinusercontent.com" in proxy_domain:
-                # Pattern: https://feedbinusercontent.com/123/original-url-encoded
-                # This is simplified - real implementation would need URL decoding
-                parts = proxy_url.split("/")
-                if len(parts) > 4:
-                    # Try to reconstruct from path segments
-                    potential_domain = parts[4] if len(parts) > 4 else None
-                    if potential_domain and "." in potential_domain:
-                        return f"https://{potential_domain}"
+                # Try to extract from query parameters first
+                query_params = parse_qs(parsed_url.query)
+                if 'url' in query_params:
+                    return unquote(query_params['url'][0])
 
-            # Substack CDN URLs
-            elif "substackcdn.com" in proxy_domain:
-                # Pattern: https://substackcdn.com/image/fetch/...
-                # These are usually image URLs, harder to canonicalize
-                return proxy_url
+                # Fallback: look for domain patterns in path
+                path_parts = parsed_url.path.strip('/').split('/')
+                for part in path_parts:
+                    # Look for parts that look like domains
+                    if '.' in part and len(part) > 4 and not part.isdigit():
+                        # Common patterns: domain.com, www.domain.com
+                        if part.count('.') >= 1 and not part.startswith('.'):
+                            return f"https://{part}"
 
-            # Readwise.io URLs
+            # Substack CDN URLs - extract publication domain
+            elif "substackcdn.com" in proxy_domain or "substack.com" in proxy_domain:
+                # Look for substack publication patterns
+                if "/open" in parsed_url.path:
+                    # These are often newsletter open tracking URLs
+                    # Try to extract publication from subdomain or referrer
+                    return proxy_url  # Keep as-is, it's likely a tracking URL
+
+            # MailChimp / List-manage tracking URLs
+            elif "list-manage.com" in proxy_domain:
+                query_params = parse_qs(parsed_url.query)
+                # Common MailChimp patterns
+                if 'u' in query_params or 'url' in query_params:
+                    for param in ['url', 'u', 'e']:
+                        if param in query_params:
+                            candidate = unquote(query_params[param][0])
+                            if candidate.startswith(('http://', 'https://')):
+                                return candidate
+
+            # Readwise.io URLs - these are reader app URLs, try to preserve
             elif "readwise.io" in proxy_domain:
-                # These are reader URLs, not the original article
-                # We'd need the original URL from the API response
+                # Readwise URLs like read.readwise.io/read/... are intentional
+                # They provide a reading experience, so keep them
                 return proxy_url
 
-        except Exception:
-            pass
+            # Generic query parameter extraction for tracking URLs
+            else:
+                query_params = parse_qs(parsed_url.query)
+                # Common URL parameter names used by tracking services
+                url_params = ['url', 'target', 'dest', 'redirect', 'link', 'goto']
+                for param in url_params:
+                    if param in query_params:
+                        candidate = unquote(query_params[param][0])
+                        if candidate.startswith(('http://', 'https://')):
+                            return candidate
+
+            # If no extraction worked, return original
+            return proxy_url
+
+        except Exception as e:
+            logger.debug(f"URL extraction failed for {proxy_url}: {e}")
+            return proxy_url
 
         return proxy_url
 
@@ -323,18 +463,41 @@ class ContentSanitizer:
         if not source_title or source_title.lower().strip() in placeholder_sources:
             issues.append(f"Placeholder source title: '{source_title}'")
 
-        # Check for generic patterns like "Url3396" - more comprehensive
+        # Check for generic patterns like "Url3396" - comprehensive coverage
         url_patterns = [
             r"^url\d+$",
             r"^link\d+$",
             r"^source\d+$",
             r"^item\d+$",
+            r"^ref\d+$",
+            r"^article\d+$",
         ]
 
         for pattern in url_patterns:
             if source_title and re.match(pattern, source_title.lower().strip()):
                 issues.append(f"Generic URL-style source: '{source_title}'")
                 break
+
+        # Check for additional generic source names found in production
+        generic_sources = [
+            "newsletters",
+            "readwise reader",
+            "starred articles",
+            "glasp",
+            "rss feed",
+            "feed",
+            "substack",
+            "medium",
+            "tech news",
+            "news",
+            "blog",
+            "website",
+            "article",
+            "post",
+        ]
+
+        if source_title and source_title.lower().strip() in generic_sources:
+            issues.append(f"Generic category source: '{source_title}'")
 
         # Check if source title is just a single word that might be a category
         single_word_sources = ["justice", "technology", "business", "art", "society"]
