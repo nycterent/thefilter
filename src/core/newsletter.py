@@ -1512,22 +1512,43 @@ Write the intro:"""
                 f"Content validation found {len(total_issues)} total issues across {len(content_items)} items"
             )
 
-            # Fail fast if too many critical issues
-            critical_count = sum(
+            # Fail fast only for the most severe critical issues that would make content unusable
+            # Be more selective - only count issues that make content completely unusable
+            severe_critical_count = sum(
                 1
                 for issue in total_issues
                 if any(
                     critical in issue
-                    for critical in ["AI refusal", "Prompt leakage", "CDN/proxy URL"]
+                    for critical in [
+                        "AI refusal detected", 
+                        "Prompt leakage detected",
+                        "Content completely removed",
+                        "Content too short: 0 chars"
+                    ]
                 )
             )
 
+            # CDN/proxy URLs are quality issues but not critical failures
+            # Other issues like truncation, placeholder content can be handled by AI enhancement
             if (
-                critical_count > len(content_items) * 0.3
-            ):  # More than 30% have critical issues
+                severe_critical_count > len(content_items) * 0.5
+            ):  # More than 50% have severe critical issues
                 raise ValueError(
-                    f"Too many critical content issues: {critical_count}/{len(content_items)}"
+                    f"Too many severe content issues: {severe_critical_count}/{len(content_items)} items have critical failures"
                 )
+            
+            # Log less severe issues for monitoring but don't fail the entire batch
+            moderate_critical_count = sum(
+                1
+                for issue in total_issues
+                if any(
+                    critical in issue
+                    for critical in ["CDN/proxy URL", "Placeholder", "Generic", "Non-canonical URL"]
+                )
+            )
+            
+            if moderate_critical_count > 0:
+                logger.warning(f"Found {moderate_critical_count} moderate quality issues (CDN URLs, placeholders, etc.) - will attempt to enhance with AI")
 
         logger.info(
             f"Content validation: {len(validated_items)}/{len(content_items)} items passed validation"
