@@ -852,3 +852,44 @@ SUGGESTIONS: [3-4 actionable suggestions for improvement]"""
                 "Use more conversational tone",
             ],
         }
+
+    async def improve_title(self, current_title: str, content: str) -> str:
+        """Improve content title based on content."""
+        if not self.api_key:
+            return current_title
+            
+        try:
+            prompt = f"""Improve this article title to be more engaging and specific based on the content.
+
+CURRENT TITLE: {current_title}
+CONTENT: {content[:500]}
+
+Write a better title that:
+- Is specific and descriptive
+- Captures the main news/development
+- Is compelling but not clickbait
+- Under 80 characters
+- Uses active voice when possible
+
+Return ONLY the improved title, no explanations:"""
+
+            response = await self._make_request(prompt, max_tokens=50, temperature=0.4)
+            if response and "choices" in response and len(response["choices"]) > 0:
+                improved_title = response["choices"][0]["message"]["content"].strip()
+                # Remove quotes if AI added them
+                improved_title = improved_title.strip('"\'')
+                
+                # Basic validation - title should be reasonable length and not empty
+                if 10 <= len(improved_title) <= 120 and not any(pattern in improved_title.lower() for pattern in [
+                    "i cannot", "i am just an ai", "as an ai", "i'm unable to"
+                ]):
+                    return improved_title
+                else:
+                    logger.debug(f"AI returned invalid title: '{improved_title}', keeping original")
+                    return current_title
+            else:
+                return current_title
+                
+        except Exception as e:
+            logger.error(f"Error improving title: {e}")
+            return current_title

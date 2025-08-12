@@ -674,10 +674,92 @@ Write the intro:"""
         return "\n".join(sections)
 
     async def _enrich_with_llm(self, items: List[ContentItem]) -> List[ContentItem]:
-        """Scaffold for LLM enrichment (summarization, categorization, etc.)."""
-        # TODO: Integrate with OpenAI, Claude, or other LLM APIs
-        # For now, return items unchanged
-        return items
+        """Enrich content items with LLM-powered improvements."""
+        if not self.openrouter_client:
+            logger.debug("No OpenRouter client available for LLM enrichment")
+            return items
+            
+        enriched_items = []
+        
+        for item in items:
+            try:
+                # Skip if content is already high quality
+                if self._is_high_quality_content(item):
+                    logger.debug(f"Skipping LLM enrichment for high-quality content: '{item.title[:40]}...'")
+                    enriched_items.append(item)
+                    continue
+                
+                # Create a working copy
+                enriched_item = ContentItem(
+                    id=item.id,
+                    title=item.title,
+                    content=item.content,
+                    source=item.source,
+                    url=item.url,
+                    author=item.author,
+                    source_title=item.source_title,
+                    is_paywalled=item.is_paywalled,
+                    tags=item.tags,
+                    created_at=item.created_at,
+                    metadata=item.metadata,
+                )
+                
+                # Enhance title if needed
+                if not self._is_meaningful_title(item.title):
+                    try:
+                        better_title = await self.openrouter_client.improve_title(
+                            item.title, item.content[:500]
+                        )
+                        if better_title and len(better_title.strip()) >= 10:
+                            enriched_item.title = better_title
+                            logger.debug(f"Enhanced title: '{item.title}' -> '{better_title}'")
+                    except Exception as e:
+                        logger.debug(f"Title enhancement failed for '{item.title}': {e}")
+                
+                # Improve content quality and fix truncation
+                if len(item.content.strip()) < 100 or item.content.endswith(("...", "…")):
+                    try:
+                        enhanced_content = await self.openrouter_client.enhance_content_summary(
+                            enriched_item.title, item.content, max_length=300
+                        )
+                        if enhanced_content and len(enhanced_content.strip()) > len(item.content.strip()):
+                            enriched_item.content = enhanced_content
+                            logger.debug(f"Enhanced content length: {len(item.content)} -> {len(enhanced_content)} chars")
+                    except Exception as e:
+                        logger.debug(f"Content enhancement failed for '{item.title}': {e}")
+                        
+                enriched_items.append(enriched_item)
+                
+            except Exception as e:
+                logger.warning(f"LLM enrichment failed for '{item.title[:40]}...': {e}")
+                # Keep original item if enrichment fails
+                enriched_items.append(item)
+        
+        logger.info(f"LLM enrichment completed: {len(enriched_items)}/{len(items)} items processed")
+        return enriched_items
+
+    def _is_high_quality_content(self, item: ContentItem) -> bool:
+        """Check if content is already high quality and doesn't need LLM enhancement."""
+        if not item.content or not item.title:
+            return False
+            
+        # Good length content
+        if len(item.content.strip()) < 80:
+            return False
+            
+        # Meaningful title  
+        if not self._is_meaningful_title(item.title):
+            return False
+            
+        # Proper sentence structure
+        if not item.content.strip().endswith((".", "!", "?", ":")):
+            return False
+            
+        # Not obviously truncated
+        if item.content.endswith(("...", "…")):
+            return False
+            
+        return True
 
     async def _get_glasp_content(self) -> List[ContentItem]:
         """Get content from Glasp."""
@@ -2247,79 +2329,85 @@ Write the intro:"""
             return content[:160] + "..."
 
     def _meets_quality_standards(self, item: ContentItem) -> bool:
-        """Check if content item meets minimum quality standards."""
-        # Minimum content length
-        if not item.content or len(item.content.strip()) < 50:
-            return False
-
-        # Must have a meaningful title
-        if not item.title or len(item.title.strip()) < 10:
-            return False
-
+        """Check if content item meets minimum quality standards with detailed failure reasons."""
+        failures = []
+        title_preview = item.title[:40] + "..." if item.title and len(item.title) > 40 else item.title or "[NO TITLE]"
+        
+        # More lenient minimum content length
+        if not item.content or len(item.content.strip()) < 20:
+            failures.append(f"Content too short: {len(item.content.strip() if item.content else '')} chars (min: 20)")
+            
+        # More lenient title requirements
+        if not item.title or len(item.title.strip()) < 5:
+            failures.append(f"Title too short: '{item.title}' (min: 5 chars)")
+            
         # Must have either URL or source info
         if not item.url and not item.source_title:
-            return False
+            failures.append("Missing both URL and source_title")
+            
+        # More lenient punctuation check - allow more ending patterns
+        if item.content:
+            content_stripped = item.content.strip()
+            valid_endings = (".", "!", "?", ":", ";", '"', "'", ")", "]", "}", ">")
+            if not content_stripped.endswith(valid_endings) and not content_stripped.endswith("..."):
+                # Check if it ends with a word (might be intentionally truncated for newsletter format)
+                if not content_stripped[-1].isalnum():
+                    failures.append(f"Invalid content ending: '{content_stripped[-20:]}' (must end with punctuation or word)")
 
-        # Check for complete sentences - no truncated content
-        if item.content.endswith(("...", "…")):
-            return False
-        if not item.content.endswith((".", "!", "?")):
-            return False
+        # Check for AI refusal text and prompt leakage (only critical patterns)
+        if item.content and item.title:
+            content_lower = item.content.lower()
+            title_lower = item.title.lower()
 
-        # Check for AI refusal text and prompt leakage
-        content_lower = item.content.lower()
-        title_lower = item.title.lower()
-
-        # Critical AI refusal patterns
-        refusal_patterns = [
-            "i cannot fulfill your request",
-            "i am just an ai model",
-            "i can't provide assistance",
-            "i cannot create content",
-            "it is not within my programming",
-            "ethical guidelines",
-            "i'm unable to",
-            "i cannot help with",
-            "as an ai",
-            "i'm an ai",
-            "particularly when it involves",
-        ]
-
-        for pattern in refusal_patterns:
-            if pattern in content_lower or pattern in title_lower:
-                return False
-
-        # Check for conversational AI fluff
-        conversational_patterns = [
-            "i'll never tire of hearing",
-            "i couldn't help but",
-            "i can't help but",
-            "what's interesting is",
-            "it's fascinating",
-            "let me tell you",
-            "picture this",
-            "imagine if",
-        ]
-
-        for pattern in conversational_patterns:
-            if content_lower.startswith(pattern) or title_lower.startswith(pattern):
-                return False
-
-        # Check for non-canonical URLs
-        if item.url:
-            url_str = str(item.url).lower()
-            problematic_domains = [
-                "feedbinusercontent.com",
-                "substackcdn.com",
-                "list-manage.com",
-                "cdn.substack.com",
+            # Only block the most critical AI refusal patterns
+            critical_refusal_patterns = [
+                "i cannot fulfill your request",
+                "i am just an ai model", 
+                "i cannot create content",
+                "it is not within my programming",
+                "i cannot help with",
             ]
 
-            for domain in problematic_domains:
-                if domain in url_str:
-                    return False
+            for pattern in critical_refusal_patterns:
+                if pattern in content_lower or pattern in title_lower:
+                    failures.append(f"AI refusal pattern detected: '{pattern}'")
+                    break  # Only report first match
 
-        return True
+            # Only block obvious conversational AI fluff that starts content
+            conversational_patterns = [
+                "i'll never tire of hearing",
+                "i couldn't help but", 
+                "let me tell you",
+                "picture this",
+            ]
+
+            for pattern in conversational_patterns:
+                if content_lower.startswith(pattern):
+                    failures.append(f"Conversational AI fluff detected: starts with '{pattern}'")
+                    break  # Only report first match
+
+        # Less strict URL validation - only block if we can't canonicalize critical domains
+        if item.url:
+            url_str = str(item.url).lower()
+            # Only block if it's clearly a tracking/proxy URL that provides no value
+            critical_problematic_domains = [
+                "list-manage.com",  # MailChimp tracking
+                "track.click",      # Generic tracking  
+                "redirect.",        # Generic redirects
+            ]
+
+            for domain in critical_problematic_domains:
+                if domain in url_str:
+                    failures.append(f"Blocked tracking URL domain: '{domain}'")
+                    break  # Only report first match
+            
+        # Log results
+        if failures:
+            logger.warning(f"Quality check FAILED for '{title_preview}': {'; '.join(failures)}")
+            return False
+        else:
+            logger.debug(f"Quality check PASSED for '{title_preview}'")
+            return True
 
     async def _create_newsletter_draft(
         self, content_items: List[ContentItem]
