@@ -1,15 +1,18 @@
 """Core newsletter generation logic."""
 
 import asyncio
+import json
 import logging
 import re
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Dict, List
 
 from src.clients.openrouter import OpenRouterClient
 from src.clients.readwise import ReadwiseClient
 from src.clients.rss import RSSClient
 from src.clients.unsplash import UnsplashClient
+from src.core.qacheck import run_checks
 from src.core.sanitizer import ContentSanitizer
 from src.models.content import ContentItem, NewsletterDraft
 from src.models.settings import Settings
@@ -969,7 +972,6 @@ Write the intro:"""
 
         # Step 4: Quality Check BEFORE publishing
         logger.info("Running final QA checks on newsletter content...")
-        from src.core.qacheck import run_checks
         qa_results = run_checks(newsletter.content)
         
         # Write QA results to output directory
@@ -1372,7 +1374,7 @@ Write the intro:"""
                 "description": item.content,
                 "commentary": getattr(item, "commentary", ""),
                 "source_title": item.source_title,
-                "url": item.url,
+                "url": str(item.url) if item.url else "",
             }
 
             # Run comprehensive quality check
@@ -2426,11 +2428,8 @@ Write the intro:"""
             True if published successfully or if dry run
         """
         import json
-        from pathlib import Path
 
         import aiohttp
-
-        from src.core.qacheck import run_checks
 
         try:
             if dry_run:
