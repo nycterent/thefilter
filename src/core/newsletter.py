@@ -129,7 +129,7 @@ class NewsletterGenerator:
         today = datetime.now(timezone.utc).strftime("%A, %B %d, %Y")
         out = []
         out.append(f"# THE FILTER\n*Curated Briefing \u2022 {today}*\n")
-        
+
         # Generate dynamic, engaging intro using LLM instead of generic template
         if self.openrouter_client:
             try:
@@ -148,9 +148,13 @@ Requirements:
 
 Write the intro:"""
 
-                intro_response = await self.openrouter_client._make_request(intro_prompt, max_tokens=150, temperature=0.7)
+                intro_response = await self.openrouter_client._make_request(
+                    intro_prompt, max_tokens=150, temperature=0.7
+                )
                 if intro_response and "choices" in intro_response:
-                    dynamic_intro = intro_response["choices"][0]["message"]["content"].strip()
+                    dynamic_intro = intro_response["choices"][0]["message"][
+                        "content"
+                    ].strip()
                     out.append(f"\n*{dynamic_intro}*\n")
                 else:
                     # Fallback to generic but better intro
@@ -679,17 +683,19 @@ Write the intro:"""
         if not self.openrouter_client:
             logger.debug("No OpenRouter client available for LLM enrichment")
             return items
-            
+
         enriched_items = []
-        
+
         for item in items:
             try:
                 # Skip if content is already high quality
                 if self._is_high_quality_content(item):
-                    logger.debug(f"Skipping LLM enrichment for high-quality content: '{item.title[:40]}...'")
+                    logger.debug(
+                        f"Skipping LLM enrichment for high-quality content: '{item.title[:40]}...'"
+                    )
                     enriched_items.append(item)
                     continue
-                
+
                 # Create a working copy
                 enriched_item = ContentItem(
                     id=item.id,
@@ -704,7 +710,7 @@ Write the intro:"""
                     created_at=item.created_at,
                     metadata=item.metadata,
                 )
-                
+
                 # Enhance title if needed
                 if not self._is_meaningful_title(item.title):
                     try:
@@ -713,53 +719,69 @@ Write the intro:"""
                         )
                         if better_title and len(better_title.strip()) >= 10:
                             enriched_item.title = better_title
-                            logger.debug(f"Enhanced title: '{item.title}' -> '{better_title}'")
+                            logger.debug(
+                                f"Enhanced title: '{item.title}' -> '{better_title}'"
+                            )
                     except Exception as e:
-                        logger.debug(f"Title enhancement failed for '{item.title}': {e}")
-                
-                # Improve content quality and fix truncation
-                if len(item.content.strip()) < 100 or item.content.endswith(("...", "…")):
-                    try:
-                        enhanced_content = await self.openrouter_client.enhance_content_summary(
-                            enriched_item.title, item.content, max_length=300
+                        logger.debug(
+                            f"Title enhancement failed for '{item.title}': {e}"
                         )
-                        if enhanced_content and len(enhanced_content.strip()) > len(item.content.strip()):
+
+                # Improve content quality and fix truncation
+                if len(item.content.strip()) < 100 or item.content.endswith(
+                    ("...", "…")
+                ):
+                    try:
+                        enhanced_content = (
+                            await self.openrouter_client.enhance_content_summary(
+                                enriched_item.title, item.content, max_length=300
+                            )
+                        )
+                        if enhanced_content and len(enhanced_content.strip()) > len(
+                            item.content.strip()
+                        ):
                             enriched_item.content = enhanced_content
-                            logger.debug(f"Enhanced content length: {len(item.content)} -> {len(enhanced_content)} chars")
+                            logger.debug(
+                                f"Enhanced content length: {len(item.content)} -> {len(enhanced_content)} chars"
+                            )
                     except Exception as e:
-                        logger.debug(f"Content enhancement failed for '{item.title}': {e}")
-                        
+                        logger.debug(
+                            f"Content enhancement failed for '{item.title}': {e}"
+                        )
+
                 enriched_items.append(enriched_item)
-                
+
             except Exception as e:
                 logger.warning(f"LLM enrichment failed for '{item.title[:40]}...': {e}")
                 # Keep original item if enrichment fails
                 enriched_items.append(item)
-        
-        logger.info(f"LLM enrichment completed: {len(enriched_items)}/{len(items)} items processed")
+
+        logger.info(
+            f"LLM enrichment completed: {len(enriched_items)}/{len(items)} items processed"
+        )
         return enriched_items
 
     def _is_high_quality_content(self, item: ContentItem) -> bool:
         """Check if content is already high quality and doesn't need LLM enhancement."""
         if not item.content or not item.title:
             return False
-            
+
         # Good length content
         if len(item.content.strip()) < 80:
             return False
-            
-        # Meaningful title  
+
+        # Meaningful title
         if not self._is_meaningful_title(item.title):
             return False
-            
+
         # Proper sentence structure
         if not item.content.strip().endswith((".", "!", "?", ":")):
             return False
-            
+
         # Not obviously truncated
         if item.content.endswith(("...", "…")):
             return False
-            
+
         return True
 
     async def _get_glasp_content(self) -> List[ContentItem]:
@@ -1056,7 +1078,7 @@ Write the intro:"""
         # Step 4: Quality Check BEFORE publishing
         logger.info("Running final QA checks on newsletter content...")
         qa_results = run_checks(newsletter.content)
-        
+
         # Write QA results to output directory
         out_dir = Path("out")
         out_dir.mkdir(exist_ok=True)
@@ -1064,26 +1086,35 @@ Write the intro:"""
         qa_file.write_text(
             json.dumps(qa_results, ensure_ascii=False, indent=2), encoding="utf-8"
         )
-        
+
         if not qa_results["passed"]:
             critical_failed = qa_results["summary"].get("critical_failed", 0)
             warning_count = qa_results["summary"].get("warnings", 0)
-            
+
             if critical_failed > 0:
-                logger.error(f"QA checks failed - {critical_failed} critical issues found, newsletter blocked from publishing")
+                logger.error(
+                    f"QA checks failed - {critical_failed} critical issues found, newsletter blocked from publishing"
+                )
                 logger.error(f"QA results written to {qa_file}")
-                logger.error("Critical content quality issues detected - newsletter generation failed")
+                logger.error(
+                    "Critical content quality issues detected - newsletter generation failed"
+                )
                 return newsletter  # Return the draft but don't publish
             else:
-                logger.warning(f"QA checks found {warning_count} warnings but no critical issues - proceeding with publication")
+                logger.warning(
+                    f"QA checks found {warning_count} warnings but no critical issues - proceeding with publication"
+                )
                 logger.info(f"QA results with warnings written to {qa_file}")
         else:
             logger.info("QA checks passed - proceeding with publication")
-        
+
         # Step 5: Publish (if not dry run and QA passed)
         if not dry_run and self.settings.buttondown_api_key:
-            await self._publish_newsletter(newsletter, dry_run=False)
-            logger.info("Newsletter published successfully")
+            published = await self._publish_newsletter(newsletter, dry_run=False)
+            if published:
+                logger.info("Newsletter published successfully")
+            else:
+                logger.error("Newsletter publishing failed")
         else:
             await self._publish_newsletter(newsletter, dry_run=True)
             logger.info(
@@ -1528,10 +1559,10 @@ Write the intro:"""
                 if any(
                     critical in issue
                     for critical in [
-                        "AI refusal detected", 
+                        "AI refusal detected",
                         "Prompt leakage detected",
                         "Content completely removed",
-                        "Content too short: 0 chars"
+                        "Content too short: 0 chars",
                     ]
                 )
             )
@@ -1544,19 +1575,26 @@ Write the intro:"""
                 raise ValueError(
                     f"Too many severe content issues: {severe_critical_count}/{len(content_items)} items have critical failures"
                 )
-            
+
             # Log less severe issues for monitoring but don't fail the entire batch
             moderate_critical_count = sum(
                 1
                 for issue in total_issues
                 if any(
                     critical in issue
-                    for critical in ["CDN/proxy URL", "Placeholder", "Generic", "Non-canonical URL"]
+                    for critical in [
+                        "CDN/proxy URL",
+                        "Placeholder",
+                        "Generic",
+                        "Non-canonical URL",
+                    ]
                 )
             )
-            
+
             if moderate_critical_count > 0:
-                logger.warning(f"Found {moderate_critical_count} moderate quality issues (CDN URLs, placeholders, etc.) - will attempt to enhance with AI")
+                logger.warning(
+                    f"Found {moderate_critical_count} moderate quality issues (CDN URLs, placeholders, etc.) - will attempt to enhance with AI"
+                )
 
         logger.info(
             f"Content validation: {len(validated_items)}/{len(content_items)} items passed validation"
@@ -2360,28 +2398,38 @@ Write the intro:"""
     def _meets_quality_standards(self, item: ContentItem) -> bool:
         """Check if content item meets minimum quality standards with detailed failure reasons."""
         failures = []
-        title_preview = item.title[:40] + "..." if item.title and len(item.title) > 40 else item.title or "[NO TITLE]"
-        
+        title_preview = (
+            item.title[:40] + "..."
+            if item.title and len(item.title) > 40
+            else item.title or "[NO TITLE]"
+        )
+
         # More lenient minimum content length
         if not item.content or len(item.content.strip()) < 20:
-            failures.append(f"Content too short: {len(item.content.strip() if item.content else '')} chars (min: 20)")
-            
+            failures.append(
+                f"Content too short: {len(item.content.strip() if item.content else '')} chars (min: 20)"
+            )
+
         # More lenient title requirements
         if not item.title or len(item.title.strip()) < 5:
             failures.append(f"Title too short: '{item.title}' (min: 5 chars)")
-            
+
         # Must have either URL or source info
         if not item.url and not item.source_title:
             failures.append("Missing both URL and source_title")
-            
+
         # More lenient punctuation check - allow more ending patterns
         if item.content:
             content_stripped = item.content.strip()
             valid_endings = (".", "!", "?", ":", ";", '"', "'", ")", "]", "}", ">")
-            if not content_stripped.endswith(valid_endings) and not content_stripped.endswith("..."):
+            if not content_stripped.endswith(
+                valid_endings
+            ) and not content_stripped.endswith("..."):
                 # Check if it ends with a word (might be intentionally truncated for newsletter format)
                 if not content_stripped[-1].isalnum():
-                    failures.append(f"Invalid content ending: '{content_stripped[-20:]}' (must end with punctuation or word)")
+                    failures.append(
+                        f"Invalid content ending: '{content_stripped[-20:]}' (must end with punctuation or word)"
+                    )
 
         # Check for AI refusal text and prompt leakage (only critical patterns)
         if item.content and item.title:
@@ -2391,7 +2439,7 @@ Write the intro:"""
             # Only block the most critical AI refusal patterns
             critical_refusal_patterns = [
                 "i cannot fulfill your request",
-                "i am just an ai model", 
+                "i am just an ai model",
                 "i cannot create content",
                 "it is not within my programming",
                 "i cannot help with",
@@ -2405,14 +2453,16 @@ Write the intro:"""
             # Only block obvious conversational AI fluff that starts content
             conversational_patterns = [
                 "i'll never tire of hearing",
-                "i couldn't help but", 
+                "i couldn't help but",
                 "let me tell you",
                 "picture this",
             ]
 
             for pattern in conversational_patterns:
                 if content_lower.startswith(pattern):
-                    failures.append(f"Conversational AI fluff detected: starts with '{pattern}'")
+                    failures.append(
+                        f"Conversational AI fluff detected: starts with '{pattern}'"
+                    )
                     break  # Only report first match
 
         # Less strict URL validation - only block if we can't canonicalize critical domains
@@ -2421,18 +2471,20 @@ Write the intro:"""
             # Only block if it's clearly a tracking/proxy URL that provides no value
             critical_problematic_domains = [
                 "list-manage.com",  # MailChimp tracking
-                "track.click",      # Generic tracking  
-                "redirect.",        # Generic redirects
+                "track.click",  # Generic tracking
+                "redirect.",  # Generic redirects
             ]
 
             for domain in critical_problematic_domains:
                 if domain in url_str:
                     failures.append(f"Blocked tracking URL domain: '{domain}'")
                     break  # Only report first match
-            
+
         # Log results
         if failures:
-            logger.warning(f"Quality check FAILED for '{title_preview}': {'; '.join(failures)}")
+            logger.warning(
+                f"Quality check FAILED for '{title_preview}': {'; '.join(failures)}"
+            )
             return False
         else:
             logger.debug(f"Quality check PASSED for '{title_preview}'")
@@ -2534,7 +2586,9 @@ Write the intro:"""
 
         return section
 
-    async def _publish_newsletter(self, newsletter: NewsletterDraft, dry_run: bool = False) -> bool:
+    async def _publish_newsletter(
+        self, newsletter: NewsletterDraft, dry_run: bool = False
+    ) -> bool:
         """Publish newsletter to Buttondown.
 
         Args:
@@ -2554,23 +2608,28 @@ Write the intro:"""
                 # Still run QA checks for dry run to show results
                 logger.info("Running QA checks for dry run validation...")
                 qa_results = run_checks(newsletter.content)
-                
+
                 # Write QA results to output directory
                 out_dir = Path("out")
                 out_dir.mkdir(exist_ok=True)
                 qa_file = out_dir / "qa.json"
                 qa_file.write_text(
-                    json.dumps(qa_results, ensure_ascii=False, indent=2), encoding="utf-8"
+                    json.dumps(qa_results, ensure_ascii=False, indent=2),
+                    encoding="utf-8",
                 )
-                
+
                 if not qa_results["passed"]:
-                    logger.warning("QA checks failed in dry run - newsletter would be blocked from publishing")
+                    logger.warning(
+                        "QA checks failed in dry run - newsletter would be blocked from publishing"
+                    )
                     logger.info(f"QA results written to {qa_file}")
                 else:
-                    logger.info("QA checks passed in dry run - newsletter would be published")
-                
+                    logger.info(
+                        "QA checks passed in dry run - newsletter would be published"
+                    )
+
                 return True  # Dry run always succeeds
-            
+
             # QA check before publishing (only for real runs)
             logger.info("Running QA checks on newsletter content...")
             qa_results = run_checks(newsletter.content)
@@ -2608,19 +2667,36 @@ Write the intro:"""
             }
 
             async with aiohttp.ClientSession() as session:
+                # Step 1: create draft
                 async with session.post(url, headers=headers, json=payload) as response:
-                    if response.status == 201:
-                        logger.info(
-                            f"Draft published to Buttondown: {newsletter.title}"
-                        )
-                        return True
+                    if response.status in {200, 201}:
+                        data = await response.json()
+                        draft_id = data.get("id")
+                        if draft_id:
+                            newsletter.draft_id = str(draft_id)
+                        logger.info(f"Draft created on Buttondown: {newsletter.title}")
                     else:
                         error_detail = await response.text()
                         status_msg = f"Buttondown API error {response.status}:"
                         logger.error(status_msg)
-                        # Split error detail into multiple lines if needed
                         for line in str(error_detail).splitlines():
                             logger.error(f"Buttondown error detail: {line}")
+                        return False
+
+                # Step 2: publish draft so it appears in archive
+                publish_url = f"{url}/{newsletter.draft_id}/send"
+                async with session.post(publish_url, headers=headers) as publish_resp:
+                    if publish_resp.status in {200, 201, 202}:
+                        logger.info(
+                            f"Newsletter published to Buttondown: {newsletter.title}"
+                        )
+                        return True
+                    else:
+                        error_detail = await publish_resp.text()
+                        status_msg = f"Buttondown publish error {publish_resp.status}:"
+                        logger.error(status_msg)
+                        for line in str(error_detail).splitlines():
+                            logger.error(f"Buttondown publish error detail: {line}")
                         return False
 
         except Exception as e:
