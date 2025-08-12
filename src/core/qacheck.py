@@ -31,7 +31,7 @@ def run_checks(text: str) -> Dict[str, any]:
     results.append(url_result)
     warning_results.append(url_result)
 
-    # Check 3: Non-canonical links (WARNING - may be acceptable)  
+    # Check 3: Non-canonical links (WARNING - may be acceptable)
     canonical_result = check_canonical_links(text)
     canonical_result["severity"] = "warning"
     results.append(canonical_result)
@@ -56,7 +56,7 @@ def run_checks(text: str) -> Dict[str, any]:
 
     # Only fail if CRITICAL checks fail - warnings don't block publication
     critical_passed = all(result["passed"] for result in critical_results)
-    
+
     # Count warnings for reporting
     warning_count = sum(1 for r in warning_results if not r["passed"])
 
@@ -313,11 +313,11 @@ def check_truncation(text: str) -> Dict[str, any]:
     lines = text.split("\n")
     for i, line in enumerate(lines):
         stripped_line = line.strip()
-        
+
         # Skip markdown horizontal rules (standalone --- lines)
         if re.match(r"^-{3,}$", stripped_line):
             continue
-            
+
         for pattern in truncation_patterns:
             if re.search(pattern, stripped_line):
                 issues.append(
@@ -328,9 +328,11 @@ def check_truncation(text: str) -> Dict[str, any]:
                         "description": f"Line appears truncated: {stripped_line}",
                     }
                 )
-        
+
         # Check for lines ending with --- that aren't standalone horizontal rules
-        if re.search(r"---$", stripped_line) and not re.match(r"^-{3,}$", stripped_line):
+        if re.search(r"---$", stripped_line) and not re.match(
+            r"^-{3,}$", stripped_line
+        ):
             issues.append(
                 {
                     "type": "truncated_line",

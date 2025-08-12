@@ -857,7 +857,7 @@ SUGGESTIONS: [3-4 actionable suggestions for improvement]"""
         """Improve content title based on content."""
         if not self.api_key:
             return current_title
-            
+
         try:
             prompt = f"""Improve this article title to be more engaging and specific based on the content.
 
@@ -877,19 +877,27 @@ Return ONLY the improved title, no explanations:"""
             if response and "choices" in response and len(response["choices"]) > 0:
                 improved_title = response["choices"][0]["message"]["content"].strip()
                 # Remove quotes if AI added them
-                improved_title = improved_title.strip('"\'')
-                
+                improved_title = improved_title.strip("\"'")
+
                 # Basic validation - title should be reasonable length and not empty
-                if 10 <= len(improved_title) <= 120 and not any(pattern in improved_title.lower() for pattern in [
-                    "i cannot", "i am just an ai", "as an ai", "i'm unable to"
-                ]):
+                if 10 <= len(improved_title) <= 120 and not any(
+                    pattern in improved_title.lower()
+                    for pattern in [
+                        "i cannot",
+                        "i am just an ai",
+                        "as an ai",
+                        "i'm unable to",
+                    ]
+                ):
                     return improved_title
                 else:
-                    logger.debug(f"AI returned invalid title: '{improved_title}', keeping original")
+                    logger.debug(
+                        f"AI returned invalid title: '{improved_title}', keeping original"
+                    )
                     return current_title
             else:
                 return current_title
-                
+
         except Exception as e:
             logger.error(f"Error improving title: {e}")
             return current_title
