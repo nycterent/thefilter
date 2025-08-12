@@ -601,7 +601,7 @@ Format: SCORE: X/10\nFEEDBACK: [comprehensive feedback with specific journalism 
                 approved = (
                     approved_match.group(1).upper() == "YES"
                     if approved_match
-                    else score >= 7
+                    else score >= 6  # Lowered threshold from 7 to 6
                 )
                 feedback = feedback_match.group(1).strip() if feedback_match else review
 

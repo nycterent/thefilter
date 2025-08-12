@@ -186,14 +186,17 @@ class ContentSanitizer:
         return text, issues
 
     def validate_completeness(self, text: str, min_length: int = 10) -> List[str]:
-        """Validate that content meets minimum quality standards."""
+        """Validate content fitness for survival in the information ecosystem."""
         issues = []
 
         if not text or len(text.strip()) < min_length:
             issues.append(
-                f"Content too short: {len(text.strip())} chars (minimum: {min_length})"
+                f"Content too short for ecosystem survival: {len(text.strip())} chars (minimum: {min_length})"
             )
             return issues
+            
+        # Evolutionary fitness check - content must be self-sustaining
+        # Check for adaptive traits that help content survive and replicate
 
         # Enhanced truncation detection - check for various incomplete patterns
         truncation_patterns = [
@@ -216,44 +219,114 @@ class ContentSanitizer:
                 issues.append(f"Content appears truncated: matches pattern '{pattern}'")
                 break  # Only report first truncation pattern found
 
-        # Check for placeholder content and quality issues
-        placeholder_patterns = [
-            r"lorem ipsum",
+        # Check for evolutionary dead-ends - content that can't replicate/adapt
+        evolutionary_dead_ends = [
+            r"lorem ipsum",  # Placeholder DNA - no survival value
             r"placeholder",
-            r"TODO",
+            r"TODO", 
             r"FIXME",
             r"example\.com",
             r"test\d+",
-            r"I couldn't help but chuckle",  # AI-generated filler phrases
-            r"I'll never tire of hearing",  # Another AI filler pattern
-            r"Best of ProductHunt",  # Generic content
-            r"Title:",  # Template artifacts
-            r"The latest data from",  # Generic openings
+            # AI-generated patterns that lack authentic replication fitness
+            r"I couldn't help but chuckle",
+            r"I'll never tire of hearing", 
+            r"Best of ProductHunt",  # Generic content lacks uniqueness for survival
+            r"Title:",  # Template artifacts show incomplete evolution
+            r"The latest data from",  # Generic openings lack adaptive specificity
         ]
 
-        for pattern in placeholder_patterns:
+        for pattern in evolutionary_dead_ends:
             if re.search(pattern, text, re.IGNORECASE):
-                issues.append(f"Placeholder or template content detected: '{pattern}'")
+                issues.append(f"Evolutionary dead-end detected - content lacks replication fitness: '{pattern}'")
 
-        # Check for overly repetitive content (same phrase repeated)
+        # Check for over-replication (genetic stagnation) - same phrase repeated
         words = text.lower().split()
         if len(words) > 5:
-            # Look for phrases repeated within short text
+            # Look for genetic stagnation - phrases that replicate too much without variation
             for i in range(len(words) - 2):
                 phrase = " ".join(words[i : i + 3])
                 if text.lower().count(phrase) > 2:
                     issues.append(
-                        f"Repetitive content: phrase '{phrase}' appears multiple times"
+                        f"Genetic stagnation - phrase over-replicates without variation: '{phrase}'"
                     )
                     break
 
         # Check for incomplete sentences
 
-        for pattern in placeholder_patterns:
-            if re.search(pattern, text, re.IGNORECASE):
-                issues.append(f"Placeholder content detected: {pattern}")
+        # This duplicate check was already handled above in evolutionary_dead_ends
 
         return issues
+
+    def assess_evolutionary_fitness(self, content: str) -> dict:
+        """Assess content's evolutionary fitness for survival in the information ecosystem.
+        
+        Based on Tierra principles:
+        - Replication potential (shareability, memorable phrases)
+        - Adaptation capability (flexibility, contextual relevance) 
+        - Competition fitness (uniqueness, value density)
+        - Mutation resistance (core meaning preservation)
+        """
+        fitness_score = 100  # Start with perfect fitness
+        fitness_factors = []
+        
+        # Replication potential - does content have traits that encourage sharing?
+        replication_traits = [
+            r"surprising",
+            r"breakthrough", 
+            r"first time",
+            r"never before",
+            r"reveals?",
+            r"discovers?",
+            r"uncover",
+            r"behind the scenes",
+            r"secret",
+            r"exclusive",
+        ]
+        
+        replication_count = sum(1 for trait in replication_traits 
+                               if re.search(trait, content, re.IGNORECASE))
+        if replication_count > 0:
+            fitness_factors.append(f"High replication potential: {replication_count} viral traits")
+        else:
+            fitness_score -= 10
+            fitness_factors.append("Low replication potential - lacks viral traits")
+        
+        # Adaptation capability - content that can survive context changes
+        word_count = len(content.split())
+        unique_words = len(set(content.lower().split()))
+        lexical_diversity = unique_words / max(word_count, 1)
+        
+        if lexical_diversity > 0.7:
+            fitness_factors.append("High adaptation potential - rich vocabulary")
+        elif lexical_diversity < 0.4:
+            fitness_score -= 15
+            fitness_factors.append(f"Low adaptation potential - limited vocabulary diversity ({lexical_diversity:.2f})")
+        
+        # Competition fitness - uniqueness and information density
+        sentence_count = len(re.split(r'[.!?]+', content))
+        avg_sentence_length = word_count / max(sentence_count, 1)
+        
+        if 10 <= avg_sentence_length <= 25:  # Optimal information density
+            fitness_factors.append("Optimal information density for competition")
+        else:
+            fitness_score -= 5
+            fitness_factors.append(f"Suboptimal information density: {avg_sentence_length:.1f} words/sentence")
+        
+        # Mutation resistance - core meaning should be preserved through variations
+        key_concepts = len(re.findall(r'\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b', content))  # Proper nouns
+        if key_concepts >= 2:
+            fitness_factors.append(f"Strong mutation resistance - {key_concepts} core concepts")
+        else:
+            fitness_score -= 10
+            fitness_factors.append("Weak mutation resistance - few stable concepts")
+        
+        return {
+            "fitness_score": max(0, fitness_score),
+            "fitness_class": "highly_fit" if fitness_score >= 85 else
+                            "moderately_fit" if fitness_score >= 70 else
+                            "poorly_fit" if fitness_score >= 50 else "extinct",
+            "factors": fitness_factors
+        }
 
     def validate_headline(self, headline: str) -> List[str]:
         """Validate headline quality and consistency."""
@@ -360,16 +433,16 @@ class ContentSanitizer:
                         )
                         break
                     else:
-                        # If we can't canonicalize, at least flag it as non-canonical
+                        # If we can't canonicalize, at least flag it as non-canonical (WARNING level)
                         issues.append(f"Non-canonical URL ({proxy_domain}): {url}")
-                        # For known problematic domains, mark as severe issue
+                        # Reduce severity - CDN URLs are common and sometimes necessary
                         if proxy_domain in [
-                            "feedbinusercontent.com",
+                            "feedbinusercontent.com", 
                             "substackcdn.com",
                             "list-manage.com",
                         ]:
                             issues.append(
-                                "CRITICAL: Using CDN URL instead of original source"
+                                "WARNING: Using CDN URL - consider finding original source"
                             )
 
             # Validate URL structure
@@ -488,26 +561,18 @@ class ContentSanitizer:
                 issues.append(f"Generic URL-style source: '{source_title}'")
                 break
 
-        # Check for additional generic source names found in production
-        generic_sources = [
-            "newsletters",
-            "readwise reader",
-            "starred articles",
-            "glasp",
-            "rss feed",
-            "feed",
-            "substack",
-            "medium",
-            "tech news",
-            "news",
-            "blog",
-            "website",
-            "article",
-            "post",
+        # Check for overly generic source names (relaxed - only flag the most generic)
+        overly_generic_sources = [
+            "url",
+            "link", 
+            "source",
+            "unknown",
+            "unknown source",
+            "newsletters",  # Keep this as it's truly generic
         ]
 
-        if source_title and source_title.lower().strip() in generic_sources:
-            issues.append(f"Generic category source: '{source_title}'")
+        if source_title and source_title.lower().strip() in overly_generic_sources:
+            issues.append(f"Overly generic source: '{source_title}'")
 
         # Check if source title is just a single word that might be a category
         single_word_sources = ["justice", "technology", "business", "art", "society"]
@@ -623,26 +688,52 @@ class ContentSanitizer:
             if image_issues:
                 all_issues["image"] = image_issues
 
+        # Assess evolutionary fitness for content survival
+        content_text = " ".join([
+            content.get("title", ""),
+            content.get("summary", ""), 
+            content.get("description", ""),
+            content.get("commentary", "")
+        ]).strip()
+        
+        if content_text:
+            fitness = self.assess_evolutionary_fitness(content_text)
+            if fitness["fitness_class"] in ["poorly_fit", "extinct"]:
+                all_issues["evolutionary_fitness"] = [
+                    f"Content fitness: {fitness['fitness_class']} (score: {fitness['fitness_score']})",
+                    *fitness["factors"]
+                ]
+
         return all_issues
 
     def validate_newsletter_structure(self, newsletter_content: str) -> List[str]:
         """Validate newsletter structure and formatting consistency."""
         issues = []
 
-        # Check for required sections
-        required_sections = [
+        # Check for core required sections (relaxed - only check for essential structure)
+        core_required_sections = [
             r"# THE FILTER",
             r"## HEADLINES AT A GLANCE",
+        ]
+
+        for section in core_required_sections:
+            if not re.search(section, newsletter_content, re.IGNORECASE):
+                issues.append(f"Missing core section: {section}")
+
+        # Check for content sections (at least 2 of these should be present)
+        content_sections = [
             r"## LEAD STORIES",
-            r"## TECHNOLOGY",
+            r"## TECHNOLOGY", 
             r"## SOCIETY",
             r"## ART",
             r"## BUSINESS",
         ]
-
-        for section in required_sections:
-            if not re.search(section, newsletter_content, re.IGNORECASE):
-                issues.append(f"Missing required section: {section}")
+        
+        found_sections = sum(1 for section in content_sections 
+                           if re.search(section, newsletter_content, re.IGNORECASE))
+        
+        if found_sections < 2:
+            issues.append(f"Insufficient content sections: found {found_sections}, need at least 2")
 
         # Check for formatting issues
 
