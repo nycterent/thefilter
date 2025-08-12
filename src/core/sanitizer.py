@@ -872,18 +872,21 @@ class ContentSanitizer:
             r"\n(## [A-Z\s&]+)\n", r"\n\n\1\n\n", newsletter_content
         )
 
+        # DISABLED: Raw URL conversion was corrupting properly formatted markdown links
+        # The newsletter generation already creates proper markdown links
+        # This processing step was interfering with existing [text](url) format
         # Convert basic raw URLs to placeholder links where possible
         # This is a basic fallback - proper URL handling should happen earlier in the pipeline
-        newsletter_content = re.sub(
-            r"(?<!\[)(?<!\()https?://([^\s\)\]]+)(?![\]\)])",
-            r"[\1](https://\1)",
-            newsletter_content,
-        )
-        newsletter_content = re.sub(
-            r"(?<!\[)(?<!\()[a-zA-Z0-9.-]+\.[a-z]{2,}(?:/[^\s\)\]]+)?(?![\]\)])",
-            lambda m: f"[{m.group(0)}](https://{m.group(0)})",
-            newsletter_content,
-        )
+        # newsletter_content = re.sub(
+        #     r"(?<!\]\()(?<!\[)https?://([^\s<>\[\]]+)(?!\s*\))",
+        #     r"[\1](https://\1)",
+        #     newsletter_content,
+        # )
+        # newsletter_content = re.sub(
+        #     r"(?<!\]\()(?<!\[)[a-zA-Z0-9.-]+\.[a-z]{2,}(?:/[^\s<>\[\]]+)?(?!\s*\))",
+        #     lambda m: f"[{m.group(0)}](https://{m.group(0)})",
+        #     newsletter_content,
+        # )
 
         # Fix common typos found in 027
         typo_fixes = [
