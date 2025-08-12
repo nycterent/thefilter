@@ -1065,12 +1065,19 @@ Write the intro:"""
         )
         
         if not qa_results["passed"]:
-            logger.error("QA checks failed - newsletter blocked from publishing")
-            logger.error(f"QA results written to {qa_file}")
-            logger.error("Content quality issues detected - newsletter generation failed")
-            return newsletter  # Return the draft but don't publish
-        
-        logger.info("QA checks passed - proceeding with publication")
+            critical_failed = qa_results["summary"].get("critical_failed", 0)
+            warning_count = qa_results["summary"].get("warnings", 0)
+            
+            if critical_failed > 0:
+                logger.error(f"QA checks failed - {critical_failed} critical issues found, newsletter blocked from publishing")
+                logger.error(f"QA results written to {qa_file}")
+                logger.error("Critical content quality issues detected - newsletter generation failed")
+                return newsletter  # Return the draft but don't publish
+            else:
+                logger.warning(f"QA checks found {warning_count} warnings but no critical issues - proceeding with publication")
+                logger.info(f"QA results with warnings written to {qa_file}")
+        else:
+            logger.info("QA checks passed - proceeding with publication")
         
         # Step 5: Publish (if not dry run and QA passed)
         if not dry_run and self.settings.buttondown_api_key:

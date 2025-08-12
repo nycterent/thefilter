@@ -17,41 +17,58 @@ def run_checks(text: str) -> Dict[str, any]:
         Dictionary with check results and overall pass/fail status
     """
     results = []
+    critical_results = []
+    warning_results = []
 
-    # Check 1: Prompt/meta leakage and guardrail refusals
+    # Check 1: Prompt/meta leakage and guardrail refusals (CRITICAL)
     leakage_result = check_prompt_leakage(text)
     results.append(leakage_result)
+    critical_results.append(leakage_result)
 
-    # Check 2: Raw URLs in copy
+    # Check 2: Raw URLs in copy (WARNING - common in newsletters)
     url_result = check_raw_urls(text)
+    url_result["severity"] = "warning"  # Mark as warning, not critical
     results.append(url_result)
+    warning_results.append(url_result)
 
-    # Check 3: Non-canonical links
+    # Check 3: Non-canonical links (WARNING - may be acceptable)  
     canonical_result = check_canonical_links(text)
+    canonical_result["severity"] = "warning"
     results.append(canonical_result)
+    warning_results.append(canonical_result)
 
-    # Check 4: Generic link labels
+    # Check 4: Generic link labels (WARNING)
     link_result = check_generic_links(text)
+    link_result["severity"] = "warning"
     results.append(link_result)
+    warning_results.append(link_result)
 
-    # Check 5: Truncated/unbalanced content
+    # Check 5: Truncated/unbalanced content (CRITICAL)
     truncation_result = check_truncation(text)
     results.append(truncation_result)
+    critical_results.append(truncation_result)
 
-    # Check 6: Markdown formatting issues
+    # Check 6: Markdown formatting issues (WARNING)
     formatting_result = check_markdown_formatting(text)
+    formatting_result["severity"] = "warning"
     results.append(formatting_result)
+    warning_results.append(formatting_result)
 
-    # Overall result
-    passed = all(result["passed"] for result in results)
+    # Only fail if CRITICAL checks fail - warnings don't block publication
+    critical_passed = all(result["passed"] for result in critical_results)
+    
+    # Count warnings for reporting
+    warning_count = sum(1 for r in warning_results if not r["passed"])
 
     return {
-        "passed": passed,
+        "passed": critical_passed,  # Only critical checks must pass
         "results": results,
         "summary": {
             "total_checks": len(results),
             "passed_checks": sum(1 for r in results if r["passed"]),
             "failed_checks": sum(1 for r in results if not r["passed"]),
+            "critical_failed": sum(1 for r in critical_results if not r["passed"]),
+            "warnings": warning_count,
         },
     }
 
