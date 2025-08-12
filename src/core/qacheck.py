@@ -308,20 +308,37 @@ def check_truncation(text: str) -> Dict[str, any]:
         )
 
     # Check for truncation indicators
-    truncation_patterns = [r"\.\.\.$", r"…$", r"--$", r"---$"]
+    truncation_patterns = [r"\.\.\.$", r"…$", r"--$"]
 
     lines = text.split("\n")
     for i, line in enumerate(lines):
+        stripped_line = line.strip()
+        
+        # Skip markdown horizontal rules (standalone --- lines)
+        if re.match(r"^-{3,}$", stripped_line):
+            continue
+            
         for pattern in truncation_patterns:
-            if re.search(pattern, line.strip()):
+            if re.search(pattern, stripped_line):
                 issues.append(
                     {
                         "type": "truncated_line",
                         "line_number": i + 1,
-                        "line": line.strip(),
-                        "description": f"Line appears truncated: {line.strip()}",
+                        "line": stripped_line,
+                        "description": f"Line appears truncated: {stripped_line}",
                     }
                 )
+        
+        # Check for lines ending with --- that aren't standalone horizontal rules
+        if re.search(r"---$", stripped_line) and not re.match(r"^-{3,}$", stripped_line):
+            issues.append(
+                {
+                    "type": "truncated_line",
+                    "line_number": i + 1,
+                    "line": stripped_line,
+                    "description": f"Line appears truncated: {stripped_line}",
+                }
+            )
 
     return {
         "name": "Content Truncation & Balance",
