@@ -190,6 +190,9 @@ def generate(ctx: click.Context, dry_run: bool) -> None:
             logger.error(f"❌ Newsletter generation failed: {e}")
             if ctx.obj.get("debug"):
                 raise
+            # Exit with non-zero code to indicate failure
+            import sys
+            sys.exit(1)
 
     asyncio.run(_generate())
 
