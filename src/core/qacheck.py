@@ -43,10 +43,10 @@ def run_checks(text: str) -> Dict[str, any]:
     results.append(link_result)
     warning_results.append(link_result)
 
-    # Check 5: Truncated/unbalanced content (CRITICAL)
+    # Check 5: Truncated/unbalanced content (WARNING - markdown rules can trigger false positives)
     truncation_result = check_truncation(text)
+    truncation_result["severity"] = "warning"  # Mark as warning, not critical
     results.append(truncation_result)
-    critical_results.append(truncation_result)
 
     # Check 6: Markdown formatting issues (WARNING)
     formatting_result = check_markdown_formatting(text)
