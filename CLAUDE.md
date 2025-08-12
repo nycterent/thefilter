@@ -112,15 +112,26 @@ docker run newsletter-bot
 ### Core Components
 
 - **src/newsletter_bot.py**: Main CLI entry point using Click framework
-- **src/clients/**: API clients for external services (Readwise, Glasp, Feedbin, etc.)
+- **src/clients/**: API clients for external services
+  - `readwise.py`: Readwise API integration for bookmarks and highlights
+  - `rss.py`: RSS feed processing
+  - `openrouter.py`: OpenRouter LLM API for content processing
+  - `llm_router.py`: Smart LLM routing and fallback logic
+  - `unsplash.py`: Image fetching for newsletters
+  - `glasp.py`: Glasp social highlighting integration
 - **src/core/**: Core business logic for content processing and newsletter generation
   - `newsletter.py`: Main newsletter generation with template system (supports 'the_filter' format)
-  - `qacheck.py`: Content quality assurance and validation
+  - `qacheck.py`: Content quality assurance and validation using evolutionary principles
   - `sanitizer.py`: Content sanitization and safety checks  
   - `secrets.py`: Infisical secrets management integration
+  - `utils.py`: Common utilities and helper functions
 - **src/models/**: Pydantic models for data validation and settings management
+  - `settings.py`: Application configuration and environment management
+  - `content.py`: Content item and newsletter data models
 - **scheduler/**: Celery-based task scheduling system
 - **web/**: FastAPI web interface for manual control and monitoring
+- **scripts/**: Utility scripts including `check_briefing.py` for content validation
+- **debug/**: Debug tools for troubleshooting specific components
 
 ### External Dependencies
 
@@ -221,6 +232,34 @@ Test files are organized by component:
 - `test_check_briefing.py` - Content quality checks
 
 Debug tools available in `debug/` directory for troubleshooting specific components.
+
+### Content Processing Pipeline
+
+The newsletter generation follows this flow:
+1. **Content Collection**: Fetch from Readwise (filtered by tags), RSS feeds, and Glasp
+2. **Content Transformation**: Apply editorial transformations and formatting
+3. **AI Processing**: Generate summaries and commentary using OpenRouter LLM API
+4. **Quality Validation**: Run evolutionary content validation (inspired by Tierra principles)
+5. **Newsletter Assembly**: Combine content using template system (default: 'the_filter')
+6. **Sanitization**: Apply content safety checks and URL validation
+7. **Output Generation**: Create newsletter draft for Buttondown or save locally
+
+### Debug Tools
+
+The `debug/` directory contains specialized debugging scripts:
+- `debug_simple.py`: Basic content pipeline testing
+- `debug_editorial.py`: Editorial workflow debugging
+- `debug_llm_interactions.py`: LLM API interaction testing
+- `debug_combined_prompt.py`: Template and prompt debugging
+- `debug_detailed.py`: Comprehensive pipeline analysis
+
+### Check Briefing System
+
+The project includes a content validation system via `scripts/check_briefing.py`:
+- Validates newsletter content structure and quality
+- Ensures all required sections are present
+- Can be run standalone or integrated into the pipeline
+- Test fixtures available in `tests/fixtures/`
 
 ## Quick Development Workflow
 
