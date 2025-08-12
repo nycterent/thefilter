@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
 import aiohttp
+from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
 
@@ -85,24 +86,51 @@ class ReadwiseClient:
                                 "created_at"
                             )
 
+                            # Fetch full article content if source URL is available
+                            source_url = highlight.get("source_url")
+                            article_content = ""
+                            if source_url:
+                                try:
+                                    article_content = await self._fetch_article_content(source_url)
+                                    if article_content:
+                                        logger.debug(f"Fetched {len(article_content)} chars of article content from {source_url}")
+                                except Exception as e:
+                                    logger.warning(f"Error fetching article content from {source_url}: {e}")
+
+                            # Combine highlight text, note, and article content for comprehensive LLM input
+                            highlight_text = highlight.get("text", "")
+                            note_text = highlight.get("note", "")
+                            
+                            # Build comprehensive content for LLM processing
+                            content_parts = []
+                            if highlight_text:
+                                content_parts.append(f"Highlight: {highlight_text}")
+                            if note_text:
+                                content_parts.append(f"Note: {note_text}")
+                            if article_content:
+                                content_parts.append(f"Article content: {article_content}")
+                            
+                            combined_content = "\n\n".join(content_parts) if content_parts else highlight_text
+
                             processed_highlight = {
                                 "id": highlight.get("id"),
                                 "title": (
-                                    highlight.get("text", "")[:200] + "..."
-                                    if len(highlight.get("text", "")) > 200
-                                    else highlight.get("text", "")
+                                    highlight_text[:200] + "..."
+                                    if len(highlight_text) > 200
+                                    else highlight_text
                                 ),
-                                "content": highlight.get("text", ""),
-                                "note": highlight.get("note", ""),
+                                "content": combined_content,  # Combined content for LLM processing
+                                "note": note_text,
                                 "source": "readwise",
                                 "source_title": highlight.get("book_title", "Unknown"),
                                 "author": highlight.get("author", "Unknown"),
-                                "url": highlight.get("source_url"),
+                                "url": source_url,
                                 "tags": highlight.get("tags", []),
                                 "created_at": created_at,
                                 "updated_at": updated_at,
                                 "location": highlight.get("location"),
                                 "location_type": highlight.get("location_type"),
+                                "needs_llm_processing": bool(article_content),  # Flag if we have full article content
                             }
                             highlights.append(processed_highlight)
 
@@ -280,6 +308,69 @@ class ReadwiseClient:
         except Exception as e:
             logger.error(f"Error fetching Readwise books: {e}")
             return []
+
+    async def _fetch_article_content(self, url: str) -> str:
+        """Fetch full article content from URL."""
+        try:
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+            }
+
+            timeout = aiohttp.ClientTimeout(total=15)
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, headers=headers, timeout=timeout) as response:
+                    if response.status == 200:
+                        # Handle potential encoding issues gracefully
+                        try:
+                            html = await response.text()
+                        except UnicodeDecodeError:
+                            # Try with latin-1 encoding for problematic content
+                            raw_content = await response.read()
+                            html = raw_content.decode("latin-1", errors="ignore")
+
+                        # Extract clean article content using BeautifulSoup
+                        import re
+
+                        soup = BeautifulSoup(html, "html.parser")
+
+                        # Remove script, style, nav, footer, ads
+                        for tag in soup(["script", "style", "nav", "footer", "aside", "iframe"]):
+                            tag.decompose()
+
+                        # Try to find article content
+                        article_content = None
+                        for selector in [
+                            "article",
+                            ".article-content",
+                            ".post-content", 
+                            ".entry-content",
+                            "main",
+                        ]:
+                            content = soup.select_one(selector)
+                            if content:
+                                article_content = content.get_text(strip=True)
+                                break
+
+                        if not article_content:
+                            # Fallback to body content
+                            article_content = soup.get_text(strip=True)
+
+                        # Clean up the text
+                        article_content = re.sub(r"\s+", " ", article_content)
+                        article_content = re.sub(r"\n+", "\n", article_content)
+
+                        # Limit length for LLM processing
+                        if len(article_content) > 8000:
+                            article_content = article_content[:8000] + "..."
+
+                        return article_content
+                    else:
+                        logger.warning(f"Failed to fetch article: {response.status}")
+                        return ""
+
+        except Exception as e:
+            logger.error(f"Error fetching article content: {e}")
+            return ""
 
     async def test_connection(self) -> bool:
         """Test the Readwise API connection.
