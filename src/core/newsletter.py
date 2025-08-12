@@ -1015,14 +1015,14 @@ Write the intro:"""
         # Step 2: Process and organize content
         processed_content = await self._process_content(content_items)
 
-        # Step 2.3: Validate and sanitize content (critical quality gate)
-        validated_content = await self._validate_and_sanitize_content(processed_content)
+        # Step 2.3: Enhance content quality FIRST (includes editorial workflow to transform raw input)
+        enhanced_content = await self._enhance_content_quality(processed_content)
 
-        # Step 2.5: Enhance content quality (includes editorial workflow)
-        enhanced_content = await self._enhance_content_quality(validated_content)
+        # Step 2.5: Validate and sanitize content AFTER editorial transformation (critical quality gate)
+        validated_content = await self._validate_and_sanitize_content(enhanced_content)
 
         # Step 2.7: Filter for content diversity to prevent repetitive themes
-        diverse_content = self._ensure_content_diversity(enhanced_content)
+        diverse_content = self._ensure_content_diversity(validated_content)
 
         # Step 3: Generate newsletter draft
         newsletter = await self._create_newsletter_draft(diverse_content)
