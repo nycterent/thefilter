@@ -91,16 +91,22 @@ class ReadwiseClient:
                             article_content = ""
                             if source_url:
                                 try:
-                                    article_content = await self._fetch_article_content(source_url)
+                                    article_content = await self._fetch_article_content(
+                                        source_url
+                                    )
                                     if article_content:
-                                        logger.debug(f"Fetched {len(article_content)} chars of article content from {source_url}")
+                                        logger.debug(
+                                            f"Fetched {len(article_content)} chars of article content from {source_url}"
+                                        )
                                 except Exception as e:
-                                    logger.warning(f"Error fetching article content from {source_url}: {e}")
+                                    logger.warning(
+                                        f"Error fetching article content from {source_url}: {e}"
+                                    )
 
                             # Combine highlight text, note, and article content for comprehensive LLM input
                             highlight_text = highlight.get("text", "")
                             note_text = highlight.get("note", "")
-                            
+
                             # Build comprehensive content for LLM processing
                             content_parts = []
                             if highlight_text:
@@ -108,9 +114,15 @@ class ReadwiseClient:
                             if note_text:
                                 content_parts.append(f"Note: {note_text}")
                             if article_content:
-                                content_parts.append(f"Article content: {article_content}")
-                            
-                            combined_content = "\n\n".join(content_parts) if content_parts else highlight_text
+                                content_parts.append(
+                                    f"Article content: {article_content}"
+                                )
+
+                            combined_content = (
+                                "\n\n".join(content_parts)
+                                if content_parts
+                                else highlight_text
+                            )
 
                             processed_highlight = {
                                 "id": highlight.get("id"),
@@ -130,7 +142,9 @@ class ReadwiseClient:
                                 "updated_at": updated_at,
                                 "location": highlight.get("location"),
                                 "location_type": highlight.get("location_type"),
-                                "needs_llm_processing": bool(article_content),  # Flag if we have full article content
+                                "needs_llm_processing": bool(
+                                    article_content
+                                ),  # Flag if we have full article content
                             }
                             highlights.append(processed_highlight)
 
@@ -318,7 +332,9 @@ class ReadwiseClient:
 
             timeout = aiohttp.ClientTimeout(total=15)
             async with aiohttp.ClientSession() as session:
-                async with session.get(url, headers=headers, timeout=timeout) as response:
+                async with session.get(
+                    url, headers=headers, timeout=timeout
+                ) as response:
                     if response.status == 200:
                         # Handle potential encoding issues gracefully
                         try:
@@ -334,7 +350,9 @@ class ReadwiseClient:
                         soup = BeautifulSoup(html, "html.parser")
 
                         # Remove script, style, nav, footer, ads
-                        for tag in soup(["script", "style", "nav", "footer", "aside", "iframe"]):
+                        for tag in soup(
+                            ["script", "style", "nav", "footer", "aside", "iframe"]
+                        ):
                             tag.decompose()
 
                         # Try to find article content
@@ -342,7 +360,7 @@ class ReadwiseClient:
                         for selector in [
                             "article",
                             ".article-content",
-                            ".post-content", 
+                            ".post-content",
                             ".entry-content",
                             "main",
                         ]:

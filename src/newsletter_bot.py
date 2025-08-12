@@ -192,6 +192,7 @@ def generate(ctx: click.Context, dry_run: bool) -> None:
                 raise
             # Exit with non-zero code to indicate failure
             import sys
+
             sys.exit(1)
 
     asyncio.run(_generate())

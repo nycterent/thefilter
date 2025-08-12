@@ -194,7 +194,7 @@ class ContentSanitizer:
                 f"Content too short for ecosystem survival: {len(text.strip())} chars (minimum: {min_length})"
             )
             return issues
-            
+
         # Evolutionary fitness check - content must be self-sustaining
         # Check for adaptive traits that help content survive and replicate
 
@@ -223,13 +223,13 @@ class ContentSanitizer:
         evolutionary_dead_ends = [
             r"lorem ipsum",  # Placeholder DNA - no survival value
             r"placeholder",
-            r"TODO", 
+            r"TODO",
             r"FIXME",
             r"example\.com",
             r"test\d+",
             # AI-generated patterns that lack authentic replication fitness
             r"I couldn't help but chuckle",
-            r"I'll never tire of hearing", 
+            r"I'll never tire of hearing",
             r"Best of ProductHunt",  # Generic content lacks uniqueness for survival
             r"Title:",  # Template artifacts show incomplete evolution
             r"The latest data from",  # Generic openings lack adaptive specificity
@@ -237,7 +237,9 @@ class ContentSanitizer:
 
         for pattern in evolutionary_dead_ends:
             if re.search(pattern, text, re.IGNORECASE):
-                issues.append(f"Evolutionary dead-end detected - content lacks replication fitness: '{pattern}'")
+                issues.append(
+                    f"Evolutionary dead-end detected - content lacks replication fitness: '{pattern}'"
+                )
 
         # Check for over-replication (genetic stagnation) - same phrase repeated
         words = text.lower().split()
@@ -259,20 +261,20 @@ class ContentSanitizer:
 
     def assess_evolutionary_fitness(self, content: str) -> dict:
         """Assess content's evolutionary fitness for survival in the information ecosystem.
-        
+
         Based on Tierra principles:
         - Replication potential (shareability, memorable phrases)
-        - Adaptation capability (flexibility, contextual relevance) 
+        - Adaptation capability (flexibility, contextual relevance)
         - Competition fitness (uniqueness, value density)
         - Mutation resistance (core meaning preservation)
         """
         fitness_score = 100  # Start with perfect fitness
         fitness_factors = []
-        
+
         # Replication potential - does content have traits that encourage sharing?
         replication_traits = [
             r"surprising",
-            r"breakthrough", 
+            r"breakthrough",
             r"first time",
             r"never before",
             r"reveals?",
@@ -282,50 +284,69 @@ class ContentSanitizer:
             r"secret",
             r"exclusive",
         ]
-        
-        replication_count = sum(1 for trait in replication_traits 
-                               if re.search(trait, content, re.IGNORECASE))
+
+        replication_count = sum(
+            1
+            for trait in replication_traits
+            if re.search(trait, content, re.IGNORECASE)
+        )
         if replication_count > 0:
-            fitness_factors.append(f"High replication potential: {replication_count} viral traits")
+            fitness_factors.append(
+                f"High replication potential: {replication_count} viral traits"
+            )
         else:
             fitness_score -= 10
             fitness_factors.append("Low replication potential - lacks viral traits")
-        
+
         # Adaptation capability - content that can survive context changes
         word_count = len(content.split())
         unique_words = len(set(content.lower().split()))
         lexical_diversity = unique_words / max(word_count, 1)
-        
+
         if lexical_diversity > 0.7:
             fitness_factors.append("High adaptation potential - rich vocabulary")
         elif lexical_diversity < 0.4:
             fitness_score -= 15
-            fitness_factors.append(f"Low adaptation potential - limited vocabulary diversity ({lexical_diversity:.2f})")
-        
+            fitness_factors.append(
+                f"Low adaptation potential - limited vocabulary diversity ({lexical_diversity:.2f})"
+            )
+
         # Competition fitness - uniqueness and information density
-        sentence_count = len(re.split(r'[.!?]+', content))
+        sentence_count = len(re.split(r"[.!?]+", content))
         avg_sentence_length = word_count / max(sentence_count, 1)
-        
+
         if 10 <= avg_sentence_length <= 25:  # Optimal information density
             fitness_factors.append("Optimal information density for competition")
         else:
             fitness_score -= 5
-            fitness_factors.append(f"Suboptimal information density: {avg_sentence_length:.1f} words/sentence")
-        
+            fitness_factors.append(
+                f"Suboptimal information density: {avg_sentence_length:.1f} words/sentence"
+            )
+
         # Mutation resistance - core meaning should be preserved through variations
-        key_concepts = len(re.findall(r'\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b', content))  # Proper nouns
+        key_concepts = len(
+            re.findall(r"\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b", content)
+        )  # Proper nouns
         if key_concepts >= 2:
-            fitness_factors.append(f"Strong mutation resistance - {key_concepts} core concepts")
+            fitness_factors.append(
+                f"Strong mutation resistance - {key_concepts} core concepts"
+            )
         else:
             fitness_score -= 10
             fitness_factors.append("Weak mutation resistance - few stable concepts")
-        
+
         return {
             "fitness_score": max(0, fitness_score),
-            "fitness_class": "highly_fit" if fitness_score >= 85 else
-                            "moderately_fit" if fitness_score >= 70 else
-                            "poorly_fit" if fitness_score >= 50 else "extinct",
-            "factors": fitness_factors
+            "fitness_class": (
+                "highly_fit"
+                if fitness_score >= 85
+                else (
+                    "moderately_fit"
+                    if fitness_score >= 70
+                    else "poorly_fit" if fitness_score >= 50 else "extinct"
+                )
+            ),
+            "factors": fitness_factors,
         }
 
     def validate_headline(self, headline: str) -> List[str]:
@@ -437,7 +458,7 @@ class ContentSanitizer:
                         issues.append(f"Non-canonical URL ({proxy_domain}): {url}")
                         # Reduce severity - CDN URLs are common and sometimes necessary
                         if proxy_domain in [
-                            "feedbinusercontent.com", 
+                            "feedbinusercontent.com",
                             "substackcdn.com",
                             "list-manage.com",
                         ]:
@@ -564,7 +585,7 @@ class ContentSanitizer:
         # Check for overly generic source names (relaxed - only flag the most generic)
         overly_generic_sources = [
             "url",
-            "link", 
+            "link",
             "source",
             "unknown",
             "unknown source",
@@ -689,19 +710,21 @@ class ContentSanitizer:
                 all_issues["image"] = image_issues
 
         # Assess evolutionary fitness for content survival
-        content_text = " ".join([
-            content.get("title", ""),
-            content.get("summary", ""), 
-            content.get("description", ""),
-            content.get("commentary", "")
-        ]).strip()
-        
+        content_text = " ".join(
+            [
+                content.get("title", ""),
+                content.get("summary", ""),
+                content.get("description", ""),
+                content.get("commentary", ""),
+            ]
+        ).strip()
+
         if content_text:
             fitness = self.assess_evolutionary_fitness(content_text)
             if fitness["fitness_class"] in ["poorly_fit", "extinct"]:
                 all_issues["evolutionary_fitness"] = [
                     f"Content fitness: {fitness['fitness_class']} (score: {fitness['fitness_score']})",
-                    *fitness["factors"]
+                    *fitness["factors"],
                 ]
 
         return all_issues
@@ -723,17 +746,22 @@ class ContentSanitizer:
         # Check for content sections (at least 2 of these should be present)
         content_sections = [
             r"## LEAD STORIES",
-            r"## TECHNOLOGY", 
+            r"## TECHNOLOGY",
             r"## SOCIETY",
             r"## ART",
             r"## BUSINESS",
         ]
-        
-        found_sections = sum(1 for section in content_sections 
-                           if re.search(section, newsletter_content, re.IGNORECASE))
-        
+
+        found_sections = sum(
+            1
+            for section in content_sections
+            if re.search(section, newsletter_content, re.IGNORECASE)
+        )
+
         if found_sections < 2:
-            issues.append(f"Insufficient content sections: found {found_sections}, need at least 2")
+            issues.append(
+                f"Insufficient content sections: found {found_sections}, need at least 2"
+            )
 
         # Check for formatting issues
 
