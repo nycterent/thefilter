@@ -71,3 +71,7 @@ htmlcov/
 # Temporary files
 tmp/
 temp/
+
+# Generated output
+out/
+newsletter-output-*/
