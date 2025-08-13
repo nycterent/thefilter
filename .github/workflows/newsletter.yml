@@ -156,7 +156,7 @@ jobs:
           retention-days: 30
 
       - name: Create success issue
-        if: steps.generate.outputs.generation_status == 'success'
+        if: steps.generate.outputs.generation_status == 'success' && (inputs.dry_run == 'true' || steps.validate.outputs.validation_status == 'passed')
         uses: actions/github-script@v7
         with:
           script: |
@@ -212,7 +212,7 @@ jobs:
             });
 
       - name: Create failure issue
-        if: failure() || steps.generate.outputs.generation_status == 'failed' || steps.health_check.outputs.health_status == 'unhealthy'
+        if: failure() || steps.generate.outputs.generation_status == 'failed' || steps.health_check.outputs.health_status == 'unhealthy' || (inputs.dry_run != 'true' && steps.validate.outputs.validation_status == 'failed')
         uses: actions/github-script@v7
         with:
           script: |
@@ -312,6 +312,7 @@ jobs:
                       <div>
                           <strong>Last Newsletter Generation</strong>
                           <div class="timestamp">$(date -u '+%Y-%m-%d %H:%M:%S UTC')</div>
+                          <div class="timestamp">Includes online publication verification</div>
                       </div>
                       <div>
                           <span class="badge ${{ needs.generate-newsletter.result == 'success' && 'success' || 'failure' }}">

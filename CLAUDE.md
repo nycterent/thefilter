@@ -216,6 +216,18 @@ See [GitHub Actions + Infisical Setup Guide](docs/github-infisical-setup.md) for
 
 By default, the system runs automated newsletter generation every Saturday at 9:00 AM using Celery cron scheduling. The schedule can be modified in scheduler/scheduler.py.
 
+### Success Criteria
+
+**IMPORTANT**: Newsletter generation is only considered successful if:
+1. Content generation completes without errors
+2. Quality validation passes (critical issues must not be present)
+3. Newsletter is successfully published to Buttondown
+4. Published newsletter is verified to be accessible online
+
+**If newsletter post is not online - the generation/action must fail (it is not considered as success)**
+
+The workflow includes online verification that fetches the latest newsletter from Buttondown API and validates it's accessible before marking the run as successful.
+
 ## Development Notes
 
 - Python 3.11+ required
