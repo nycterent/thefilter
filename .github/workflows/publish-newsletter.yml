@@ -111,7 +111,7 @@ except Exception as e:
     print(f"❌ Error processing newsletter content: {e}")
     sys.exit(1)
 EOF
-              
+
             else
               echo "❌ Newsletter output file not found in artifact"
               echo "download_status=failed" >> $GITHUB_OUTPUT
