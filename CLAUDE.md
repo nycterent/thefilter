@@ -228,6 +228,27 @@ By default, the system runs automated newsletter generation every Saturday at 9:
 
 The workflow includes online verification that fetches the latest newsletter from Buttondown API and validates it's accessible before marking the run as successful.
 
+### Efficient Workflow: Dry-Run + Publish
+
+To avoid resource consumption, use this two-step process:
+
+1. **Generate with Dry-Run**: `Newsletter Generation` workflow with `dry_run=true`
+   - Generates content without publishing
+   - Creates artifact with newsletter preview for review
+   - Success issue shows preview and next steps
+
+2. **Publish from Artifact**: `Publish Newsletter` workflow
+   - Downloads latest dry-run artifact 
+   - Publishes to Buttondown
+   - Validates online accessibility
+   - Only marks success if newsletter is confirmed online
+
+**Benefits:**
+- Review content before publishing
+- Reuse generated content without regeneration
+- Resource-efficient workflow
+- Same strict success validation
+
 ## Development Notes
 
 - Python 3.11+ required
