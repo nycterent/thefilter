@@ -223,14 +223,14 @@ EOF
           echo "🔍 Validating published newsletter is online..."
           sleep 10  # Give Buttondown time to process
           
-          # Get the latest newsletter URL from Buttondown API
-          NEWSLETTER_RESPONSE=$(curl -s -H "Authorization: Token ${{ secrets.BUTTONDOWN_API_KEY }}" \
-            "https://api.buttondown.email/v1/newsletters")
+          # Get the latest newsletter email from Buttondown API
+          EMAIL_RESPONSE=$(curl -s -H "Authorization: Token ${{ secrets.BUTTONDOWN_API_KEY }}" \
+            "https://api.buttondown.email/v1/emails?status=sent")
           
-          SECONDARY_ID=$(echo "$NEWSLETTER_RESPONSE" | jq -r '.results[0].secondary_id // empty')
+          SECONDARY_ID=$(echo "$EMAIL_RESPONSE" | jq -r '.results[0].secondary_id // empty')
           
           if [ -z "$SECONDARY_ID" ] || [ "$SECONDARY_ID" = "null" ]; then
-            echo "❌ No newsletter found or secondary_id is null"
+            echo "❌ No published newsletter email found or secondary_id is null"
             echo "validation_status=failed" >> $GITHUB_OUTPUT
           else
             LATEST_URL="https://buttondown.com/filter/archive/$SECONDARY_ID"

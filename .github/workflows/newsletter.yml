@@ -168,14 +168,14 @@ EOF
           echo "🔍 Running newsletter quality validation..."
           echo "Fetching latest newsletter from Buttondown..."
 
-          # Get the latest newsletter URL from Buttondown API with better error handling
-          NEWSLETTER_RESPONSE=$(curl -s -H "Authorization: Token ${{ secrets.BUTTONDOWN_API_KEY }}" \
-            "https://api.buttondown.email/v1/newsletters")
+          # Get the latest newsletter email from Buttondown API
+          EMAIL_RESPONSE=$(curl -s -H "Authorization: Token ${{ secrets.BUTTONDOWN_API_KEY }}" \
+            "https://api.buttondown.email/v1/emails?status=sent")
 
-          SECONDARY_ID=$(echo "$NEWSLETTER_RESPONSE" | jq -r '.results[0].secondary_id // empty')
+          SECONDARY_ID=$(echo "$EMAIL_RESPONSE" | jq -r '.results[0].secondary_id // empty')
 
           if [ -z "$SECONDARY_ID" ] || [ "$SECONDARY_ID" = "null" ]; then
-            echo "❌ No newsletter found or secondary_id is null" > validation_output.log
+            echo "❌ No published newsletter email found or secondary_id is null" > validation_output.log
             echo "This might indicate the newsletter generation didn't complete successfully" >> validation_output.log
             echo "validation_status=failed" >> $GITHUB_OUTPUT
             cat validation_output.log
