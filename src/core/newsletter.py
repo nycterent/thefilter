@@ -1245,7 +1245,11 @@ Write the intro:"""
                     author = doc.get("author", "")
                     category = doc.get("category", "article")
                     summary = doc.get("summary", "")
-                    url = doc.get("url", "")
+                    # Use source_url (actual article URL) instead of url (Readwise proxy URL)
+                    url = doc.get("source_url", "") or doc.get("url", "")
+                    site_name = doc.get(
+                        "site_name", ""
+                    )  # Direct source name from Readwise
                     word_count = doc.get("word_count")
                     reading_progress = doc.get("reading_progress")
 
@@ -1265,6 +1269,9 @@ Write the intro:"""
                         # Ensure it's a valid URL format
                         if not clean_url.startswith(("http://", "https://")):
                             clean_url = None
+                        else:
+                            # Remove tracking parameters
+                            clean_url = self._clean_tracking_params(clean_url)
 
                     # Debug URL issues
                     if not clean_url:
@@ -1295,9 +1302,13 @@ Write the intro:"""
                     if not clean_title:
                         clean_title = f"Document from {category}"
 
-                    # Extract actual source from URL instead of hardcoding "Readwise Reader"
+                    # Extract actual source - prefer site_name, then URL extraction, then fallback
                     actual_source_title = "Readwise Reader"  # fallback
-                    if clean_url:
+                    if site_name and site_name.strip():
+                        # Use site_name from Readwise if available (most accurate)
+                        actual_source_title = site_name.strip()
+                    elif clean_url:
+                        # Fallback to URL extraction
                         extracted_source = self._extract_source_from_url(clean_url)
                         if extracted_source and extracted_source != "Readwise Reader":
                             actual_source_title = extracted_source
@@ -1922,6 +1933,68 @@ Write the intro:"""
         except Exception as e:
             logger.debug(f"Error extracting source from URL {url}: {e}")
             return ""
+
+    def _clean_tracking_params(self, url: str) -> str:
+        """Remove tracking parameters from URL."""
+        try:
+            from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+
+            parsed = urlparse(url)
+            query_params = parse_qs(parsed.query)
+
+            # Define tracking parameters to remove
+            tracking_params = {
+                "utm_source",
+                "utm_medium",
+                "utm_campaign",
+                "utm_content",
+                "utm_term",
+                "_bhlid",
+                "fbclid",
+                "gclid",
+                "msclkid",
+                "twclid",
+                "li_source",
+                "li_medium",
+                "ref",
+                "source",
+                "campaign_id",
+                "ad_id",
+                "affiliate_id",
+                "partner_id",
+                "mc_cid",
+                "mc_eid",
+                "WT.mc_id",
+                "_hsenc",
+                "_hsmi",
+                "hsCtaTracking",
+                "mkt_tok",
+                "trk",
+                "trkCampaign",
+                "ss_email_id",
+                "vero_id",
+                "vero_conv",
+                "ck_subscriber_id",
+                "sb_referer_host",
+                "ref_",
+                "referer",
+                "referrer",
+            }
+
+            # Remove tracking parameters
+            clean_params = {
+                k: v for k, v in query_params.items() if k not in tracking_params
+            }
+
+            # Rebuild URL
+            clean_query = urlencode(clean_params, doseq=True) if clean_params else ""
+            clean_parsed = parsed._replace(query=clean_query)
+
+            return urlunparse(clean_parsed)
+
+        except Exception as e:
+            logger.debug(f"Error cleaning URL {url}: {e}")
+            return url  # Return original if cleaning fails
 
     async def _search_for_source_name(
         self, article_title: str, article_url: str
