@@ -130,9 +130,13 @@ class ReadwiseClient:
                             actual_source = None
                             if source_url:
                                 actual_source = extract_source_from_url(source_url)
-                            
+
                             # Use actual source or fall back to book title, but prefer URL-based source
-                            source_title = actual_source if actual_source else highlight.get("book_title", "Unknown")
+                            source_title = (
+                                actual_source
+                                if actual_source
+                                else highlight.get("book_title", "Unknown")
+                            )
 
                             processed_highlight = {
                                 "id": highlight.get("id"),
