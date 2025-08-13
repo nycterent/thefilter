@@ -8,6 +8,8 @@ from typing import Any, Dict, List
 import aiohttp
 from bs4 import BeautifulSoup
 
+from src.core.utils import extract_source_from_url
+
 logger = logging.getLogger(__name__)
 
 
@@ -124,6 +126,14 @@ class ReadwiseClient:
                                 else highlight_text
                             )
 
+                            # Extract actual source from URL instead of generic book title
+                            actual_source = None
+                            if source_url:
+                                actual_source = extract_source_from_url(source_url)
+                            
+                            # Use actual source or fall back to book title, but prefer URL-based source
+                            source_title = actual_source if actual_source else highlight.get("book_title", "Unknown")
+
                             processed_highlight = {
                                 "id": highlight.get("id"),
                                 "title": (
@@ -134,7 +144,7 @@ class ReadwiseClient:
                                 "content": combined_content,  # Combined content for LLM processing
                                 "note": note_text,
                                 "source": "readwise",
-                                "source_title": highlight.get("book_title", "Unknown"),
+                                "source_title": source_title,
                                 "author": highlight.get("author", "Unknown"),
                                 "url": source_url,
                                 "tags": highlight.get("tags", []),
