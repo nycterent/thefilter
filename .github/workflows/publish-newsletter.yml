@@ -84,22 +84,21 @@ import sys
 try:
     with open('newsletter_output.log', 'r') as f:
         content = f.read()
-    
+
     # Look for newsletter content in the log
-    # The content is usually after "Content preview:" or similar markers
     patterns = [
         r'📝 Content preview: (.*?)(?=INFO:|$)',
         r'Generated newsletter content:\s*(.*?)(?=INFO:|$)',
         r'Newsletter content:\s*(.*?)(?=INFO:|$)'
     ]
-    
+
     newsletter_content = None
     for pattern in patterns:
         match = re.search(pattern, content, re.DOTALL)
         if match:
             newsletter_content = match.group(1).strip()
             break
-    
+
     if newsletter_content:
         with open('newsletter_content.md', 'w') as f:
             f.write(newsletter_content)
@@ -107,7 +106,7 @@ try:
     else:
         print("❌ Could not extract newsletter content from log")
         sys.exit(1)
-        
+
 except Exception as e:
     print(f"❌ Error processing newsletter content: {e}")
     sys.exit(1)
