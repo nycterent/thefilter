@@ -70,6 +70,7 @@ mypy src/
 make build        # Build production image
 make build-dev    # Build development image
 make run          # Run newsletter generation (dry-run)
+make run-prod     # Run newsletter generation (production)
 make test         # Run tests in Docker
 make shell        # Open development shell
 make clean        # Clean up Docker resources
@@ -82,6 +83,12 @@ make run-dev      # Start development container with hot reload
 make health       # Run health check
 make logs         # Show container logs
 make ci-build     # Build for CI/CD with platform optimization
+make cache-clean  # Clean Docker build cache
+
+# Docker Compose profiles
+docker-compose up newsletter-bot                    # Production mode
+docker-compose --profile dev up newsletter-bot-dev  # Development mode
+docker-compose --profile cache up redis             # Enable Redis caching
 ```
 
 ### Running the Application
@@ -101,6 +108,9 @@ python -m src.newsletter_bot
 
 # Check configuration
 ./venv/bin/python -m src.newsletter_bot config
+
+# Health check
+./venv/bin/python -m src.newsletter_bot health
 
 # Docker build and run
 docker build -t newsletter-bot .

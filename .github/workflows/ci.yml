@@ -66,7 +66,9 @@ jobs:
           context: .
           file: ./Dockerfile
           target: production
+          platforms: linux/amd64
           tags: newsletter-bot:test
+          load: true
           push: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -117,7 +119,9 @@ jobs:
           context: .
           file: ./Dockerfile
           target: production
+          platforms: linux/amd64
           tags: newsletter-bot:${{ github.sha }}
+          load: true
           push: false
           cache-from: type=gha
           cache-to: type=gha,mode=max

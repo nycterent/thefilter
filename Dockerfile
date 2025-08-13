@@ -37,6 +37,7 @@ COPY --from=dependencies /usr/local/bin /usr/local/bin
 COPY --from=dependencies /app/src /app/src
 
 # Copy additional application files
+RUN mkdir -p scripts
 COPY scripts/check_briefing.py ./scripts/
 
 # Create non-root user for security
