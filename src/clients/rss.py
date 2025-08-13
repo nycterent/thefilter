@@ -29,7 +29,9 @@ class RSSClient:
         # Timeout configuration
         self.feed_timeout = settings.rss_feed_timeout if settings else 30.0
         self.content_timeout = settings.rss_content_timeout if settings else 15.0
-        self.user_agent = settings.default_user_agent if settings else "Newsletter-Bot/1.0"
+        self.user_agent = (
+            settings.default_user_agent if settings else "Newsletter-Bot/1.0"
+        )
 
     async def get_recent_articles(self, days: int = 7) -> List[Dict[str, Any]]:
         """Get recent articles from all RSS feeds.

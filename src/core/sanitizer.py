@@ -343,9 +343,7 @@ class ContentSanitizer:
                 else (
                     "moderately_fit"
                     if fitness_score >= 70
-                    else "poorly_fit"
-                    if fitness_score >= 50
-                    else "extinct"
+                    else "poorly_fit" if fitness_score >= 50 else "extinct"
                 )
             ),
             "factors": fitness_factors,

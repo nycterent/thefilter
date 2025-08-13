@@ -41,40 +41,25 @@ class Settings(BaseSettings):
 
     # API Timeout Settings (in seconds)
     openrouter_timeout: float = Field(
-        30.0,
-        ge=5.0,
-        le=120.0,
-        description="OpenRouter API request timeout in seconds"
+        30.0, ge=5.0, le=120.0, description="OpenRouter API request timeout in seconds"
     )
     readwise_timeout: float = Field(
-        15.0,
-        ge=5.0,
-        le=60.0,
-        description="Readwise API request timeout in seconds"
+        15.0, ge=5.0, le=60.0, description="Readwise API request timeout in seconds"
     )
     rss_feed_timeout: float = Field(
-        30.0,
-        ge=10.0,
-        le=120.0,
-        description="RSS feed fetch timeout in seconds"
+        30.0, ge=10.0, le=120.0, description="RSS feed fetch timeout in seconds"
     )
     rss_content_timeout: float = Field(
         15.0,
         ge=5.0,
         le=60.0,
-        description="RSS article content fetch timeout in seconds"
+        description="RSS article content fetch timeout in seconds",
     )
     unsplash_timeout: float = Field(
-        10.0,
-        ge=3.0,
-        le=30.0,
-        description="Unsplash API request timeout in seconds"
+        10.0, ge=3.0, le=30.0, description="Unsplash API request timeout in seconds"
     )
     buttondown_timeout: float = Field(
-        15.0,
-        ge=5.0,
-        le=60.0,
-        description="Buttondown API request timeout in seconds"
+        15.0, ge=5.0, le=60.0, description="Buttondown API request timeout in seconds"
     )
 
     # OpenRouter Rate Limiting Settings
@@ -82,33 +67,30 @@ class Settings(BaseSettings):
         3.2,
         ge=0.5,
         le=10.0,
-        description="Minimum seconds between OpenRouter requests (free tier: 20 req/min)"
+        description="Minimum seconds between OpenRouter requests (free tier: 20 req/min)",
     )
     openrouter_max_backoff_multiplier: float = Field(
         8.0,
         ge=2.0,
         le=32.0,
-        description="Maximum backoff multiplier for consecutive failures"
+        description="Maximum backoff multiplier for consecutive failures",
     )
     openrouter_max_consecutive_failures: int = Field(
         5,
         ge=1,
         le=20,
-        description="Maximum consecutive failures before circuit breaking"
+        description="Maximum consecutive failures before circuit breaking",
     )
 
-    # General API Settings  
+    # General API Settings
     max_retries: int = Field(
-        3,
-        ge=0,
-        le=10,
-        description="Maximum number of API request retries"
+        3, ge=0, le=10, description="Maximum number of API request retries"
     )
     default_user_agent: str = Field(
         "Newsletter-Bot/1.0",
         min_length=5,
         max_length=100,
-        description="Default User-Agent for HTTP requests"
+        description="Default User-Agent for HTTP requests",
     )
 
     @model_validator(mode="after")
@@ -151,16 +133,24 @@ class Settings(BaseSettings):
                         logger.debug(f"Loaded {field_name} from Infisical")
 
         except (ImportError, ModuleNotFoundError) as e:
-            logger.warning("Infisical module not available - falling back to environment variables")
+            logger.warning(
+                "Infisical module not available - falling back to environment variables"
+            )
             if self.debug:
                 logger.debug(f"Infisical import error details: {e}")
         except (KeyError, AttributeError, ValueError, TypeError) as e:
-            logger.warning("Infisical configuration error - check credentials and settings")
+            logger.warning(
+                "Infisical configuration error - check credentials and settings"
+            )
             if self.debug:
                 logger.debug(f"Infisical configuration error details: {e}")
         except Exception as e:
-            logger.error("Failed to load secrets from Infisical - falling back to environment variables")
+            logger.error(
+                "Failed to load secrets from Infisical - falling back to environment variables"
+            )
             if self.debug:
                 logger.debug(f"Infisical error details: {e}")
+                # In debug mode, re-raise exceptions for better debugging
+                raise
 
         return self

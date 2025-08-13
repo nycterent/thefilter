@@ -48,11 +48,13 @@ class OpenRouterClient:
             self.timeout = settings.openrouter_timeout
         else:
             # Fallback to hardcoded defaults for backward compatibility
-            self.min_request_interval = 3.2  # 3.2 seconds = ~18.75 requests/minute (safe buffer)
+            self.min_request_interval = (
+                3.2  # 3.2 seconds = ~18.75 requests/minute (safe buffer)
+            )
             self.max_backoff_multiplier = 8.0
             self.max_consecutive_failures = 5
             self.timeout = 30.0
-        
+
         self.consecutive_failures = 0
         self.backoff_multiplier = 1.0
 
@@ -411,7 +413,7 @@ Choose the most appropriate category. Respond with ONLY ONE WORD: technology, so
                         )
                         return None
 
-        except (aiohttp.ClientResponseError) as e:
+        except aiohttp.ClientResponseError as e:
             # Handle HTTP errors including rate limiting
             if e.status == 429:
                 logger.warning(
@@ -468,7 +470,9 @@ Choose the most appropriate category. Respond with ONLY ONE WORD: technology, so
 
             async with aiohttp.ClientSession() as session:
                 async with session.get(
-                    url, headers=headers, timeout=aiohttp.ClientTimeout(total=self.timeout)
+                    url,
+                    headers=headers,
+                    timeout=aiohttp.ClientTimeout(total=self.timeout),
                 ) as response:
                     if response.status == 200:
                         # Handle potential encoding issues gracefully

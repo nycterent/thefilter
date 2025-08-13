@@ -111,7 +111,9 @@ class UnsplashClient:
             logger.warning(f"Network error with Unsplash API: {e} - using fallback")
             return self._get_fallback_image(category)
         except (KeyError, ValueError, TypeError) as e:
-            logger.warning(f"Data parsing error with Unsplash API: {e} - using fallback")
+            logger.warning(
+                f"Data parsing error with Unsplash API: {e} - using fallback"
+            )
             return self._get_fallback_image(category)
         except Exception as e:
             logger.warning(f"Unexpected Unsplash API error: {e} - using fallback")

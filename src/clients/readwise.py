@@ -182,13 +182,19 @@ class ReadwiseClient:
             return highlights
 
         except (aiohttp.ClientError, asyncio.TimeoutError) as e:
-            logger.error(f"Network error fetching Readwise highlights: {e}", exc_info=True)
+            logger.error(
+                f"Network error fetching Readwise highlights: {e}", exc_info=True
+            )
             return []
         except (KeyError, ValueError, TypeError) as e:
-            logger.error(f"Data parsing error fetching Readwise highlights: {e}", exc_info=True)
+            logger.error(
+                f"Data parsing error fetching Readwise highlights: {e}", exc_info=True
+            )
             return []
         except Exception as e:
-            logger.error(f"Unexpected error fetching Readwise highlights: {e}", exc_info=True)
+            logger.error(
+                f"Unexpected error fetching Readwise highlights: {e}", exc_info=True
+            )
             return []
 
     async def get_recent_reader_documents(self, days: int = 30) -> List[Dict[str, Any]]:

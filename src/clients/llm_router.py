@@ -1,8 +1,11 @@
 """LLM Router with fallback functionality for newsletter generation."""
 
+import asyncio
 import logging
 import os
 from typing import Any, Dict, List, Optional
+
+import aiohttp
 
 from src.clients.openrouter import OpenRouterClient
 

@@ -1,5 +1,6 @@
 """Glasp API client for retrieving highlights and articles."""
 
+import asyncio
 import logging
 from typing import Any, Dict, List
 

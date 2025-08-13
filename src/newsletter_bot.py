@@ -3,8 +3,8 @@
 import asyncio
 import logging
 
-import click
 import aiohttp
+import click
 
 # Import heavy dependencies lazily within command functions to avoid
 # requiring optional packages (like pydantic and aiohttp) just to load
@@ -230,18 +230,21 @@ def generate(ctx: click.Context, dry_run: bool, from_draft: str) -> None:
             if ctx.obj.get("debug"):
                 raise
             import sys
+
             sys.exit(1)
         except (KeyError, AttributeError, ValueError, TypeError) as e:
             logger.error(f"❌ Configuration or data error: {e}")
             if ctx.obj.get("debug"):
                 raise
             import sys
+
             sys.exit(1)
         except (FileNotFoundError, PermissionError) as e:
             logger.error(f"❌ File system error: {e}")
             if ctx.obj.get("debug"):
                 raise
             import sys
+
             sys.exit(1)
         except Exception as e:
             logger.error(f"❌ Unexpected newsletter generation error: {e}")
@@ -249,6 +252,7 @@ def generate(ctx: click.Context, dry_run: bool, from_draft: str) -> None:
                 raise
             # Exit with non-zero code to indicate failure
             import sys
+
             sys.exit(1)
 
     asyncio.run(_generate())

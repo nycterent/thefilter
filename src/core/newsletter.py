@@ -8,6 +8,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List
 
+import aiohttp
+
 from src.clients.openrouter import OpenRouterClient
 from src.clients.readwise import ReadwiseClient
 from src.clients.rss import RSSClient
@@ -883,7 +885,9 @@ Write the intro:"""
                 "No content sources available. Please configure at least one API key or RSS feed."
             )
         else:
-            logger.info(f"✅ {active_sources} content source(s) configured successfully")
+            logger.info(
+                f"✅ {active_sources} content source(s) configured successfully"
+            )
 
     def _init_readwise_client(self, settings: Settings):
         """Initialize Readwise client with validation."""
@@ -2748,7 +2752,9 @@ Write the intro:"""
                 headers = {"Authorization": f"Token {self.settings.buttondown_api_key}"}
 
                 try:
-                    timeout = aiohttp.ClientTimeout(total=self.settings.buttondown_timeout)
+                    timeout = aiohttp.ClientTimeout(
+                        total=self.settings.buttondown_timeout
+                    )
                     async with aiohttp.ClientSession(timeout=timeout) as session:
                         async with session.get(url, headers=headers) as response:
                             if response.status == 200:

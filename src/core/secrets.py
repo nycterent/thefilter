@@ -122,8 +122,12 @@ class InfisicalSecretManager:
             return value
 
         except (ImportError, ModuleNotFoundError) as e:
-            logger.error(f"Infisical dependencies not available for secret {secret_name}: {e}")
-            raise ValueError(f"Secret '{secret_name}' not accessible - missing dependencies") from e
+            logger.error(
+                f"Infisical dependencies not available for secret {secret_name}: {e}"
+            )
+            raise ValueError(
+                f"Secret '{secret_name}' not accessible - missing dependencies"
+            ) from e
         except (KeyError, ValueError, TypeError) as e:
             logger.error(f"Secret configuration error for {secret_name}: {e}")
             raise ValueError(f"Secret '{secret_name}' not found") from e
