@@ -16,11 +16,12 @@ logger = logging.getLogger(__name__)
 class ReadwiseClient:
     """Client for Readwise API to fetch highlights and notes."""
 
-    def __init__(self, api_key: str):
+    def __init__(self, api_key: str, settings=None):
         """Initialize Readwise client.
 
         Args:
             api_key: Readwise API key
+            settings: Settings instance for configuration values
         """
         self.api_key = api_key
         self.base_url = "https://readwise.io/api/v2"
@@ -28,6 +29,8 @@ class ReadwiseClient:
             "Authorization": f"Token {api_key}",
             "Content-Type": "application/json",
         }
+        # Timeout configuration
+        self.timeout = settings.readwise_timeout if settings else 15.0
 
     async def get_recent_highlights(self, days: int = 7) -> List[Dict[str, Any]]:
         """Get recent highlights from Readwise.
@@ -100,9 +103,13 @@ class ReadwiseClient:
                                         logger.debug(
                                             f"Fetched {len(article_content)} chars of article content from {source_url}"
                                         )
+                                except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+                                    logger.warning(
+                                        f"Network error fetching article content from {source_url}: {e}"
+                                    )
                                 except Exception as e:
                                     logger.warning(
-                                        f"Error fetching article content from {source_url}: {e}"
+                                        f"Unexpected error fetching article content from {source_url}: {e}"
                                     )
 
                             # Combine highlight text, note, and article content for comprehensive LLM input
@@ -174,8 +181,14 @@ class ReadwiseClient:
             logger.info(f"Retrieved {len(highlights)} highlights from Readwise")
             return highlights
 
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            logger.error(f"Network error fetching Readwise highlights: {e}", exc_info=True)
+            return []
+        except (KeyError, ValueError, TypeError) as e:
+            logger.error(f"Data parsing error fetching Readwise highlights: {e}", exc_info=True)
+            return []
         except Exception as e:
-            logger.error(f"Error fetching Readwise highlights: {e}", exc_info=True)
+            logger.error(f"Unexpected error fetching Readwise highlights: {e}", exc_info=True)
             return []
 
     async def get_recent_reader_documents(self, days: int = 30) -> List[Dict[str, Any]]:
@@ -251,8 +264,14 @@ class ReadwiseClient:
             )
             return curated_documents
 
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            logger.error(f"Network error fetching Readwise Reader documents: {e}")
+            return []
+        except (KeyError, ValueError, TypeError) as e:
+            logger.error(f"Data parsing error fetching Readwise Reader documents: {e}")
+            return []
         except Exception as e:
-            logger.error(f"Error fetching Readwise Reader documents: {e}")
+            logger.error(f"Unexpected error fetching Readwise Reader documents: {e}")
             return []
 
     def _filter_curated_articles(
@@ -333,8 +352,14 @@ class ReadwiseClient:
 
             return books
 
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            logger.error(f"Network error fetching Readwise books: {e}")
+            return []
+        except (KeyError, ValueError, TypeError) as e:
+            logger.error(f"Data parsing error fetching Readwise books: {e}")
+            return []
         except Exception as e:
-            logger.error(f"Error fetching Readwise books: {e}")
+            logger.error(f"Unexpected error fetching Readwise books: {e}")
             return []
 
     async def _fetch_article_content(self, url: str) -> str:
@@ -344,7 +369,7 @@ class ReadwiseClient:
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
             }
 
-            timeout = aiohttp.ClientTimeout(total=15)
+            timeout = aiohttp.ClientTimeout(total=self.timeout)
             async with aiohttp.ClientSession() as session:
                 async with session.get(
                     url, headers=headers, timeout=timeout
@@ -400,8 +425,14 @@ class ReadwiseClient:
                         logger.warning(f"Failed to fetch article: {response.status}")
                         return ""
 
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            logger.error(f"Network error fetching article content: {e}")
+            return ""
+        except (ValueError, TypeError) as e:
+            logger.error(f"Data processing error fetching article content: {e}")
+            return ""
         except Exception as e:
-            logger.error(f"Error fetching article content: {e}")
+            logger.error(f"Unexpected error fetching article content: {e}")
             return ""
 
     async def test_connection(self) -> bool:
@@ -430,6 +461,12 @@ class ReadwiseClient:
                             pass
                         return False
 
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            logger.error(f"Network error testing Readwise connection: {e}")
+            return False
+        except (KeyError, ValueError, TypeError) as e:
+            logger.error(f"Response parsing error testing Readwise connection: {e}")
+            return False
         except Exception as e:
-            logger.error(f"Readwise connection test failed: {e}")
+            logger.error(f"Unexpected error testing Readwise connection: {e}")
             return False

@@ -473,8 +473,10 @@ class ContentSanitizer:
             if not parsed_canonical.scheme or not parsed_canonical.netloc:
                 issues.append(f"Invalid URL structure: {canonical_url}")
 
+        except (ValueError, TypeError) as e:
+            issues.append(f"URL parsing data error: {e}")
         except Exception as e:
-            issues.append(f"URL parsing failed: {e}")
+            issues.append(f"Unexpected URL parsing error: {e}")
 
         return canonical_url, issues
 
@@ -544,8 +546,11 @@ class ContentSanitizer:
             # If no extraction worked, return original
             return proxy_url
 
+        except (ValueError, TypeError, AttributeError) as e:
+            logger.debug(f"URL extraction data error for {proxy_url}: {e}")
+            return proxy_url
         except Exception as e:
-            logger.debug(f"URL extraction failed for {proxy_url}: {e}")
+            logger.debug(f"Unexpected URL extraction error for {proxy_url}: {e}")
             return proxy_url
 
         return proxy_url

@@ -15,12 +15,13 @@ logger = logging.getLogger(__name__)
 class OpenRouterClient:
     """Client for OpenRouter API to process content with free models."""
 
-    def __init__(self, api_key: str, model: str = None):
+    def __init__(self, api_key: str, model: str = None, settings=None):
         """Initialize OpenRouter client.
 
         Args:
             api_key: OpenRouter API key
             model: Model to use (defaults to Venice if not specified)
+            settings: Settings instance for configuration values
         """
         self.api_key = api_key
         self.base_url = "https://openrouter.ai/api/v1"
@@ -38,11 +39,20 @@ class OpenRouterClient:
             "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
         )
 
-        # Rate limiting for free tier (20 requests/minute)
+        # Rate limiting configuration - use settings if provided, fallback to defaults
         self.last_request_time = 0
-        self.min_request_interval = (
-            3.2  # 3.2 seconds between requests = ~18.75 requests/minute (safe buffer)
-        )
+        if settings:
+            self.min_request_interval = settings.openrouter_min_request_interval
+            self.max_backoff_multiplier = settings.openrouter_max_backoff_multiplier
+            self.max_consecutive_failures = settings.openrouter_max_consecutive_failures
+            self.timeout = settings.openrouter_timeout
+        else:
+            # Fallback to hardcoded defaults for backward compatibility
+            self.min_request_interval = 3.2  # 3.2 seconds = ~18.75 requests/minute (safe buffer)
+            self.max_backoff_multiplier = 8.0
+            self.max_consecutive_failures = 5
+            self.timeout = 30.0
+        
         self.consecutive_failures = 0
         self.backoff_multiplier = 1.0
 
@@ -168,8 +178,14 @@ Summary:"""
                 logger.warning("OpenRouter returned no content")
                 return content[:max_length]
 
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            logger.error(f"Network error enhancing content with OpenRouter: {e}")
+            return content[:max_length]
+        except (KeyError, ValueError, TypeError) as e:
+            logger.error(f"Data parsing error in content enhancement: {e}")
+            return content[:max_length]
         except Exception as e:
-            logger.error(f"Error enhancing content with OpenRouter: {e}")
+            logger.error(f"Unexpected error enhancing content with OpenRouter: {e}")
             return content[:max_length]
 
     async def categorize_content(
@@ -226,8 +242,14 @@ Choose the most appropriate category. Respond with ONLY ONE WORD: technology, so
             else:
                 return self._fallback_categorize(title, content, tags)
 
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            logger.error(f"Network error categorizing content with OpenRouter: {e}")
+            return self._fallback_categorize(title, content, tags)
+        except (KeyError, ValueError, TypeError) as e:
+            logger.error(f"Data parsing error in content categorization: {e}")
+            return self._fallback_categorize(title, content, tags)
         except Exception as e:
-            logger.error(f"Error categorizing content with OpenRouter: {e}")
+            logger.error(f"Unexpected error categorizing content with OpenRouter: {e}")
             return self._fallback_categorize(title, content, tags)
 
     def _fallback_categorize(
@@ -365,7 +387,7 @@ Choose the most appropriate category. Respond with ONLY ONE WORD: technology, so
                     f"{self.base_url}/chat/completions",
                     headers=self.headers,
                     json=payload,
-                    timeout=aiohttp.ClientTimeout(total=30),
+                    timeout=aiohttp.ClientTimeout(total=self.timeout),
                 ) as response:
                     if response.status == 200:
                         # Reset backoff on successful request
@@ -376,7 +398,7 @@ Choose the most appropriate category. Respond with ONLY ONE WORD: technology, so
                         # Rate limit hit - increase backoff
                         self.consecutive_failures += 1
                         self.backoff_multiplier = min(
-                            8.0, 2.0**self.consecutive_failures
+                            self.max_backoff_multiplier, 2.0**self.consecutive_failures
                         )
                         logger.warning(
                             f"Rate limit hit, backing off to {self.backoff_multiplier:.1f}x delay"
@@ -389,20 +411,26 @@ Choose the most appropriate category. Respond with ONLY ONE WORD: technology, so
                         )
                         return None
 
-        except asyncio.TimeoutError:
-            logger.error("OpenRouter API request timed out")
-            return None
-        except Exception as e:
-            # Handle rate limiting with exponential backoff
-            if "429" in str(e) or "rate limit" in str(e).lower():
+        except (aiohttp.ClientResponseError) as e:
+            # Handle HTTP errors including rate limiting
+            if e.status == 429:
                 logger.warning(
-                    f"OpenRouter rate limit hit, will retry with longer delay: {e}"
+                    f"OpenRouter rate limit hit (HTTP {e.status}), will retry with longer delay: {e}"
                 )
                 await asyncio.sleep(10)  # Wait 10 seconds on rate limit
                 return None
             else:
-                logger.error(f"OpenRouter API request failed: {e}")
+                logger.error(f"HTTP error from OpenRouter API: {e.status} - {e}")
                 return None
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            logger.error(f"Network error in OpenRouter API request: {e}")
+            return None
+        except (KeyError, ValueError, TypeError) as e:
+            logger.error(f"Data parsing error in OpenRouter API response: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error in OpenRouter API request: {e}")
+            return None
 
     async def test_connection(self) -> bool:
         """Test the OpenRouter API connection.
@@ -419,8 +447,14 @@ Choose the most appropriate category. Respond with ONLY ONE WORD: technology, so
                 logger.error("OpenRouter API connection failed - no valid response")
                 return False
 
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            logger.error(f"Network error testing OpenRouter connection: {e}")
+            return False
+        except (KeyError, ValueError, TypeError) as e:
+            logger.error(f"Response parsing error testing OpenRouter connection: {e}")
+            return False
         except Exception as e:
-            logger.error(f"OpenRouter connection test failed: {e}")
+            logger.error(f"Unexpected error testing OpenRouter connection: {e}")
             return False
 
     async def fetch_article_content(self, url: str) -> str:
@@ -434,7 +468,7 @@ Choose the most appropriate category. Respond with ONLY ONE WORD: technology, so
 
             async with aiohttp.ClientSession() as session:
                 async with session.get(
-                    url, headers=headers, timeout=aiohttp.ClientTimeout(total=15)
+                    url, headers=headers, timeout=aiohttp.ClientTimeout(total=self.timeout)
                 ) as response:
                     if response.status == 200:
                         # Handle potential encoding issues gracefully
@@ -483,8 +517,14 @@ Choose the most appropriate category. Respond with ONLY ONE WORD: technology, so
                         logger.warning(f"Failed to fetch article: {response.status}")
                         return ""
 
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            logger.error(f"Network error fetching article content: {e}")
+            return ""
+        except (ValueError, TypeError) as e:
+            logger.error(f"Data processing error fetching article content: {e}")
+            return ""
         except Exception as e:
-            logger.error(f"Error fetching article content: {e}")
+            logger.error(f"Unexpected error fetching article content: {e}")
             return ""
 
     async def generate_commentary(
@@ -525,8 +565,14 @@ Keep under 300 words with a conversational, editorial tone."""
             else:
                 return user_highlights  # Fallback
 
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            logger.error(f"Network error generating commentary: {e}")
+            return user_highlights  # Fallback
+        except (KeyError, ValueError, TypeError) as e:
+            logger.error(f"Data parsing error generating commentary: {e}")
+            return user_highlights  # Fallback
         except Exception as e:
-            logger.error(f"Error generating commentary: {e}")
+            logger.error(f"Unexpected error generating commentary: {e}")
             return user_highlights  # Fallback
 
     async def editorial_roast(
@@ -614,8 +660,14 @@ Format: SCORE: X/10\nFEEDBACK: [comprehensive feedback with specific journalism 
             else:
                 return {"approved": True, "feedback": "Editor unavailable", "score": 7}
 
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            logger.error(f"Network error in editorial review: {e}")
+            return {"approved": True, "feedback": f"Network error: {e}", "score": 7}
+        except (KeyError, ValueError, TypeError) as e:
+            logger.error(f"Data parsing error in editorial review: {e}")
+            return {"approved": True, "feedback": f"Parsing error: {e}", "score": 7}
         except Exception as e:
-            logger.error(f"Error in editorial review: {e}")
+            logger.error(f"Unexpected error in editorial review: {e}")
             return {"approved": True, "feedback": f"Editor error: {e}", "score": 7}
 
     async def revise_content(
@@ -674,8 +726,14 @@ Create substantially improved content using journalism best practices:"""
             else:
                 return original_content
 
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            logger.error(f"Network error revising content: {e}")
+            return original_content
+        except (KeyError, ValueError, TypeError) as e:
+            logger.error(f"Data parsing error revising content: {e}")
+            return original_content
         except Exception as e:
-            logger.error(f"Error revising content: {e}")
+            logger.error(f"Unexpected error revising content: {e}")
             return original_content
 
     async def detect_user_commentary(self, content: str, title: str = "") -> bool:
@@ -710,8 +768,14 @@ Respond with only: YES (contains user commentary) or NO (pure article content)""
             else:
                 return False
 
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            logger.error(f"Network error detecting user commentary: {e}")
+            return False
+        except (KeyError, ValueError, TypeError) as e:
+            logger.error(f"Data parsing error detecting user commentary: {e}")
+            return False
         except Exception as e:
-            logger.error(f"Error detecting user commentary: {e}")
+            logger.error(f"Unexpected error detecting user commentary: {e}")
             return False
 
     async def assess_content_quality(
@@ -780,8 +844,14 @@ SUGGESTIONS: [3-4 actionable suggestions for improvement]"""
             else:
                 return self._default_quality_assessment()
 
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            logger.error(f"Network error assessing content quality: {e}")
+            return self._default_quality_assessment()
+        except (KeyError, ValueError, TypeError) as e:
+            logger.error(f"Data parsing error assessing content quality: {e}")
+            return self._default_quality_assessment()
         except Exception as e:
-            logger.error(f"Error assessing content quality: {e}")
+            logger.error(f"Unexpected error assessing content quality: {e}")
             return self._default_quality_assessment()
 
     def _parse_quality_assessment(self, assessment: str) -> Dict[str, Any]:
@@ -829,8 +899,11 @@ SUGGESTIONS: [3-4 actionable suggestions for improvement]"""
                     else []
                 ),
             }
+        except (KeyError, ValueError, TypeError) as e:
+            logger.error(f"JSON parsing error in quality assessment: {e}")
+            return self._default_quality_assessment()
         except Exception as e:
-            logger.error(f"Error parsing quality assessment: {e}")
+            logger.error(f"Unexpected error parsing quality assessment: {e}")
             return self._default_quality_assessment()
 
     def _default_quality_assessment(self) -> Dict[str, Any]:
@@ -898,6 +971,12 @@ Return ONLY the improved title, no explanations:"""
             else:
                 return current_title
 
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            logger.error(f"Network error improving title: {e}")
+            return current_title
+        except (KeyError, ValueError, TypeError) as e:
+            logger.error(f"Data parsing error improving title: {e}")
+            return current_title
         except Exception as e:
-            logger.error(f"Error improving title: {e}")
+            logger.error(f"Unexpected error improving title: {e}")
             return current_title

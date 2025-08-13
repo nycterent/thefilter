@@ -68,8 +68,12 @@ class LLMRouter:
             if response and self._is_valid_response(response):
                 logger.debug("Primary LLM request successful")
                 return {"content": response["choices"][0]["message"]["content"]}
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            logger.warning(f"Network error with primary LLM: {e}")
+        except (KeyError, ValueError, TypeError) as e:
+            logger.warning(f"Data processing error with primary LLM: {e}")
         except Exception as e:
-            logger.warning(f"Primary LLM failed: {e}")
+            logger.warning(f"Unexpected error with primary LLM: {e}")
 
         # Fallback to secondary client if available
         if self.fallback_client:
@@ -82,8 +86,12 @@ class LLMRouter:
                 if response and self._is_valid_response(response):
                     logger.info("Fallback LLM request successful")
                     return {"content": response["choices"][0]["message"]["content"]}
+            except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+                logger.error(f"Network error with fallback LLM: {e}")
+            except (KeyError, ValueError, TypeError) as e:
+                logger.error(f"Data processing error with fallback LLM: {e}")
             except Exception as e:
-                logger.error(f"Fallback LLM also failed: {e}")
+                logger.error(f"Unexpected error with fallback LLM: {e}")
 
         # If all else fails, return empty content
         logger.error("All LLM providers failed")

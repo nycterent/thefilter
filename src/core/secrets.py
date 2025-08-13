@@ -121,8 +121,14 @@ class InfisicalSecretManager:
             logger.debug(f"Retrieved secret: {secret_name}")
             return value
 
+        except (ImportError, ModuleNotFoundError) as e:
+            logger.error(f"Infisical dependencies not available for secret {secret_name}: {e}")
+            raise ValueError(f"Secret '{secret_name}' not accessible - missing dependencies") from e
+        except (KeyError, ValueError, TypeError) as e:
+            logger.error(f"Secret configuration error for {secret_name}: {e}")
+            raise ValueError(f"Secret '{secret_name}' not found") from e
         except Exception as e:
-            logger.error(f"Failed to retrieve secret {secret_name}: {e}")
+            logger.error(f"Unexpected error retrieving secret {secret_name}: {e}")
             raise ValueError(f"Secret '{secret_name}' not found") from e
 
     def get_multiple_secrets(

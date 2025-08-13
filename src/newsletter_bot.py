@@ -4,6 +4,7 @@ import asyncio
 import logging
 
 import click
+import aiohttp
 
 # Import heavy dependencies lazily within command functions to avoid
 # requiring optional packages (like pydantic and aiohttp) just to load
@@ -224,13 +225,30 @@ def generate(ctx: click.Context, dry_run: bool, from_draft: str) -> None:
             else:
                 logger.info("✅ Dry run completed successfully!")
 
+        except (ImportError, ModuleNotFoundError) as e:
+            logger.error(f"❌ Missing required dependencies: {e}")
+            if ctx.obj.get("debug"):
+                raise
+            import sys
+            sys.exit(1)
+        except (KeyError, AttributeError, ValueError, TypeError) as e:
+            logger.error(f"❌ Configuration or data error: {e}")
+            if ctx.obj.get("debug"):
+                raise
+            import sys
+            sys.exit(1)
+        except (FileNotFoundError, PermissionError) as e:
+            logger.error(f"❌ File system error: {e}")
+            if ctx.obj.get("debug"):
+                raise
+            import sys
+            sys.exit(1)
         except Exception as e:
-            logger.error(f"❌ Newsletter generation failed: {e}")
+            logger.error(f"❌ Unexpected newsletter generation error: {e}")
             if ctx.obj.get("debug"):
                 raise
             # Exit with non-zero code to indicate failure
             import sys
-
             sys.exit(1)
 
     asyncio.run(_generate())
@@ -281,8 +299,12 @@ def health() -> None:
                     status_icon = "✅" if status else "❌"
                     logger.info(f"   - {service.title()}: {status_icon}")
 
+        except (ImportError, ModuleNotFoundError) as e:
+            logger.warning(f"Missing dependencies for connection testing: {e}")
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            logger.warning(f"Network error during connection testing: {e}")
         except Exception as e:
-            logger.warning(f"Could not test connections: {e}")
+            logger.warning(f"Unexpected error during connection testing: {e}")
 
         logger.info("🔑 API Keys status:")
         for service, available in api_keys.items():
@@ -305,8 +327,14 @@ def health() -> None:
         else:
             logger.info("✅ System healthy - all critical components configured")
 
+    except (ImportError, ModuleNotFoundError) as e:
+        logger.error(f"❌ Missing required dependencies for health check: {e}")
+        raise
+    except (KeyError, AttributeError, ValueError) as e:
+        logger.error(f"❌ Configuration error during health check: {e}")
+        raise
     except Exception as e:
-        logger.error(f"❌ Health check failed: {e}")
+        logger.error(f"❌ Unexpected error during health check: {e}")
         raise
 
 
@@ -349,8 +377,14 @@ def config() -> None:
             for i, url in enumerate(settings.rss_feeds.split(","), 1):
                 click.echo(f"  {i}. {url.strip()}")
 
+    except (ImportError, ModuleNotFoundError) as e:
+        click.echo(f"❌ Missing required dependencies for configuration: {e}")
+        raise
+    except (KeyError, AttributeError, ValueError, TypeError) as e:
+        click.echo(f"❌ Configuration data error: {e}")
+        raise
     except Exception as e:
-        click.echo(f"❌ Failed to load configuration: {e}")
+        click.echo(f"❌ Unexpected error loading configuration: {e}")
         raise
 
 

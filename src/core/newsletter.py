@@ -65,8 +65,10 @@ class NewsletterGenerator:
                     # Generate descriptive alt text based on category and topic
                     alt_text = generate_image_alt_text(category, topic_hint)
                     return image_url, alt_text
+                except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+                    logger.debug(f"Unsplash API network error, using fallback: {e}")
                 except Exception as e:
-                    logger.debug(f"Unsplash API failed, using fallback: {e}")
+                    logger.debug(f"Unexpected Unsplash API error, using fallback: {e}")
 
             # Fallback to curated professional images with descriptive alt text
             curated_images_with_alt = {
@@ -163,8 +165,11 @@ Write the intro:"""
                         f"{categories.get('society', [])[:1][0].title if categories.get('society') else 'society'}, "
                         "each story reveals deeper patterns worth your attention.*\n"
                     )
+            except (KeyError, IndexError, AttributeError) as e:
+                logger.warning(f"Data access error generating dynamic intro: {e}")
+                # Fallback to generic but better intro
             except Exception as e:
-                logger.warning(f"Failed to generate dynamic intro: {e}")
+                logger.warning(f"Unexpected error generating dynamic intro: {e}")
                 # Fallback to generic but better intro
                 out.append(
                     "\n*This week's briefing cuts through the noise to surface what actually matters. "
@@ -2663,7 +2668,8 @@ Write the intro:"""
                 # Optionally, you can add "to" or "tags" if needed
             }
 
-            async with aiohttp.ClientSession() as session:
+            timeout = aiohttp.ClientTimeout(total=self.settings.buttondown_timeout)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
                 # Step 1: create draft
                 async with session.post(url, headers=headers, json=payload) as response:
                     if response.status in {200, 201}:
@@ -2742,7 +2748,8 @@ Write the intro:"""
                 headers = {"Authorization": f"Token {self.settings.buttondown_api_key}"}
 
                 try:
-                    async with aiohttp.ClientSession() as session:
+                    timeout = aiohttp.ClientTimeout(total=self.settings.buttondown_timeout)
+                    async with aiohttp.ClientSession(timeout=timeout) as session:
                         async with session.get(url, headers=headers) as response:
                             if response.status == 200:
                                 emails = await response.json()

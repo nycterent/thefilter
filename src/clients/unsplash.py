@@ -13,11 +13,12 @@ logger = logging.getLogger(__name__)
 class UnsplashClient:
     """Client for Unsplash API to fetch relevant images for newsletter content."""
 
-    def __init__(self, api_key: str):
+    def __init__(self, api_key: str, settings=None):
         """Initialize Unsplash client.
 
         Args:
             api_key: Unsplash Access Key
+            settings: Settings instance for configuration values
         """
         self.api_key = api_key
         self.base_url = "https://api.unsplash.com"
@@ -25,6 +26,8 @@ class UnsplashClient:
             "Authorization": f"Client-ID {api_key}",
             "Content-Type": "application/json",
         }
+        # Timeout configuration
+        self.timeout = settings.unsplash_timeout if settings else 10.0
 
         # Curated fallback images (high quality)
         self.fallback_images = {
@@ -78,7 +81,7 @@ class UnsplashClient:
 
             async with aiohttp.ClientSession() as session:
                 async with session.get(
-                    url, headers=self.headers, params=params, timeout=10
+                    url, headers=self.headers, params=params, timeout=self.timeout
                 ) as response:
                     if response.status == 200:
                         data = await response.json()
@@ -104,8 +107,14 @@ class UnsplashClient:
         except asyncio.TimeoutError:
             logger.warning("Unsplash API timeout - using fallback")
             return self._get_fallback_image(category)
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            logger.warning(f"Network error with Unsplash API: {e} - using fallback")
+            return self._get_fallback_image(category)
+        except (KeyError, ValueError, TypeError) as e:
+            logger.warning(f"Data parsing error with Unsplash API: {e} - using fallback")
+            return self._get_fallback_image(category)
         except Exception as e:
-            logger.warning(f"Unsplash API error: {e} - using fallback")
+            logger.warning(f"Unexpected Unsplash API error: {e} - using fallback")
             return self._get_fallback_image(category)
 
     def _enhance_search_query(self, query: str, category: str) -> str:
@@ -190,7 +199,7 @@ class UnsplashClient:
 
             async with aiohttp.ClientSession() as session:
                 async with session.get(
-                    url, headers=self.headers, params=params, timeout=10
+                    url, headers=self.headers, params=params, timeout=self.timeout
                 ) as response:
                     if response.status == 200:
                         logger.info("Unsplash API connection successful")
@@ -201,6 +210,12 @@ class UnsplashClient:
                         )
                         return False
 
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            logger.error(f"Network error testing Unsplash connection: {e}")
+            return False
+        except (KeyError, ValueError, TypeError) as e:
+            logger.error(f"Response parsing error testing Unsplash connection: {e}")
+            return False
         except Exception as e:
-            logger.error(f"Unsplash connection test failed: {e}")
+            logger.error(f"Unexpected error testing Unsplash connection: {e}")
             return False

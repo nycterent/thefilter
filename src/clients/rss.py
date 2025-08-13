@@ -18,13 +18,18 @@ logger = logging.getLogger(__name__)
 class RSSClient:
     """Client for fetching and parsing RSS feeds."""
 
-    def __init__(self, feed_urls: List[str]):
+    def __init__(self, feed_urls: List[str], settings=None):
         """Initialize RSS client.
 
         Args:
             feed_urls: List of RSS feed URLs to monitor
+            settings: Settings instance for configuration values
         """
         self.feed_urls = feed_urls if feed_urls else []
+        # Timeout configuration
+        self.feed_timeout = settings.rss_feed_timeout if settings else 30.0
+        self.content_timeout = settings.rss_content_timeout if settings else 15.0
+        self.user_agent = settings.default_user_agent if settings else "Newsletter-Bot/1.0"
 
     async def get_recent_articles(self, days: int = 7) -> List[Dict[str, Any]]:
         """Get recent articles from all RSS feeds.
@@ -79,9 +84,9 @@ class RSSClient:
             List of articles from this feed
         """
         try:
-            headers = {"User-Agent": "Newsletter-Bot/1.0 (RSS Reader)"}
+            headers = {"User-Agent": f"{self.user_agent} (RSS Reader)"}
 
-            timeout = aiohttp.ClientTimeout(total=30)
+            timeout = aiohttp.ClientTimeout(total=self.feed_timeout)
             async with session.get(
                 feed_url, headers=headers, timeout=timeout
             ) as response:
@@ -97,8 +102,11 @@ class RSSClient:
         except asyncio.TimeoutError:
             logger.error(f"Timeout fetching RSS feed: {feed_url}")
             return []
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            logger.error(f"Network error fetching RSS feed {feed_url}: {e}")
+            return []
         except Exception as e:
-            logger.error(f"Error fetching RSS feed {feed_url}: {e}")
+            logger.error(f"Unexpected error fetching RSS feed {feed_url}: {e}")
             return []
 
     async def _parse_rss(
@@ -167,8 +175,11 @@ class RSSClient:
         except ET.ParseError as e:
             logger.error(f"XML parsing error for {feed_url}: {e}")
             return []
+        except (ValueError, TypeError, AttributeError) as e:
+            logger.error(f"RSS parsing error for feed {feed_url}: {e}")
+            return []
         except Exception as e:
-            logger.error(f"Error parsing RSS feed {feed_url}: {e}")
+            logger.error(f"Unexpected error parsing RSS feed {feed_url}: {e}")
             return []
 
     async def _parse_item(
@@ -258,9 +269,13 @@ class RSSClient:
                     logger.warning(
                         f"Could not fetch article content from {original_url}"
                     )
+            except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+                logger.warning(
+                    f"Network error fetching article content from {original_url}: {e}"
+                )
             except Exception as e:
                 logger.warning(
-                    f"Error fetching article content from {original_url}: {e}"
+                    f"Unexpected error fetching article content from {original_url}: {e}"
                 )
 
         # For RSS items, combine title + description + article content as raw input for LLM processing
@@ -399,8 +414,8 @@ class RSSClient:
             True if feed is accessible, False otherwise
         """
         try:
-            headers = {"User-Agent": "Newsletter-Bot/1.0 (RSS Reader)"}
-            timeout = aiohttp.ClientTimeout(total=10)
+            headers = {"User-Agent": f"{self.user_agent} (RSS Reader)"}
+            timeout = aiohttp.ClientTimeout(total=self.feed_timeout)
 
             async with session.get(
                 feed_url, headers=headers, timeout=timeout
@@ -547,7 +562,7 @@ class RSSClient:
             }
 
             # Use the same session from the parent call
-            timeout = aiohttp.ClientTimeout(total=15)
+            timeout = aiohttp.ClientTimeout(total=self.content_timeout)
             async with aiohttp.ClientSession() as session:
                 async with session.get(
                     url, headers=headers, timeout=timeout
@@ -603,8 +618,14 @@ class RSSClient:
                         logger.warning(f"Failed to fetch article: {response.status}")
                         return ""
 
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            logger.error(f"Network error fetching article content: {e}")
+            return ""
+        except (ValueError, TypeError) as e:
+            logger.error(f"Data processing error fetching article content: {e}")
+            return ""
         except Exception as e:
-            logger.error(f"Error fetching article content: {e}")
+            logger.error(f"Unexpected error fetching article content: {e}")
             return ""
 
     def _extract_article_url(self, html_content: str) -> str:

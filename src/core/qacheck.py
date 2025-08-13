@@ -403,8 +403,14 @@ def main():
     # Read content
     try:
         content = input_file.read_text(encoding="utf-8", errors="ignore")
+    except (FileNotFoundError, PermissionError) as e:
+        print(f"File access error: {e}")
+        sys.exit(1)
+    except (UnicodeDecodeError, ValueError) as e:
+        print(f"File encoding/format error: {e}")
+        sys.exit(1)
     except Exception as e:
-        print(f"Error reading file: {e}")
+        print(f"Unexpected error reading file: {e}")
         sys.exit(1)
 
     # Run checks
