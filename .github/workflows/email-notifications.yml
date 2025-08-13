@@ -1,0 +1,242 @@
+name: Email Notification Service
+
+on:
+  workflow_call:
+    inputs:
+      notification_type:
+        description: "Type of notification (approval_request, approved, rejected, published)"
+        required: true
+        type: string
+      issue_number:
+        description: "GitHub issue number for the newsletter"
+        required: true
+        type: string
+      newsletter_title:
+        description: "Title of the newsletter"
+        required: true
+        type: string
+      newsletter_url:
+        description: "URL of published newsletter (for published notifications)"
+        required: false
+        type: string
+      recipient_email:
+        description: "Email address to send notification to"
+        required: false
+        type: string
+        default: "${{ vars.NEWSLETTER_EDITOR_EMAIL }}"
+
+jobs:
+  send-notification:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Prepare Email Content
+        id: email-content
+        run: |
+          # Set email content based on notification type
+          case "${{ inputs.notification_type }}" in
+            "approval_request")
+              SUBJECT="📧 Newsletter Approval Required: ${{ inputs.newsletter_title }}"
+              BODY=$(cat << 'EOF'
+          # Newsletter Approval Required
+          
+          A new newsletter draft is ready for your review and approval.
+          
+          **Newsletter:** ${{ inputs.newsletter_title }}
+          **Generated:** $(date -u +"%Y-%m-%d %H:%M UTC")
+          
+          ## Quick Actions
+          
+          Visit the approval issue to review and decide:
+          🔗 **Review & Approve:** ${{ github.server_url }}/${{ github.repository }}/issues/${{ inputs.issue_number }}
+          
+          **Commands:**
+          - Comment `/approve` to publish the newsletter
+          - Comment `/reject [reason]` to reject with feedback  
+          - Comment `/changes [feedback]` to request revisions
+          
+          ## Deadline
+          
+          ⏰ **Auto-rejection in 48 hours** if no decision is made.
+          
+          ## Preview
+          
+          The full newsletter preview is available in the GitHub issue above.
+          
+          ---
+          This is an automated notification from the newsletter editorial system.
+          EOF
+              )
+              ;;
+            "approved")
+              SUBJECT="✅ Newsletter Approved: ${{ inputs.newsletter_title }}"
+              BODY=$(cat << 'EOF'
+          # Newsletter Approved
+          
+          The newsletter has been approved and is being published.
+          
+          **Newsletter:** ${{ inputs.newsletter_title }}
+          **Approved:** $(date -u +"%Y-%m-%d %H:%M UTC")
+          
+          🚀 Publication is in progress. You'll receive another notification once it's live.
+          
+          📊 Track publication progress: ${{ github.server_url }}/${{ github.repository }}/actions
+          
+          ---
+          This is an automated notification from the newsletter editorial system.
+          EOF
+              )
+              ;;
+            "published")
+              SUBJECT="🎉 Newsletter Published: ${{ inputs.newsletter_title }}"
+              BODY=$(cat << 'EOF'
+          # Newsletter Successfully Published!
+          
+          Your newsletter is now live and accessible to subscribers.
+          
+          **Newsletter:** ${{ inputs.newsletter_title }}
+          **Published:** $(date -u +"%Y-%m-%d %H:%M UTC")
+          **Live URL:** ${{ inputs.newsletter_url }}
+          
+          ## Quick Links
+          
+          📰 [View Published Newsletter](${{ inputs.newsletter_url }})
+          📚 [Newsletter Archive](https://buttondown.com/filter/archive)
+          📊 [Buttondown Analytics](https://buttondown.com/dashboard)
+          
+          ## Next Steps
+          
+          - Monitor subscriber engagement
+          - Review newsletter performance metrics
+          - Next newsletter generation: Saturday 9:00 AM UTC
+          
+          ---
+          This is an automated notification from the newsletter editorial system.
+          EOF
+              )
+              ;;
+            "rejected")
+              SUBJECT="❌ Newsletter Rejected: ${{ inputs.newsletter_title }}"
+              BODY=$(cat << 'EOF'
+          # Newsletter Rejected
+          
+          The newsletter draft has been rejected and will not be published.
+          
+          **Newsletter:** ${{ inputs.newsletter_title }}
+          **Rejected:** $(date -u +"%Y-%m-%d %H:%M UTC")
+          
+          ## Next Steps
+          
+          📝 Review the rejection feedback in the GitHub issue
+          🔄 Generate a new newsletter when ready
+          ⚙️ Check content sources and AI processing if issues persist
+          
+          🔗 **Issue:** ${{ github.server_url }}/${{ github.repository }}/issues/${{ inputs.issue_number }}
+          
+          ---
+          This is an automated notification from the newsletter editorial system.
+          EOF
+              )
+              ;;
+            *)
+              echo "Unknown notification type: ${{ inputs.notification_type }}"
+              exit 1
+              ;;
+          esac
+          
+          # Save content for use in subsequent steps
+          echo "SUBJECT=$SUBJECT" >> $GITHUB_OUTPUT
+          echo 'BODY<<EOF' >> $GITHUB_OUTPUT
+          echo "$BODY" >> $GITHUB_OUTPUT
+          echo 'EOF' >> $GITHUB_OUTPUT
+
+      # Option 1: Send via SMTP (requires SMTP credentials in secrets)
+      - name: Send Email via SMTP
+        if: env.SMTP_SERVER != ''
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.SMTP_SERVER }}
+          server_port: ${{ secrets.SMTP_PORT || '587' }}
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: ${{ steps.email-content.outputs.SUBJECT }}
+          to: ${{ inputs.recipient_email || vars.NEWSLETTER_EDITOR_EMAIL || github.repository_owner }}
+          from: Newsletter Bot <${{ secrets.SMTP_FROM_EMAIL || 'noreply@github.com' }}>
+          body: ${{ steps.email-content.outputs.BODY }}
+          content_type: text/markdown
+        env:
+          SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
+
+      # Option 2: Send via SendGrid (requires SendGrid API key in secrets)
+      - name: Send Email via SendGrid
+        if: secrets.SENDGRID_API_KEY != '' && env.SMTP_SERVER == ''
+        uses: peter-evans/sendgrid-action@v1
+        with:
+          api-key: ${{ secrets.SENDGRID_API_KEY }}
+          from: Newsletter Bot <${{ secrets.SENDGRID_FROM_EMAIL || 'noreply@github.com' }}>
+          to: ${{ inputs.recipient_email || vars.NEWSLETTER_EDITOR_EMAIL || github.repository_owner }}
+          subject: ${{ steps.email-content.outputs.SUBJECT }}
+          html: |
+            <html>
+              <body>
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                  <pre style="white-space: pre-wrap; font-family: inherit;">
+            ${{ steps.email-content.outputs.BODY }}
+                  </pre>
+                </div>
+              </body>
+            </html>
+
+      # Option 3: Webhook notification (for Discord/Slack/Teams/custom endpoints)
+      - name: Send Webhook Notification
+        if: secrets.WEBHOOK_URL != '' && env.SMTP_SERVER == '' && secrets.SENDGRID_API_KEY == ''
+        run: |
+          # Format message for webhook
+          WEBHOOK_PAYLOAD=$(cat << 'EOF'
+          {
+            "content": "📧 **Newsletter Notification**",
+            "embeds": [{
+              "title": "${{ steps.email-content.outputs.SUBJECT }}",
+              "description": "${{ steps.email-content.outputs.BODY }}",
+              "color": ${{ inputs.notification_type == 'published' && '65280' || inputs.notification_type == 'approved' && '255' || inputs.notification_type == 'rejected' && '16711680' || '16776960' }},
+              "timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+              "footer": {
+                "text": "Newsletter Editorial System"
+              }
+            }]
+          }
+          EOF
+          )
+          
+          curl -X POST "${{ secrets.WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -d "$WEBHOOK_PAYLOAD"
+
+      # Option 4: GitHub Issue Comment (fallback if no email service configured)
+      - name: GitHub Issue Comment Fallback
+        if: env.SMTP_SERVER == '' && secrets.SENDGRID_API_KEY == '' && secrets.WEBHOOK_URL == ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Fallback to GitHub comment if no email service is configured
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: parseInt('${{ inputs.issue_number }}'),
+              body: `📧 **Email Notification** (Fallback - Configure email service)\n\n` +
+                    `**Subject:** ${{ steps.email-content.outputs.SUBJECT }}\n\n` +
+                    `**Content:**\n${{ steps.email-content.outputs.BODY }}\n\n` +
+                    `---\n` +
+                    `💡 **Setup Email Notifications:**\n` +
+                    `- Add \`SMTP_*\` secrets for SMTP email\n` +
+                    `- Add \`SENDGRID_API_KEY\` for SendGrid\n` +
+                    `- Add \`WEBHOOK_URL\` for Discord/Slack notifications\n` +
+                    `- Set \`NEWSLETTER_EDITOR_EMAIL\` repository variable`
+            });
+
+      - name: Log Notification Status
+        run: |
+          echo "📧 Notification sent successfully"
+          echo "Type: ${{ inputs.notification_type }}"
+          echo "Recipient: ${{ inputs.recipient_email || vars.NEWSLETTER_EDITOR_EMAIL || 'fallback-github-comment' }}"
+          echo "Subject: ${{ steps.email-content.outputs.SUBJECT }}"

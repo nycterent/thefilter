@@ -1,0 +1,184 @@
+name: Newsletter Approval Processor
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  process-approval:
+    runs-on: ubuntu-latest
+    if: |
+      contains(github.event.issue.labels.*.name, 'editorial-review') &&
+      (contains(github.event.comment.body, '/approve') || 
+       contains(github.event.comment.body, '/reject') ||
+       contains(github.event.comment.body, '/changes'))
+    
+    permissions:
+      contents: read
+      issues: write
+      actions: write
+
+    steps:
+      - name: Check Comment Authority
+        id: check-auth
+        uses: actions/github-script@v7
+        with:
+          result-encoding: string
+          script: |
+            // Check if commenter has write access or is repo owner
+            const { data: permission } = await github.rest.repos.getCollaboratorPermissionLevel({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              username: context.payload.comment.user.login
+            });
+            
+            const hasPermission = ['admin', 'write'].includes(permission.permission) || 
+                                 context.payload.comment.user.login === context.repo.owner;
+            
+            if (!hasPermission) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: `❌ @${context.payload.comment.user.login} does not have permission to approve/reject newsletters.`
+              });
+              return 'false';
+            }
+            return 'true';
+
+      - name: Process Approval
+        if: steps.check-auth.outputs.result == 'true' && contains(github.event.comment.body, '/approve')
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Extract newsletter details from issue
+            const issueBody = context.payload.issue.body;
+            const workflowMatch = issueBody.match(/Workflow Run.*?\/(\d+)\)/);
+            const workflowRunId = workflowMatch ? workflowMatch[1] : null;
+            
+            if (!workflowRunId) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: `❌ Could not extract workflow run ID from issue. Please check the approval request format.`
+              });
+              throw new Error('Could not extract workflow run ID from issue');
+            }
+            
+            // Trigger publish workflow
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'publish-approved-newsletter.yml',
+              ref: 'main',
+              inputs: {
+                approval_issue_number: context.issue.number.toString(),
+                original_workflow_run: workflowRunId,
+                approved_by: context.payload.comment.user.login
+              }
+            });
+            
+            // Update issue with approval
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `✅ **Newsletter APPROVED by @${context.payload.comment.user.login}**\n\n` +
+                    `🚀 Publishing workflow initiated...\n` +
+                    `📊 [Track publishing progress](../../actions)\n\n` +
+                    `⏳ Expected publication time: ~3-5 minutes\n` +
+                    `🔗 You'll receive a confirmation with the live newsletter URL once published.`
+            });
+            
+            // Update labels and close issue
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              labels: ['editorial-review', 'newsletter', 'approved'],
+              state: 'closed'
+            });
+
+      - name: Process Rejection
+        if: steps.check-auth.outputs.result == 'true' && contains(github.event.comment.body, '/reject')
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const feedback = context.payload.comment.body.replace('/reject', '').trim();
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `❌ **Newsletter REJECTED by @${context.payload.comment.user.login}**\n\n` +
+                    `📝 **Rejection Reason:**\n${feedback || 'No specific feedback provided'}\n\n` +
+                    `🔄 **Next Steps:**\n` +
+                    `- Review the feedback above\n` +
+                    `- Make necessary improvements\n` +
+                    `- Generate a new newsletter when ready\n\n` +
+                    `💡 **Tip:** Use the manual trigger to generate a new newsletter with \`/generate\` command`
+            });
+            
+            // Update labels and close issue
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              labels: ['editorial-review', 'newsletter', 'rejected'],
+              state: 'closed'
+            });
+
+      - name: Process Change Request
+        if: steps.check-auth.outputs.result == 'true' && contains(github.event.comment.body, '/changes')
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const feedback = context.payload.comment.body.replace('/changes', '').trim();
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `🔄 **Changes requested by @${context.payload.comment.user.login}**\n\n` +
+                    `📝 **Requested Changes:**\n${feedback || 'No specific changes specified'}\n\n` +
+                    `⚠️ This newsletter draft requires revision before publication.\n\n` +
+                    `🔄 **Options:**\n` +
+                    `1. **Manual editing:** Download the draft, make changes, and re-upload\n` +
+                    `2. **Regenerate:** Create a new newsletter with improved content\n` +
+                    `3. **Approve as-is:** Comment \`/approve\` if changes aren't critical\n\n` +
+                    `💡 **To regenerate:** Trigger a new newsletter generation workflow`
+            });
+            
+            // Update labels but keep issue open
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              labels: ['editorial-review', 'newsletter', 'changes-requested']
+            });
+
+      - name: Help Command
+        if: contains(github.event.comment.body, '/help')
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `📚 **Newsletter Approval Commands**\n\n` +
+                    `**Available Commands:**\n` +
+                    `- \`/approve\` - Approve and publish the newsletter\n` +
+                    `- \`/reject [reason]\` - Reject the newsletter with optional feedback\n` +
+                    `- \`/changes [feedback]\` - Request changes before publication\n` +
+                    `- \`/help\` - Show this help message\n\n` +
+                    `**Permission Requirements:**\n` +
+                    `- Repository admin or write access required\n` +
+                    `- Commands are case-sensitive\n\n` +
+                    `**Examples:**\n` +
+                    `\`/approve\` - Simple approval\n` +
+                    `\`/reject Content quality is poor\` - Rejection with feedback\n` +
+                    `\`/changes Please improve the technology section\` - Request specific changes\n\n` +
+                    `**Timeout:** This approval request will auto-expire in 48 hours if no decision is made.`
+            });

@@ -33,9 +33,10 @@ def cli(ctx: click.Context, debug: bool) -> None:
 
 @cli.command()
 @click.option("--dry-run", is_flag=True, help="Generate newsletter without publishing")
+@click.option("--from-draft", type=click.Path(exists=True), help="Publish from existing draft file")
 @click.pass_context
-def generate(ctx: click.Context, dry_run: bool) -> None:
-    """Generate a new newsletter from available content sources."""
+def generate(ctx: click.Context, dry_run: bool, from_draft: str) -> None:
+    """Generate a new newsletter from available content sources or publish from draft."""
 
     async def _generate():
         try:
@@ -88,31 +89,58 @@ def generate(ctx: click.Context, dry_run: bool) -> None:
 
             logger.info("✅ Configuration validated")
 
-            if dry_run:
-                logger.info("🔍 DRY RUN MODE - No actual newsletter will be published")
-
-            # Initialize newsletter generator
-            generator = NewsletterGenerator(settings)
-
-            # Test connections first
-            logger.info("🔍 Testing service connections...")
-            connections = await generator.test_connections()
-
-            failed_connections = [
-                service
-                for service, status in connections.items()
-                if not status and service != "rss_feeds"
-            ]
-
-            if failed_connections:
-                logger.warning(
-                    f"⚠️  Some services are unavailable: "
-                    f"{', '.join(failed_connections)}"
+            if from_draft:
+                logger.info(f"📄 PUBLISHING FROM DRAFT: {from_draft}")
+                # Read the draft content
+                from pathlib import Path
+                draft_content = Path(from_draft).read_text(encoding='utf-8')
+                
+                # Initialize newsletter generator for publishing only
+                generator = NewsletterGenerator(settings)
+                
+                # Create a newsletter draft object from the file
+                from src.models.content import NewsletterDraft
+                newsletter = NewsletterDraft(
+                    title="Newsletter from Draft",
+                    content=draft_content,
+                    items=[],  # Items already processed in the draft
+                    metadata={"source": "draft_file", "draft_path": from_draft}
                 )
-                logger.info("Continuing with available sources...")
+                
+                # Publish directly (skip generation, go straight to publishing)
+                if not dry_run:
+                    logger.info("🚀 Publishing newsletter from draft...")
+                    await generator._publish_newsletter(newsletter)
+                    logger.info("✅ Newsletter published successfully from draft")
+                else:
+                    logger.info("🔍 DRY RUN MODE - Draft content loaded but not published")
+                    
+            else:
+                if dry_run:
+                    logger.info("🔍 DRY RUN MODE - No actual newsletter will be published")
 
-            # Generate newsletter
-            newsletter = await generator.generate_newsletter(dry_run=dry_run)
+                # Initialize newsletter generator
+                generator = NewsletterGenerator(settings)
+
+                # Test connections first
+                logger.info("🔍 Testing service connections...")
+                connections = await generator.test_connections()
+
+                failed_connections = [
+                    service
+                    for service, status in connections.items()
+                    if not status and service != "rss_feeds"
+                ]
+
+                if failed_connections:
+                    logger.warning(
+                        f"⚠️  Some services are unavailable: "
+                        f"{', '.join(failed_connections)}"
+                    )
+                    logger.info("Continuing with available sources...")
+
+                # Generate newsletter
+                newsletter = await generator.generate_newsletter(dry_run=dry_run)
 
             # Display results
             logger.info(f"📧 Generated newsletter: '{newsletter.title}'")
