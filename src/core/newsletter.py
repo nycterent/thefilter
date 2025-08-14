@@ -2707,18 +2707,19 @@ Write the intro:"""
             # If URL resolution fails, try to construct likely URLs based on the source
             source_name = self._extract_source_from_url(original_url)
             
-            # For The Information, try to construct a direct URL
-            if source_name == "The Information":
-                # Extract potential article slug from title
-                import re
-                # Convert title to URL-friendly slug
-                slug_words = re.findall(r'\b\w+\b', title.lower())
-                if len(slug_words) >= 3:
-                    # Take first few meaningful words for slug
-                    slug = '-'.join(slug_words[:6])
-                    potential_url = f"https://www.theinformation.com/{slug}"
-                    logger.debug(f"Constructed potential URL for The Information: {potential_url}")
-                    return potential_url, source_name
+            # For paywall/premium sites, don't construct URLs as they likely won't work
+            paywall_sources = {"The Information", "Wall Street Journal", "Financial Times", "New York Times"}
+            
+            if source_name in paywall_sources:
+                logger.debug(f"Detected paywall source '{source_name}', using text-only attribution to avoid broken links")
+                return "", source_name
+            
+            # For other sources, try to construct URLs if we have patterns
+            # Note: Most URL construction will fail, so we're conservative about which sources to attempt
+            
+            # For now, don't attempt URL construction for most sources as it's unreliable
+            # Instead, focus on proper source name display and let users search manually
+            logger.debug(f"No reliable URL construction pattern for '{source_name}', using text-only attribution")
             
             # For other sources, return the source name but no URL (will show as text-only)
             logger.warning(f"Could not resolve tracking URL for '{title[:50]}...', showing source name only")
