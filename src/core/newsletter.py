@@ -2679,6 +2679,112 @@ Write the intro:"""
             logger.debug(f"Error resolving tracking URL {tracking_url}: {e}")
             return ""
 
+    async def _search_archive_org(self, title: str, domain: str = "") -> str:
+        """Search archive.org for articles with similar title.
+        
+        Args:
+            title: Article title to search for
+            domain: Optional domain to search within
+            
+        Returns:
+            str: Archive.org URL if found, empty string otherwise
+        """
+        try:
+            import aiohttp
+            from urllib.parse import quote
+            
+            # Prepare search query
+            search_terms = title.replace('"', '').replace("'", "")  # Remove quotes
+            search_query = quote(search_terms)
+            
+            if domain:
+                # Search within specific domain
+                search_url = f"https://web.archive.org/cdx/search/cdx?url={domain}/*&output=json&fl=timestamp,original&filter=statuscode:200&limit=50"
+            else:
+                # General search (less reliable)
+                search_url = f"https://web.archive.org/web/20231201000000*/{search_query}"
+            
+            timeout = aiohttp.ClientTimeout(total=15)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                try:
+                    async with session.get(search_url) as response:
+                        if response.status == 200:
+                            if domain:
+                                # Parse CDX API response
+                                data = await response.json()
+                                if isinstance(data, list) and len(data) > 1:  # First row is headers
+                                    # Find most recent snapshot
+                                    for row in data[1:]:  # Skip header row
+                                        if len(row) >= 2:
+                                            timestamp, original_url = row[0], row[1]
+                                            archive_url = f"https://web.archive.org/web/{timestamp}/{original_url}"
+                                            logger.info(f"Found archive.org snapshot: {archive_url}")
+                                            return archive_url
+                            else:
+                                # Check if archive.org has content
+                                final_url = str(response.url)
+                                if "web.archive.org/web/" in final_url and response.status == 200:
+                                    logger.info(f"Found archive.org page: {final_url}")
+                                    return final_url
+                except Exception as e:
+                    logger.debug(f"Error searching archive.org: {e}")
+            
+            return ""
+            
+        except Exception as e:
+            logger.debug(f"Error accessing archive.org for '{title}': {e}")
+            return ""
+
+    async def _search_group_lt(self, title: str) -> str:
+        """Search s.group.lt for alternative articles about the same news.
+        
+        Args:
+            title: Article title to search for
+            
+        Returns:
+            str: URL to search results if found, empty string otherwise
+        """
+        try:
+            import aiohttp
+            from urllib.parse import quote
+            
+            # Prepare search query - extract key terms from title
+            import re
+            # Remove common words and punctuation, keep meaningful terms
+            search_terms = re.sub(r'[^\w\s]', ' ', title.lower())
+            words = search_terms.split()
+            # Filter out common words
+            stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'says', 'said', 'new', 'how', 'what', 'why', 'when', 'where', 'from'}
+            meaningful_words = [w for w in words if len(w) > 3 and w not in stop_words]
+            
+            if len(meaningful_words) < 2:
+                return ""
+                
+            # Create search query from meaningful terms (limit to first 4-5 terms)
+            search_query = ' '.join(meaningful_words[:5])
+            encoded_query = quote(search_query)
+            
+            # Create search URL for s.group.lt
+            search_url = f"https://s.group.lt/?q={encoded_query}"
+            
+            # Test if the search service is available (follow redirects)
+            timeout = aiohttp.ClientTimeout(total=10)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                try:
+                    async with session.head(search_url, allow_redirects=True) as response:
+                        if response.status == 200:
+                            final_url = str(response.url)
+                            logger.info(f"Found s.group.lt search for '{title[:50]}...': {final_url}")
+                            return final_url  # Return the final redirected URL
+                except Exception as e:
+                    logger.debug(f"Error accessing s.group.lt: {e}")
+            
+            return ""
+            
+        except Exception as e:
+            logger.debug(f"Error searching s.group.lt for '{title}': {e}")
+            return ""
+
     async def _find_alternative_source(self, title: str, original_url: str) -> tuple[str, str]:
         """Find alternative source for the same news story.
         
@@ -2704,25 +2810,47 @@ Write the intro:"""
                     logger.info(f"Successfully resolved tracking URL for '{title[:50]}...': {resolved_url}")
                     return resolved_url, source_name
             
-            # If URL resolution fails, try to construct likely URLs based on the source
+            # If URL resolution fails, try to find alternatives
             source_name = self._extract_source_from_url(original_url)
             
-            # For paywall/premium sites, don't construct URLs as they likely won't work
+            # Try to find the article on archive.org
+            logger.debug(f"Searching archive.org for article: '{title[:50]}...' from {source_name}")
+            
+            # Extract domain from original URL for targeted archive.org search
+            from urllib.parse import urlparse
+            parsed = urlparse(original_url)
+            if parsed.netloc:
+                # Clean domain to get the main site (remove tracking subdomains)
+                import re
+                domain = parsed.netloc.lower()
+                if re.match(r'^(url\d+|click|track|email|newsletter|redirect|link)\.', domain):
+                    # Extract main domain from tracking subdomain
+                    parts = domain.split('.')
+                    if len(parts) >= 2:
+                        domain = '.'.join(parts[1:])  # Skip tracking subdomain
+                
+                # Search archive.org for content from this domain
+                archive_url = await self._search_archive_org(title, domain)
+                if archive_url:
+                    logger.info(f"Found archive.org alternative for '{title[:50]}...': {archive_url}")
+                    return archive_url, f"{source_name} (Archive)"
+            
+            # If archive.org doesn't have results, try s.group.lt as fallback
+            logger.debug(f"Archive.org search failed, trying s.group.lt for '{title[:50]}...'")
+            search_url = await self._search_group_lt(title)
+            if search_url:
+                logger.info(f"Found s.group.lt search alternative for '{title[:50]}...': {search_url}")
+                return search_url, f"Search: {source_name}"
+            
+            # For paywall/premium sites, still prefer text-only to avoid confusion
             paywall_sources = {"The Information", "Wall Street Journal", "Financial Times", "New York Times"}
             
             if source_name in paywall_sources:
-                logger.debug(f"Detected paywall source '{source_name}', using text-only attribution to avoid broken links")
+                logger.debug(f"Detected paywall source '{source_name}', using text-only attribution")
                 return "", source_name
             
-            # For other sources, try to construct URLs if we have patterns
-            # Note: Most URL construction will fail, so we're conservative about which sources to attempt
-            
-            # For now, don't attempt URL construction for most sources as it's unreliable
-            # Instead, focus on proper source name display and let users search manually
-            logger.debug(f"No reliable URL construction pattern for '{source_name}', using text-only attribution")
-            
             # For other sources, return the source name but no URL (will show as text-only)
-            logger.warning(f"Could not resolve tracking URL for '{title[:50]}...', showing source name only")
+            logger.warning(f"Could not resolve tracking URL or find archive for '{title[:50]}...', showing source name only")
             return "", source_name
             
         except Exception as e:
