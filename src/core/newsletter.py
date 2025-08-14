@@ -198,7 +198,7 @@ Write the intro:"""
         if len(top_stories) >= 2:
             intro_items = []
             for category, item in top_stories[:3]:  # Top 3 stories
-                source_url, source_name = self._get_source_attribution(item)
+                source_url, source_name = await self._get_source_attribution(item)
                 if source_url:
                     intro_items.append(f"**{item.title}** from [{source_name}]({source_url})")
                 else:
@@ -214,7 +214,7 @@ Write the intro:"""
         all_headlines = []
         for category, items in categories.items():
             for item in items[:2]:  # Top 2 from each category
-                source_url, source_name = self._get_source_attribution(item)
+                source_url, source_name = await self._get_source_attribution(item)
                 if source_url:
                     all_headlines.append(f"• **{item.title}** ([{source_name}]({source_url}))")
                 else:
@@ -253,7 +253,7 @@ Write the intro:"""
                 return "| | |\n"
             img_url, alt_text = await get_unsplash_image_with_alt(cat, item.title)
             
-            source_url, source_name = self._get_source_attribution(item)
+            source_url, source_name = await self._get_source_attribution(item)
             summary = item.content[:300].replace("\n", " ").strip()
 
             # Create proper table row format matching Briefing 001
@@ -282,7 +282,7 @@ Write the intro:"""
                 img_url, alt_text = await get_unsplash_image_with_alt(
                     "technology", item.title
                 )
-                source_url, source_name = self._get_source_attribution(item)
+                source_url, source_name = await self._get_source_attribution(item)
                 summary = item.content[:150].replace("\n", " ")
 
                 out.append(f"### {item.title}\n")
@@ -305,7 +305,7 @@ Write the intro:"""
                 img_url, alt_text = await get_unsplash_image_with_alt(
                     "society", item.title
                 )
-                source_url, source_name = self._get_source_attribution(item)
+                source_url, source_name = await self._get_source_attribution(item)
                 summary = item.content[:180].replace("\n", " ")
 
                 # Use bullet points for a more organic feel
@@ -326,7 +326,7 @@ Write the intro:"""
         for item in art_items:
             if item:
                 img_url, alt_text = await get_unsplash_image_with_alt("art", item.title)
-                source_url, source_name = self._get_source_attribution(item)
+                source_url, source_name = await self._get_source_attribution(item)
                 summary = item.content[:150].replace("\n", " ")
 
                 out.append(f"**{item.title}**\n")
@@ -350,7 +350,7 @@ Write the intro:"""
                 img_url, alt_text = await get_unsplash_image_with_alt(
                     "business", item.title
                 )
-                source_url, source_name = self._get_source_attribution(item)
+                source_url, source_name = await self._get_source_attribution(item)
                 summary = item.content[:150].replace("\n", " ")
 
                 out.append(f"**{item.title}**\n")
@@ -1892,10 +1892,26 @@ Write the intro:"""
             if "readwise.io" in domain:
                 return ""
 
-            # Remove common prefixes and suffixes
-            domain = re.sub(r"^(www\.|m\.|mobile\.)", "", domain)
-            original_domain = domain
-            domain = re.sub(r"\.(com|org|net|edu|gov|io|co\.uk|ai)$", "", domain)
+            # Handle tracking/redirect URLs - extract the real domain
+            # Examples: url3396.theinformation.com -> theinformation, click.convertkit-mail.com -> convertkit
+            if re.match(r"^(url\d+|click|track|email|newsletter|redirect|link)\.", domain):
+                # Extract the main domain part after the tracking subdomain
+                parts = domain.split('.')
+                if len(parts) >= 2:
+                    # Try to find the actual domain (skip tracking subdomains)
+                    for i in range(1, len(parts)):
+                        potential_domain = '.'.join(parts[i:])
+                        # Remove common prefixes and suffixes from the potential domain
+                        clean_potential = re.sub(r"^(www\.|m\.|mobile\.)", "", potential_domain)
+                        clean_potential = re.sub(r"\.(com|org|net|edu|gov|io|co\.uk|ai)$", "", clean_potential)
+                        if clean_potential and len(clean_potential) > 2:  # Valid domain name
+                            domain = clean_potential
+                            break
+            else:
+                # Remove common prefixes and suffixes
+                domain = re.sub(r"^(www\.|m\.|mobile\.)", "", domain)
+                original_domain = domain
+                domain = re.sub(r"\.(com|org|net|edu|gov|io|co\.uk|ai)$", "", domain)
 
             # Handle special cases for common domains
             source_mapping = {
@@ -1917,6 +1933,7 @@ Write the intro:"""
                 "tailscale": "Tailscale",
                 "openai": "OpenAI",
                 "anthropic": "Anthropic",
+                "theinformation": "The Information",
                 "google": "Google",
                 "microsoft": "Microsoft",
                 "producthacker": "ProductHacker",
@@ -2630,7 +2647,60 @@ Write the intro:"""
             logger.debug(f"Quality check PASSED for '{title_preview}'")
             return True
 
-    def _get_source_attribution(self, item: ContentItem) -> tuple[str, str]:
+    async def _find_alternative_source(self, title: str, original_url: str) -> tuple[str, str]:
+        """Find alternative source for the same news story.
+        
+        Args:
+            title: Article title to search for
+            original_url: Original (possibly inaccessible) URL
+            
+        Returns:
+            tuple: (alternative_url, source_name) or ("", "") if no alternative found
+        """
+        if not title or len(title.strip()) < 10:
+            return "", ""
+            
+        try:
+            # Extract key terms from title for search
+            import re
+            # Remove common words and punctuation, keep meaningful terms
+            search_terms = re.sub(r'[^\w\s]', ' ', title.lower())
+            words = search_terms.split()
+            # Filter out common words
+            stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'says', 'said', 'new', 'how', 'what', 'why', 'when', 'where'}
+            meaningful_words = [w for w in words if len(w) > 3 and w not in stop_words]
+            
+            if len(meaningful_words) < 2:
+                return "", ""
+                
+            # Create search query from meaningful terms (limit to first 4-5 terms)
+            search_query = ' '.join(meaningful_words[:5])
+            
+            # Try to find the story on major news sites
+            alternative_sources = [
+                f"site:reuters.com {search_query}",
+                f"site:apnews.com {search_query}", 
+                f"site:bbc.com {search_query}",
+                f"site:cnn.com {search_query}",
+                f"site:techcrunch.com {search_query}",
+                f"site:arstechnica.com {search_query}",
+                f"site:theverge.com {search_query}",
+            ]
+            
+            # For now, return the original source name extraction as fallback
+            # In a full implementation, we would use a web search API here
+            source_name = self._extract_source_from_url(original_url)
+            
+            # Log the attempt for debugging
+            logger.debug(f"Would search for alternative source for: '{title[:50]}...' with query: '{search_query}'")
+            
+            return "", source_name
+            
+        except Exception as e:
+            logger.debug(f"Error finding alternative source for '{title}': {e}")
+            return "", ""
+
+    async def _get_source_attribution(self, item: ContentItem) -> tuple[str, str]:
         """Get clean source URL and name for attribution.
         
         Returns:
@@ -2646,6 +2716,30 @@ Write the intro:"""
         if source_url:
             # Clean the URL of tracking parameters
             clean_url = self._clean_tracking_params(source_url)
+            
+            # Check if this is a tracking URL that might be inaccessible
+            import re
+            from urllib.parse import urlparse
+            
+            parsed = urlparse(clean_url)
+            is_tracking_url = False
+            if parsed.netloc:
+                domain = parsed.netloc.lower()
+                is_tracking_url = bool(re.match(r'^(url\d+|click|track|email|newsletter|redirect|link)\.', domain))
+            
+            # If it's a tracking URL, try to find an alternative source
+            if is_tracking_url:
+                logger.debug(f"Detected tracking URL: {clean_url}, searching for alternative source")
+                alt_url, alt_source = await self._find_alternative_source(item.title, clean_url)
+                if alt_url:
+                    logger.info(f"Found alternative source for '{item.title[:50]}...': {alt_url}")
+                    return alt_url, alt_source
+                else:
+                    # Use improved source name extraction for tracking URLs
+                    source_name = self._extract_source_from_url(clean_url)
+                    if source_name and source_name not in ["Unknown", "Source"]:
+                        return clean_url, source_name
+            
             # Extract domain or use source title
             source_name = item.source_title or item.source or self._extract_source_from_url(clean_url) or "Source"
             return clean_url, source_name
