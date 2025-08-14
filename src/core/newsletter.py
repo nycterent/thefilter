@@ -198,8 +198,11 @@ Write the intro:"""
         if len(top_stories) >= 2:
             intro_items = []
             for category, item in top_stories[:3]:  # Top 3 stories
-                src = item.source_title or item.source or "Unknown"
-                intro_items.append(f"**{item.title}** from {src}")
+                source_url, source_name = self._get_source_attribution(item)
+                if source_url:
+                    intro_items.append(f"**{item.title}** from [{source_name}]({source_url})")
+                else:
+                    intro_items.append(f"**{item.title}** from {source_name}")
             out.append(f"\n*Today's highlights: {' • '.join(intro_items)}*\n")
 
         out.append("\n---\n")
@@ -211,8 +214,11 @@ Write the intro:"""
         all_headlines = []
         for category, items in categories.items():
             for item in items[:2]:  # Top 2 from each category
-                source = item.source_title or item.source or "Source"
-                all_headlines.append(f"• **{item.title}** ({source})")
+                source_url, source_name = self._get_source_attribution(item)
+                if source_url:
+                    all_headlines.append(f"• **{item.title}** ([{source_name}]({source_url}))")
+                else:
+                    all_headlines.append(f"• **{item.title}** ({source_name})")
 
         if all_headlines:
             out.append("\n".join(all_headlines[:8]))  # Limit to 8 headlines
@@ -246,13 +252,16 @@ Write the intro:"""
             if not item:
                 return "| | |\n"
             img_url, alt_text = await get_unsplash_image_with_alt(cat, item.title)
-            url = item.url or ""
-            src = item.source_title or item.source or "Source Needed"
+            
+            source_url, source_name = self._get_source_attribution(item)
             summary = item.content[:300].replace("\n", " ").strip()
 
             # Create proper table row format matching Briefing 001
             image_cell = f"![{alt_text}]({img_url})"
-            content_cell = f"**{item.title}** {summary} **[→ {src}]({url})**"
+            if source_url:
+                content_cell = f"**{item.title}** {summary} **[→ {source_name}]({source_url})**"
+            else:
+                content_cell = f"**{item.title}** {summary} **[→ {source_name}]**"
 
             return f"| {image_cell} | {content_cell} |\n"
 
@@ -273,14 +282,16 @@ Write the intro:"""
                 img_url, alt_text = await get_unsplash_image_with_alt(
                     "technology", item.title
                 )
-                src = item.source_title or item.source or "Unknown"
-                url = item.url or ""
+                source_url, source_name = self._get_source_attribution(item)
                 summary = item.content[:150].replace("\n", " ")
 
                 out.append(f"### {item.title}\n")
                 out.append(f"![{alt_text}]({img_url})\n")
                 out.append(f"{summary}\n")
-                out.append(f"*Source: [{src}]({url})*\n")
+                if source_url:
+                    out.append(f"*Source: [{source_name}]({source_url})*\n")
+                else:
+                    out.append(f"*Source: {source_name}*\n")
                 if i < len(tech_items) - 1:  # Add separator except for last item
                     out.append("---\n")
         out.append("\n---\n")
@@ -294,15 +305,17 @@ Write the intro:"""
                 img_url, alt_text = await get_unsplash_image_with_alt(
                     "society", item.title
                 )
-                src = item.source_title or item.source or "Unknown"
-                url = item.url or ""
+                source_url, source_name = self._get_source_attribution(item)
                 summary = item.content[:180].replace("\n", " ")
 
                 # Use bullet points for a more organic feel
                 out.append(f"**• {item.title}**\n")
                 if i == 0:  # Only show image for first item to avoid clutter
                     out.append(f"![{alt_text}]({img_url})\n")
-                out.append(f"{summary} *([{src}]({url}))*\n")
+                if source_url:
+                    out.append(f"{summary} *([{source_name}]({source_url}))*\n")
+                else:
+                    out.append(f"{summary} *({source_name})*\n")
 
         out.append("\n---\n")
 
@@ -313,13 +326,15 @@ Write the intro:"""
         for item in art_items:
             if item:
                 img_url, alt_text = await get_unsplash_image_with_alt("art", item.title)
-                src = item.source_title or item.source or "Unknown"
-                url = item.url or ""
+                source_url, source_name = self._get_source_attribution(item)
                 summary = item.content[:150].replace("\n", " ")
 
                 out.append(f"**{item.title}**\n")
                 out.append(f"![{alt_text}]({img_url})\n")
-                out.append(f"{summary} *([{src}]({url}))*\n\n")
+                if source_url:
+                    out.append(f"{summary} *([{source_name}]({source_url}))*\n\n")
+                else:
+                    out.append(f"{summary} *({source_name})*\n\n")
 
         if not art_items or all(item is None for item in art_items):
             out.append("*No arts & culture stories this week.*\n\n")
@@ -335,13 +350,15 @@ Write the intro:"""
                 img_url, alt_text = await get_unsplash_image_with_alt(
                     "business", item.title
                 )
-                src = item.source_title or item.source or "Unknown"
-                url = item.url or ""
+                source_url, source_name = self._get_source_attribution(item)
                 summary = item.content[:150].replace("\n", " ")
 
                 out.append(f"**{item.title}**\n")
                 out.append(f"![{alt_text}]({img_url})\n")
-                out.append(f"{summary} *([{src}]({url}))*\n\n")
+                if source_url:
+                    out.append(f"{summary} *([{source_name}]({source_url}))*\n\n")
+                else:
+                    out.append(f"{summary} *({source_name})*\n\n")
 
         if not bus_items or all(item is None for item in bus_items):
             out.append("*No business stories this week.*\n\n")
@@ -2612,6 +2629,30 @@ Write the intro:"""
         else:
             logger.debug(f"Quality check PASSED for '{title_preview}'")
             return True
+
+    def _get_source_attribution(self, item: ContentItem) -> tuple[str, str]:
+        """Get clean source URL and name for attribution.
+        
+        Returns:
+            tuple: (source_url, source_name) where source_url is clean URL and source_name is display name
+        """
+        # Use actual source URL if available, otherwise fallback to item.url
+        source_url = None
+        if item.metadata and item.metadata.get("source_url"):
+            source_url = item.metadata["source_url"]
+        elif item.url:
+            source_url = str(item.url)
+        
+        if source_url:
+            # Clean the URL of tracking parameters
+            clean_url = self._clean_tracking_params(source_url)
+            # Extract domain or use source title
+            source_name = item.source_title or item.source or self._extract_source_from_url(clean_url) or "Source"
+            return clean_url, source_name
+        else:
+            # Fallback to text-only source if no URL available
+            source_name = item.source_title or item.source or "Unknown"
+            return "", source_name
 
     async def _create_newsletter_draft(
         self, content_items: List[ContentItem]
