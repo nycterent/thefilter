@@ -2647,6 +2647,38 @@ Write the intro:"""
             logger.debug(f"Quality check PASSED for '{title_preview}'")
             return True
 
+    async def _resolve_tracking_url(self, tracking_url: str) -> str:
+        """Attempt to resolve a tracking URL to get the real destination.
+        
+        Args:
+            tracking_url: The tracking/redirect URL to resolve
+            
+        Returns:
+            str: The resolved URL or empty string if resolution fails
+        """
+        try:
+            import aiohttp
+            
+            # Try to follow redirects to get the real URL
+            timeout = aiohttp.ClientTimeout(total=10)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                try:
+                    # Use HEAD request to avoid downloading content
+                    async with session.head(tracking_url, allow_redirects=True) as response:
+                        if response.status < 400:
+                            final_url = str(response.url)
+                            if final_url != tracking_url:
+                                logger.info(f"Resolved tracking URL: {tracking_url} -> {final_url}")
+                                return final_url
+                except Exception as e:
+                    logger.debug(f"Failed to resolve tracking URL {tracking_url}: {e}")
+                    
+            return ""
+            
+        except Exception as e:
+            logger.debug(f"Error resolving tracking URL {tracking_url}: {e}")
+            return ""
+
     async def _find_alternative_source(self, title: str, original_url: str) -> tuple[str, str]:
         """Find alternative source for the same news story.
         
@@ -2661,44 +2693,41 @@ Write the intro:"""
             return "", ""
             
         try:
-            # Extract key terms from title for search
-            import re
-            # Remove common words and punctuation, keep meaningful terms
-            search_terms = re.sub(r'[^\w\s]', ' ', title.lower())
-            words = search_terms.split()
-            # Filter out common words
-            stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'says', 'said', 'new', 'how', 'what', 'why', 'when', 'where'}
-            meaningful_words = [w for w in words if len(w) > 3 and w not in stop_words]
+            # First, try to resolve the tracking URL to get the real destination
+            resolved_url = await self._resolve_tracking_url(original_url)
+            if resolved_url:
+                # Check if the resolved URL is accessible and not another tracking URL
+                from urllib.parse import urlparse
+                parsed = urlparse(resolved_url)
+                if parsed.netloc and not any(pattern in parsed.netloc.lower() for pattern in ['url', 'click', 'track', 'redirect']):
+                    source_name = self._extract_source_from_url(resolved_url)
+                    logger.info(f"Successfully resolved tracking URL for '{title[:50]}...': {resolved_url}")
+                    return resolved_url, source_name
             
-            if len(meaningful_words) < 2:
-                return "", ""
-                
-            # Create search query from meaningful terms (limit to first 4-5 terms)
-            search_query = ' '.join(meaningful_words[:5])
-            
-            # Try to find the story on major news sites
-            alternative_sources = [
-                f"site:reuters.com {search_query}",
-                f"site:apnews.com {search_query}", 
-                f"site:bbc.com {search_query}",
-                f"site:cnn.com {search_query}",
-                f"site:techcrunch.com {search_query}",
-                f"site:arstechnica.com {search_query}",
-                f"site:theverge.com {search_query}",
-            ]
-            
-            # For now, return the original source name extraction as fallback
-            # In a full implementation, we would use a web search API here
+            # If URL resolution fails, try to construct likely URLs based on the source
             source_name = self._extract_source_from_url(original_url)
             
-            # Log the attempt for debugging
-            logger.debug(f"Would search for alternative source for: '{title[:50]}...' with query: '{search_query}'")
+            # For The Information, try to construct a direct URL
+            if source_name == "The Information":
+                # Extract potential article slug from title
+                import re
+                # Convert title to URL-friendly slug
+                slug_words = re.findall(r'\b\w+\b', title.lower())
+                if len(slug_words) >= 3:
+                    # Take first few meaningful words for slug
+                    slug = '-'.join(slug_words[:6])
+                    potential_url = f"https://www.theinformation.com/{slug}"
+                    logger.debug(f"Constructed potential URL for The Information: {potential_url}")
+                    return potential_url, source_name
             
+            # For other sources, return the source name but no URL (will show as text-only)
+            logger.warning(f"Could not resolve tracking URL for '{title[:50]}...', showing source name only")
             return "", source_name
             
         except Exception as e:
             logger.debug(f"Error finding alternative source for '{title}': {e}")
-            return "", ""
+            source_name = self._extract_source_from_url(original_url)
+            return "", source_name
 
     async def _get_source_attribution(self, item: ContentItem) -> tuple[str, str]:
         """Get clean source URL and name for attribution.
@@ -2735,10 +2764,11 @@ Write the intro:"""
                     logger.info(f"Found alternative source for '{item.title[:50]}...': {alt_url}")
                     return alt_url, alt_source
                 else:
-                    # Use improved source name extraction for tracking URLs
+                    # Use improved source name extraction for tracking URLs but no URL (to avoid broken links)
                     source_name = self._extract_source_from_url(clean_url)
                     if source_name and source_name not in ["Unknown", "Source"]:
-                        return clean_url, source_name
+                        logger.warning(f"Tracking URL detected but no alternative found for '{item.title[:50]}...', showing source name only")
+                        return "", source_name  # Return empty URL to show text-only source
             
             # Extract domain or use source title
             source_name = item.source_title or item.source or self._extract_source_from_url(clean_url) or "Source"
