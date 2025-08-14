@@ -846,7 +846,7 @@ Write the intro:"""
 
         # Initialize content sanitizer
         self.sanitizer = ContentSanitizer()
-        
+
         # Initialize voice system for commentary generation
         self.voice_manager = VoiceManager(default_voice=settings.default_voice)
 
@@ -1941,7 +1941,7 @@ Write the intro:"""
     def _clean_tracking_params(self, url: str) -> str:
         """Remove tracking parameters from URL."""
         try:
-            from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+            from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
             parsed = urlparse(url)
             query_params = parse_qs(parsed.query)
@@ -2299,37 +2299,49 @@ Write the intro:"""
                     logger.warning(f"Failed to fetch article content for: {item.url}")
 
             # Step 2: Generate voice-based commentary using article + user highlights
-            logger.info(f"🎭 {self.settings.default_voice.title()} voice: generating commentary for '{title[:50]}...'")
-            
+            logger.info(
+                f"🎭 {self.settings.default_voice.title()} voice: generating commentary for '{title[:50]}...'"
+            )
+
             # Prepare content for voice generation
             content_for_voice = f"TITLE: {title}\n\nCONTENT: {article_content if article_content else 'Article content not available'}"
             notes_for_voice = f"USER HIGHLIGHTS: {user_highlights}"
-            
+
             try:
                 # Generate using voice system
                 voice_response = await self.voice_manager.generate_commentary(
                     content=content_for_voice,
                     notes=notes_for_voice,
                     voice=self.settings.default_voice,
-                    language=self.settings.voice_languages.split(',')[0].strip(),
+                    language=self.settings.voice_languages.split(",")[0].strip(),
                     target_words=self.settings.voice_target_words,
                     image_subject=None,  # Could extract from title/content later
-                    llm_client=self.openrouter_client
+                    llm_client=self.openrouter_client,
                 )
-                
+
                 # Extract the story content
-                commentary = voice_response.get("content", voice_response.get("story", ""))
-                
+                commentary = voice_response.get(
+                    "content", voice_response.get("story", "")
+                )
+
                 # Log voice metadata for debugging
                 if voice_response.get("voice_metadata"):
                     metadata = voice_response["voice_metadata"]
-                    logger.debug(f"Voice generation: {metadata.get('voice')} in {metadata.get('language')}")
-                
+                    logger.debug(
+                        f"Voice generation: {metadata.get('voice')} in {metadata.get('language')}"
+                    )
+
             except Exception as e:
-                logger.warning(f"Voice generation failed, falling back to simple commentary: {e}")
+                logger.warning(
+                    f"Voice generation failed, falling back to simple commentary: {e}"
+                )
                 # Fallback to simple OpenRouter commentary
                 commentary = await self.openrouter_client.generate_commentary(
-                    article_content if article_content else "Article content not available",
+                    (
+                        article_content
+                        if article_content
+                        else "Article content not available"
+                    ),
                     user_highlights,
                     title,
                 )

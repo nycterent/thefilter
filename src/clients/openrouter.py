@@ -461,23 +461,23 @@ Choose the most appropriate category. Respond with ONLY ONE WORD: technology, so
 
     async def generate_text(self, prompt: str, max_tokens: int = 2000) -> str:
         """Generate text using OpenRouter API.
-        
+
         Args:
             prompt: Input prompt for text generation
             max_tokens: Maximum tokens to generate
-            
+
         Returns:
             Generated text response
-            
+
         Raises:
             Exception: If generation fails
         """
         if not self.api_key:
             raise ValueError("OpenRouter API key not configured")
-        
+
         try:
             response = await self._make_request(prompt, max_tokens=max_tokens)
-            
+
             if response and "choices" in response and len(response["choices"]) > 0:
                 content = response["choices"][0].get("message", {}).get("content", "")
                 if content:
@@ -486,7 +486,7 @@ Choose the most appropriate category. Respond with ONLY ONE WORD: technology, so
                     raise ValueError("Empty response from OpenRouter API")
             else:
                 raise ValueError("Invalid response format from OpenRouter API")
-                
+
         except Exception as e:
             logger.error(f"Failed to generate text with OpenRouter: {e}")
             raise

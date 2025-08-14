@@ -95,16 +95,16 @@ SAINT_CONFIG = {
     "description": "Minimalist, systems-first analytical voice with quiet intensity",
     "languages": ["en", "lt"],
     "default_options": {
-        "language": "en", 
+        "language": "en",
         "target_words": 700,
         "strictness": 0.7,
-        "image_subject": None
+        "image_subject": None,
     },
     "themes": [
-        "clarity", 
-        "agency", 
-        "protocols over implementations", 
-        "security as usability", 
-        "antifragility"
-    ]
+        "clarity",
+        "agency",
+        "protocols over implementations",
+        "security as usability",
+        "antifragility",
+    ],
 }

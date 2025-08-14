@@ -398,17 +398,17 @@ def voices(voice: str) -> None:
     """List available voices and their configurations."""
     try:
         from src.core.voice_manager import VoiceManager
-        
+
         voice_manager = VoiceManager()
         available_voices = voice_manager.list_available_voices()
-        
+
         if voice:
             # Show specific voice info
             voice_info = next((v for v in available_voices if v["name"] == voice), None)
             if not voice_info:
                 click.echo(f"❌ Voice '{voice}' not found")
                 return
-            
+
             click.echo(f"\n🎤 Voice: {voice_info['name']}")
             click.echo(f"Description: {voice_info['description']}")
             click.echo(f"Languages: {', '.join(voice_info['languages'])}")
@@ -418,15 +418,17 @@ def voices(voice: str) -> None:
             # List all voices
             click.echo("\n🎤 Available Voices:\n")
             for voice_info in available_voices:
-                status = "✅ Active" if voice_info["name"] == "saint" else "📋 Available"
+                status = (
+                    "✅ Active" if voice_info["name"] == "saint" else "📋 Available"
+                )
                 click.echo(f"  {voice_info['name']}: {status}")
                 click.echo(f"    {voice_info['description']}")
                 click.echo(f"    Languages: {', '.join(voice_info['languages'])}")
                 click.echo()
-            
+
             click.echo("💡 Use --voice <name> to see detailed configuration")
             click.echo("💡 Set DEFAULT_VOICE environment variable to change default")
-            
+
     except Exception as e:
         click.echo(f"❌ Error loading voices: {e}")
         raise
@@ -438,13 +440,13 @@ def add_voice(voice_file: str) -> None:
     """Add a custom voice from a Python file."""
     try:
         from src.core.voice_manager import VoiceManager
-        
+
         voice_manager = VoiceManager()
         voice_manager.add_custom_voice(voice_file)
-        
+
         click.echo(f"✅ Successfully added custom voice from: {voice_file}")
         click.echo("💡 Use 'newsletter-bot voices' to see all available voices")
-        
+
     except Exception as e:
         click.echo(f"❌ Failed to add voice: {e}")
         raise

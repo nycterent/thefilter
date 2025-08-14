@@ -244,14 +244,17 @@ class RSSClient:
         if title and title.strip():
             # Look for URLs in the title (like "[Firehose] https://example.com/")
             import re
-            url_pattern = r'https?://[^\s\])]+'
+
+            url_pattern = r"https?://[^\s\])]+"
             url_matches = re.findall(url_pattern, title)
             if url_matches:
                 # Title contains a URL - use it as the article URL and generate a proper title
                 actual_article_url = url_matches[0]  # Take the first URL found
-                logger.debug(f"Title contains URL: {actual_article_url} - will extract real title from article")
+                logger.debug(
+                    f"Title contains URL: {actual_article_url} - will extract real title from article"
+                )
                 title = None  # Will be extracted from article content
-        
+
         # Extract user highlights and insights from HTML description
         user_insights = ""
         description_clean = ""
@@ -269,7 +272,9 @@ class RSSClient:
                 description_clean = description_clean.strip()
 
         # Extract original article URL from the content, or use the URL from title
-        original_url = actual_article_url or self._extract_article_url(description) or link
+        original_url = (
+            actual_article_url or self._extract_article_url(description) or link
+        )
 
         # Fetch full article content from the original URL
         article_content = ""
@@ -713,54 +718,58 @@ class RSSClient:
 
     def _extract_title_from_content(self, content: str, url: str) -> str:
         """Extract a meaningful title from article content.
-        
+
         Args:
             content: Full article content text
             url: Source URL for context
-            
+
         Returns:
             Extracted title or empty string if extraction fails
         """
         try:
             # Split content into lines and look for title patterns
-            lines = [line.strip() for line in content.split('\n') if line.strip()]
-            
+            lines = [line.strip() for line in content.split("\n") if line.strip()]
+
             if not lines:
                 return ""
-            
+
             # Strategy 1: Look for lines that appear to be titles (shorter, no periods)
             for line in lines[:10]:  # Check first 10 lines
                 # Skip very short lines or lines with URLs
-                if len(line) < 10 or line.startswith('http') or line.lower().startswith('[firehose]'):
+                if (
+                    len(line) < 10
+                    or line.startswith("http")
+                    or line.lower().startswith("[firehose]")
+                ):
                     continue
-                    
+
                 # Skip lines that look like descriptions (too long, end with periods)
-                if len(line) > 120 or line.endswith('.') or line.endswith('...'):
+                if len(line) > 120 or line.endswith(".") or line.endswith("..."):
                     continue
-                    
+
                 # Skip lines with too many special characters
-                special_chars = sum(1 for c in line if c in '.,;:!?()[]{}')
+                special_chars = sum(1 for c in line if c in ".,;:!?()[]{}")
                 if special_chars > len(line) * 0.3:
                     continue
-                    
+
                 # This looks like a title
                 return line[:100]  # Limit title length
-            
+
             # Strategy 2: Take first substantial line that doesn't end with period
             for line in lines[:5]:
-                if len(line) >= 20 and len(line) <= 100 and not line.endswith('.'):
+                if len(line) >= 20 and len(line) <= 100 and not line.endswith("."):
                     return line
-            
+
             # Strategy 3: Take first line if it's reasonable
             first_line = lines[0] if lines else ""
             if len(first_line) >= 10 and len(first_line) <= 150:
                 # Clean up the first line
-                if first_line.endswith('.'):
+                if first_line.endswith("."):
                     first_line = first_line[:-1]
                 return first_line[:100]
-            
+
             return ""
-            
+
         except Exception as e:
             logger.debug(f"Error extracting title from content: {e}")
             return ""
