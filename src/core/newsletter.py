@@ -2307,7 +2307,7 @@ Write the intro:"""
             
             try:
                 # Generate using voice system
-                voice_response = self.voice_manager.generate_commentary(
+                voice_response = await self.voice_manager.generate_commentary(
                     content=content_for_voice,
                     notes=notes_for_voice,
                     voice=self.settings.default_voice,

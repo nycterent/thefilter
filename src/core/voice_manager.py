@@ -59,7 +59,7 @@ class VoiceManager:
         
         return self._generators[voice_name]
     
-    def generate_commentary(
+    async def generate_commentary(
         self,
         content: str,
         notes: str = "",
@@ -104,7 +104,7 @@ class VoiceManager:
                 raise ValueError("LLM client is required for commentary generation")
             
             # Generate response using LLM
-            response = llm_client.generate_text(prompt)
+            response = await llm_client.generate_text(prompt)
             
             # Parse and format response
             parsed_response = generator.parse_response(response)
@@ -126,7 +126,7 @@ class VoiceManager:
             logger.error(f"Failed to generate commentary: {e}")
             raise
     
-    def generate_multi_language(
+    async def generate_multi_language(
         self,
         content: str,
         notes: str = "",
@@ -163,7 +163,7 @@ class VoiceManager:
         
         for language in valid_languages:
             try:
-                result = self.generate_commentary(
+                result = await self.generate_commentary(
                     content=content,
                     notes=notes,
                     voice=voice,
