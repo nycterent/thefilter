@@ -459,6 +459,38 @@ Choose the most appropriate category. Respond with ONLY ONE WORD: technology, so
             logger.error(f"Unexpected error testing OpenRouter connection: {e}")
             return False
 
+    async def generate_text(self, prompt: str, max_tokens: int = 2000) -> str:
+        """Generate text using OpenRouter API.
+        
+        Args:
+            prompt: Input prompt for text generation
+            max_tokens: Maximum tokens to generate
+            
+        Returns:
+            Generated text response
+            
+        Raises:
+            Exception: If generation fails
+        """
+        if not self.api_key:
+            raise ValueError("OpenRouter API key not configured")
+        
+        try:
+            response = await self._make_request(prompt, max_tokens=max_tokens)
+            
+            if response and "choices" in response and len(response["choices"]) > 0:
+                content = response["choices"][0].get("message", {}).get("content", "")
+                if content:
+                    return content.strip()
+                else:
+                    raise ValueError("Empty response from OpenRouter API")
+            else:
+                raise ValueError("Invalid response format from OpenRouter API")
+                
+        except Exception as e:
+            logger.error(f"Failed to generate text with OpenRouter: {e}")
+            raise
+
     async def fetch_article_content(self, url: str) -> str:
         """Fetch and extract clean article content from URL."""
         try:

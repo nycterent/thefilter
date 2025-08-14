@@ -93,6 +93,17 @@ class Settings(BaseSettings):
         description="Default User-Agent for HTTP requests",
     )
 
+    # Voice System Settings
+    default_voice: str = Field(
+        "saint", description="Default voice for newsletter commentary"
+    )
+    voice_languages: str = Field(
+        "en", description="Comma-separated list of languages for voice generation"
+    )
+    voice_target_words: int = Field(
+        700, ge=200, le=2000, description="Target word count for voice commentary"
+    )
+
     @model_validator(mode="after")
     def load_secrets_from_infisical(self) -> "Settings":
         """Load secrets from Infisical if enabled."""

@@ -16,6 +16,7 @@ from src.clients.rss import RSSClient
 from src.clients.unsplash import UnsplashClient
 from src.core.qacheck import run_checks
 from src.core.sanitizer import ContentSanitizer
+from src.core.voice_manager import VoiceManager
 from src.models.content import ContentItem, NewsletterDraft
 from src.models.settings import Settings
 
@@ -845,6 +846,9 @@ Write the intro:"""
 
         # Initialize content sanitizer
         self.sanitizer = ContentSanitizer()
+        
+        # Initialize voice system for commentary generation
+        self.voice_manager = VoiceManager(default_voice=settings.default_voice)
 
         # Initialize content source clients with validation
         self.readwise_client = self._init_readwise_client(settings)
@@ -2294,13 +2298,41 @@ Write the intro:"""
                 if not article_content:
                     logger.warning(f"Failed to fetch article content for: {item.url}")
 
-            # Step 2: Generate initial commentary using article + user highlights
-            logger.info(f"🎭 Writer agent: generating commentary for '{title[:50]}...'")
-            commentary = await self.openrouter_client.generate_commentary(
-                article_content if article_content else "Article content not available",
-                user_highlights,
-                title,
-            )
+            # Step 2: Generate voice-based commentary using article + user highlights
+            logger.info(f"🎭 {self.settings.default_voice.title()} voice: generating commentary for '{title[:50]}...'")
+            
+            # Prepare content for voice generation
+            content_for_voice = f"TITLE: {title}\n\nCONTENT: {article_content if article_content else 'Article content not available'}"
+            notes_for_voice = f"USER HIGHLIGHTS: {user_highlights}"
+            
+            try:
+                # Generate using voice system
+                voice_response = self.voice_manager.generate_commentary(
+                    content=content_for_voice,
+                    notes=notes_for_voice,
+                    voice=self.settings.default_voice,
+                    language=self.settings.voice_languages.split(',')[0].strip(),
+                    target_words=self.settings.voice_target_words,
+                    image_subject=None,  # Could extract from title/content later
+                    llm_client=self.openrouter_client
+                )
+                
+                # Extract the story content
+                commentary = voice_response.get("content", voice_response.get("story", ""))
+                
+                # Log voice metadata for debugging
+                if voice_response.get("voice_metadata"):
+                    metadata = voice_response["voice_metadata"]
+                    logger.debug(f"Voice generation: {metadata.get('voice')} in {metadata.get('language')}")
+                
+            except Exception as e:
+                logger.warning(f"Voice generation failed, falling back to simple commentary: {e}")
+                # Fallback to simple OpenRouter commentary
+                commentary = await self.openrouter_client.generate_commentary(
+                    article_content if article_content else "Article content not available",
+                    user_highlights,
+                    title,
+                )
 
             # Validate commentary quality - check for AI refusal patterns
             if commentary:
