@@ -350,7 +350,7 @@ class RSSClient:
             ),
             "source": "rss",
             "source_title": source_title,
-            "source_url": feed_url,
+            "source_url": original_url,  # Use actual article URL for source attribution
             "url": original_url,  # Use extracted article URL instead of Feedbin redirect
             "author": author,
             "published_at": self._normalize_date(pub_date),
