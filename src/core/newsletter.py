@@ -214,11 +214,14 @@ Write the intro:"""
         all_headlines = []
         for category, items in categories.items():
             for item in items[:2]:  # Top 2 from each category
+                # Clean up the title for headlines
+                clean_title = self._clean_headline_title(item.title)
+                
                 source_url, source_name = await self._get_source_attribution(item)
                 if source_url:
-                    all_headlines.append(f"• **{item.title}** ([{source_name}]({source_url}))")
+                    all_headlines.append(f"• {clean_title} ([{source_name}]({source_url}))")
                 else:
-                    all_headlines.append(f"• **{item.title}** ({source_name})")
+                    all_headlines.append(f"• {clean_title} ({source_name})")
 
         if all_headlines:
             out.append("\n".join(all_headlines[:8]))  # Limit to 8 headlines
@@ -1830,6 +1833,103 @@ Write the intro:"""
             and sum(1 for c in title if c.isalnum()) >= 5  # Has meaningful content
         )
 
+    def _clean_headline_title(self, title: str) -> str:
+        """Clean and format a title for the Headlines at a Glance section.
+        
+        Args:
+            title: Raw title to clean
+            
+        Returns:
+            str: Cleaned title suitable for headlines
+        """
+        if not title:
+            return "Untitled Article"
+            
+        # Clean up the title
+        clean_title = title.strip()
+        
+        # Remove trailing ellipses and truncation indicators
+        clean_title = re.sub(r'\.{3,}$', '', clean_title)
+        clean_title = re.sub(r'\s*\.\.\.$', '', clean_title)
+        
+        # Remove weird trailing characters and artifacts
+        clean_title = re.sub(r'[_\-\|]+$', '', clean_title)
+        clean_title = re.sub(r'\s*-+\s*$', '', clean_title)
+        
+        # Fix common formatting issues
+        clean_title = clean_title.replace('...', '').strip()
+        
+        # Handle titles that are too short after cleaning
+        if len(clean_title) < 10:
+            return "Article Summary"
+        
+        # Improve capitalization for titles that are all lowercase or poorly formatted
+        if clean_title.islower() or (clean_title.count(' ') > 2 and not any(c.isupper() for c in clean_title[1:])):
+            # Use title case but preserve proper nouns and acronyms
+            words = clean_title.split()
+            title_words = []
+            for i, word in enumerate(words):
+                # Keep common lowercase words lowercase if they're not at the start
+                if i > 0 and word.lower() in ['and', 'or', 'but', 'to', 'for', 'of', 'with', 'by', 'in', 'on', 'at', 'the', 'a', 'an']:
+                    title_words.append(word.lower())
+                else:
+                    title_words.append(word.capitalize())
+            clean_title = ' '.join(title_words)
+            
+        # Truncate overly long titles for headlines (keep under 80 chars)
+        if len(clean_title) > 80:
+            # Try to truncate at word boundary
+            words = clean_title[:77].split()
+            if len(words) > 1:
+                clean_title = ' '.join(words[:-1]) + "..."
+            else:
+                clean_title = clean_title[:77] + "..."
+        
+        return clean_title
+
+    def _extract_source_from_title_or_content(self, item: ContentItem) -> str:
+        """Extract source name from title patterns or content metadata.
+        
+        Args:
+            item: Content item to analyze
+            
+        Returns:
+            str: Extracted source name, or empty string if none found
+        """
+        import re
+        
+        # Check title for common patterns like "The Briefing: ..." from The Information
+        title = item.title or ""
+        
+        # Pattern: "The Briefing: ..." indicates The Information
+        if title.startswith("The Briefing:"):
+            return "The Information"
+        
+        # Pattern: "From [Source]:" at start of title
+        briefing_match = re.match(r"^From\s+([^:]+):", title)
+        if briefing_match:
+            return briefing_match.group(1).strip()
+        
+        # Check if content mentions the source explicitly
+        content = item.content or ""
+        if len(content) > 0:
+            # Look for "Via [Source]" or "Source: [Source]" patterns
+            via_match = re.search(r"(?:Via|Source):\s*([A-Za-z\s&]+?)(?:\.|,|\n|$)", content)
+            if via_match:
+                source = via_match.group(1).strip()
+                if len(source) > 2 and len(source) < 50:  # Reasonable source name length
+                    return source
+        
+        # Check metadata for better source information
+        if item.metadata:
+            # Some RSS feeds put the real source in metadata
+            if "original_source" in item.metadata:
+                return str(item.metadata["original_source"])
+            if "publication" in item.metadata:
+                return str(item.metadata["publication"])
+        
+        return ""
+
     async def _improve_source_attribution(self, item: ContentItem) -> dict:
         """Improve source attribution to avoid 'Unknown' sources."""
 
@@ -1891,6 +1991,10 @@ Write the intro:"""
             # Skip Readwise Reader URLs - these are proxy URLs, not the actual source
             if "readwise.io" in domain:
                 return ""
+            
+            # Handle Feedbin CDN URLs - these are newsletter content proxies
+            if "feedbinusercontent.com" in domain or "newsletters.feedbinusercontent.com" in domain:
+                return ""  # Will need to rely on item metadata for source name
 
             # Handle tracking/redirect URLs - extract the real domain
             # Examples: url3396.theinformation.com -> theinformation, click.convertkit-mail.com -> convertkit
@@ -2867,7 +2971,9 @@ Write the intro:"""
                 archive_url = await self._search_archive_org(title, domain)
                 if archive_url:
                     logger.info(f"Found archive.org alternative for '{title[:50]}...': {archive_url}")
-                    return archive_url, f"{source_name} (Archive)"
+                    # Provide a meaningful source name if extraction failed
+                    final_source_name = source_name if source_name else "Source"
+                    return archive_url, f"{final_source_name} (Archive)"
             
             # If archive.org doesn't have results, try s.group.lt as fallback
             logger.debug(f"Archive.org search failed, trying s.group.lt for '{title[:50]}...'")
@@ -2933,12 +3039,37 @@ Write the intro:"""
                         logger.warning(f"Tracking URL detected but no alternative found for '{item.title[:50]}...', showing source name only")
                         return "", source_name  # Return empty URL to show text-only source
             
-            # Extract domain or use source title
-            source_name = item.source_title or item.source or self._extract_source_from_url(clean_url) or "Source"
+            # Extract domain or use source title - prioritize extracted domain over generic source titles
+            extracted_source = self._extract_source_from_url(clean_url)
+            
+            # Try to extract a better source name from the title or content if available
+            better_source = self._extract_source_from_title_or_content(item)
+            
+            # Only use item.source_title/source if they're meaningful (not generic)
+            source_from_item = item.source_title or item.source
+            generic_sources = {"Newsletters", "Newsletter", "Source", "Unknown", "RSS", "Feed"}
+            
+            if better_source and better_source not in generic_sources:
+                source_name = better_source
+            elif extracted_source and extracted_source not in generic_sources:
+                source_name = extracted_source
+            elif source_from_item and source_from_item not in generic_sources:
+                source_name = source_from_item
+            elif extracted_source:
+                source_name = extracted_source
+            else:
+                source_name = "Source"
+                
             return clean_url, source_name
         else:
             # Fallback to text-only source if no URL available
-            source_name = item.source_title or item.source or "Unknown"
+            source_from_item = item.source_title or item.source
+            generic_sources = {"Newsletters", "Newsletter", "Source", "Unknown", "RSS", "Feed"}
+            
+            if source_from_item and source_from_item not in generic_sources:
+                source_name = source_from_item
+            else:
+                source_name = "Unknown"
             return "", source_name
 
     async def _create_newsletter_draft(
