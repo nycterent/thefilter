@@ -2748,7 +2748,23 @@ Write the intro:"""
             import aiohttp
             from urllib.parse import quote
             
-            # Prepare search query - extract key terms from title
+            # Strategy 1: Try full title search first (most precise)
+            # Clean up the title but keep it mostly intact
+            clean_title = title.strip()
+            # Remove special characters that might break search but keep quoted phrases
+            clean_title = clean_title.replace('"', '').replace("'", "").replace(':', ' ')
+            
+            # If title is reasonable length, use full title search
+            if len(clean_title) > 10 and len(clean_title) < 150:
+                encoded_query = quote(clean_title)
+                search_url = f"https://s.group.lt/?q={encoded_query}"
+                
+                # Test the full title search
+                success = await self._test_search_url(search_url, f"full title: '{clean_title[:50]}...'")
+                if success:
+                    return search_url
+            
+            # Strategy 2: Fallback to keyword extraction if full title search fails
             import re
             # Remove common words and punctuation, keep meaningful terms
             search_terms = re.sub(r'[^\w\s]', ' ', title.lower())
@@ -2757,15 +2773,34 @@ Write the intro:"""
             stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'says', 'said', 'new', 'how', 'what', 'why', 'when', 'where', 'from'}
             meaningful_words = [w for w in words if len(w) > 3 and w not in stop_words]
             
-            if len(meaningful_words) < 2:
-                return ""
+            if len(meaningful_words) >= 2:
+                # Create search query from meaningful terms (limit to first 4-5 terms)
+                search_query = ' '.join(meaningful_words[:5])
+                encoded_query = quote(search_query)
+                search_url = f"https://s.group.lt/?q={encoded_query}"
                 
-            # Create search query from meaningful terms (limit to first 4-5 terms)
-            search_query = ' '.join(meaningful_words[:5])
-            encoded_query = quote(search_query)
+                success = await self._test_search_url(search_url, f"keywords: '{search_query}'")
+                if success:
+                    return search_url
             
-            # Create search URL for s.group.lt
-            search_url = f"https://s.group.lt/?q={encoded_query}"
+            return ""
+            
+        except Exception as e:
+            logger.debug(f"Error searching s.group.lt for '{title}': {e}")
+            return ""
+
+    async def _test_search_url(self, search_url: str, description: str) -> bool:
+        """Test if a search URL is accessible.
+        
+        Args:
+            search_url: The search URL to test
+            description: Description for logging
+            
+        Returns:
+            bool: True if accessible, False otherwise
+        """
+        try:
+            import aiohttp
             
             # Test if the search service is available (follow redirects)
             timeout = aiohttp.ClientTimeout(total=10)
@@ -2773,17 +2808,16 @@ Write the intro:"""
                 try:
                     async with session.head(search_url, allow_redirects=True) as response:
                         if response.status == 200:
-                            final_url = str(response.url)
-                            logger.info(f"Found s.group.lt search for '{title[:50]}...': {final_url}")
-                            return final_url  # Return the final redirected URL
+                            logger.debug(f"s.group.lt search successful with {description}")
+                            return True
                 except Exception as e:
-                    logger.debug(f"Error accessing s.group.lt: {e}")
+                    logger.debug(f"Error testing s.group.lt search with {description}: {e}")
             
-            return ""
+            return False
             
         except Exception as e:
-            logger.debug(f"Error searching s.group.lt for '{title}': {e}")
-            return ""
+            logger.debug(f"Error testing search URL: {e}")
+            return False
 
     async def _find_alternative_source(self, title: str, original_url: str) -> tuple[str, str]:
         """Find alternative source for the same news story.
