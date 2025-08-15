@@ -1992,9 +1992,9 @@ Write the intro:"""
             if "readwise.io" in domain:
                 return ""
             
-            # Handle Feedbin CDN URLs - these are newsletter content proxies
+            # Handle Feedbin CDN URLs - these are private newsletter content proxies
             if "feedbinusercontent.com" in domain or "newsletters.feedbinusercontent.com" in domain:
-                return ""  # Will need to rely on item metadata for source name
+                return "PRIVATE_CDN"  # Special marker to indicate this is a private CDN URL
 
             # Handle tracking/redirect URLs - extract the real domain
             # Examples: url3396.theinformation.com -> theinformation, click.convertkit-mail.com -> convertkit
@@ -3041,6 +3041,25 @@ Write the intro:"""
             
             # Extract domain or use source title - prioritize extracted domain over generic source titles
             extracted_source = self._extract_source_from_url(clean_url)
+            
+            # Check if this is a private CDN URL that readers can't access
+            if extracted_source == "PRIVATE_CDN":
+                logger.debug(f"Detected private CDN URL for '{item.title[:50]}...', using text-only attribution")
+                # Don't waste time searching for alternatives for private CDN URLs
+                # Just use text-only attribution to avoid broken links
+                better_source = self._extract_source_from_title_or_content(item)
+                source_from_item = item.source_title or item.source
+                generic_sources = {"Newsletters", "Newsletter", "Source", "Unknown", "RSS", "Feed"}
+                
+                if better_source and better_source not in generic_sources:
+                    source_name = better_source
+                elif source_from_item and source_from_item not in generic_sources:
+                    source_name = source_from_item
+                else:
+                    source_name = "Newsletter"
+                
+                logger.info(f"Private CDN URL detected for '{item.title[:50]}...', using text-only attribution: {source_name}")
+                return "", source_name  # Return empty URL to avoid broken links
             
             # Try to extract a better source name from the title or content if available
             better_source = self._extract_source_from_title_or_content(item)
