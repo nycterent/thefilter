@@ -3044,22 +3044,20 @@ Write the intro:"""
             
             # Check if this is a private CDN URL that readers can't access
             if extracted_source == "PRIVATE_CDN":
-                logger.debug(f"Detected private CDN URL for '{item.title[:50]}...', using text-only attribution")
-                # Don't waste time searching for alternatives for private CDN URLs
-                # Just use text-only attribution to avoid broken links
-                better_source = self._extract_source_from_title_or_content(item)
-                source_from_item = item.source_title or item.source
-                generic_sources = {"Newsletters", "Newsletter", "Source", "Unknown", "RSS", "Feed"}
-                
-                if better_source and better_source not in generic_sources:
-                    source_name = better_source
-                elif source_from_item and source_from_item not in generic_sources:
-                    source_name = source_from_item
+                logger.debug(f"Detected private CDN URL for '{item.title[:50]}...', generating search link")
+                # Private CDN URLs are inaccessible to readers, so provide a search link instead
+                search_url = await self._search_group_lt(item.title)
+                if search_url:
+                    logger.info(f"Generated search link for private CDN content '{item.title[:50]}...': {search_url}")
+                    return search_url, "Search"
                 else:
-                    source_name = "Newsletter"
-                
-                logger.info(f"Private CDN URL detected for '{item.title[:50]}...', using text-only attribution: {source_name}")
-                return "", source_name  # Return empty URL to avoid broken links
+                    # Fallback: create a basic search URL manually
+                    import urllib.parse
+                    clean_title = item.title.replace('"', '').replace("'", "")[:100]
+                    encoded_query = urllib.parse.quote(clean_title)
+                    fallback_search = f"https://s.group.lt/?q={encoded_query}"
+                    logger.info(f"Created fallback search for private CDN content '{item.title[:50]}...': {fallback_search}")
+                    return fallback_search, "Search"
             
             # Try to extract a better source name from the title or content if available
             better_source = self._extract_source_from_title_or_content(item)
