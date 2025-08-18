@@ -213,12 +213,11 @@ class ReadwiseClient:
             return []
 
         try:
-            threshold_date = datetime.utcnow() - timedelta(days=days)
-            updated_after = threshold_date.strftime("%Y-%m-%dT%H:%M:%SZ")
-
+            # For twiar-tagged articles, we want ALL articles regardless of date
+            # to ensure we capture all curated content
             url = "https://readwise.io/api/v3/list/"
             params = {
-                "updatedAfter": updated_after,
+                # Remove date filter to get all twiar-tagged articles
             }
 
             all_documents = []
