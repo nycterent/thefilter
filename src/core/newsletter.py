@@ -2880,8 +2880,9 @@ Write the intro:"""
             str: Archive.org URL if found, empty string otherwise
         """
         try:
-            import aiohttp
             from urllib.parse import quote
+
+            import aiohttp
 
             # Prepare search query
             search_terms = title.replace('"', "").replace("'", "")  # Remove quotes
@@ -2944,8 +2945,9 @@ Write the intro:"""
             str: URL to search results if found, empty string otherwise
         """
         try:
-            import aiohttp
             from urllib.parse import quote
+
+            import aiohttp
 
             # Strategy 1: Try full title search first (most precise)
             # Clean up the title but keep it mostly intact
