@@ -197,11 +197,11 @@ class ReadwiseClient:
             )
             return []
 
-    async def get_recent_reader_documents(self, days: int = 7) -> List[Dict[str, Any]]:
+    async def get_recent_reader_documents(self, days: int = 30) -> List[Dict[str, Any]]:
         """Get curated documents from Readwise Reader (only 'twiar' tagged articles).
 
         Args:
-            days: Number of days back to fetch documents (default 7 days)
+            days: Number of days back to fetch documents (default 30 days to capture all twiar articles)
 
         Returns:
             List of curated Reader document dictionaries

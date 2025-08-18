@@ -92,8 +92,8 @@ jobs:
                   
                   client = ReadwiseClient(settings.readwise_api_key)
                   
-                  # Get recent documents (last 7 days)
-                  documents = await client.get_recent_reader_documents(days=7)
+                  # Get recent documents (last 30 days to capture all twiar articles)
+                  documents = await client.get_recent_reader_documents(days=30)
                   
                   count = len(documents)
                   required = 7
