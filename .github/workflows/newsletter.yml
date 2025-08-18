@@ -166,53 +166,53 @@ jobs:
             
             # Extract newsletter content for preview
             python3 << 'EOF'
-import re
-import sys
-import datetime
+          import re
+          import sys
+          import datetime
 
-try:
-    with open('newsletter_output.log', 'r') as f:
-        content = f.read()
+          try:
+              with open('newsletter_output.log', 'r') as f:
+                  content = f.read()
 
-    # Look for newsletter content in the log
-    patterns = [
-        r'📝 Content preview: (.*?)(?=INFO:|$)',
-        r'Generated newsletter content:\s*(.*?)(?=INFO:|$)',
-        r'Newsletter content:\s*(.*?)(?=INFO:|$)'
-    ]
+              # Look for newsletter content in the log
+              patterns = [
+                  r'📝 Content preview: (.*?)(?=INFO:|$)',
+                  r'Generated newsletter content:\s*(.*?)(?=INFO:|$)',
+                  r'Newsletter content:\s*(.*?)(?=INFO:|$)'
+              ]
 
-    newsletter_content = None
-    for pattern in patterns:
-        match = re.search(pattern, content, re.DOTALL)
-        if match:
-            newsletter_content = match.group(1).strip()
-            break
+              newsletter_content = None
+              for pattern in patterns:
+                  match = re.search(pattern, content, re.DOTALL)
+                  if match:
+                      newsletter_content = match.group(1).strip()
+                      break
 
-    if newsletter_content:
-        with open('newsletter_preview.md', 'w') as f:
-            f.write(newsletter_content)
-        print("✅ Newsletter preview saved to newsletter_preview.md")
+              if newsletter_content:
+                  with open('newsletter_preview.md', 'w') as f:
+                      f.write(newsletter_content)
+                  print("✅ Newsletter preview saved to newsletter_preview.md")
 
-        # Create a summary for the artifact
-        lines = newsletter_content.split('\n')
-        title = "Newsletter Preview"
-        for line in lines:
-            if line.strip().startswith('# '):
-                title = line.strip()[2:].strip()
-                break
+                  # Create a summary for the artifact
+                  lines = newsletter_content.split('\n')
+                  title = "Newsletter Preview"
+                  for line in lines:
+                      if line.strip().startswith('# '):
+                          title = line.strip()[2:].strip()
+                          break
 
-        with open('newsletter_summary.txt', 'w') as f:
-            f.write(f"Title: {title}\n")
-            f.write(f"Generated: {datetime.datetime.now().isoformat()}\n")
-            f.write(f"Dry Run: ${{ inputs.dry_run }}\n")
-            f.write(f"Content Length: {len(newsletter_content)} characters\n")
-            f.write(f"Lines: {len(lines)}\n")
-    else:
-        print("❌ Could not extract newsletter content for preview")
+                  with open('newsletter_summary.txt', 'w') as f:
+                      f.write(f"Title: {title}\n")
+                      f.write(f"Generated: {datetime.datetime.now().isoformat()}\n")
+                      f.write(f"Dry Run: ${{ inputs.dry_run }}\n")
+                      f.write(f"Content Length: {len(newsletter_content)} characters\n")
+                      f.write(f"Lines: {len(lines)}\n")
+              else:
+                  print("❌ Could not extract newsletter content for preview")
 
-except Exception as e:
-    print(f"Error extracting newsletter preview: {e}")
-EOF
+          except Exception as e:
+              print(f"Error extracting newsletter preview: {e}")
+          EOF
             
           else
             echo "generation_status=failed" >> $GITHUB_OUTPUT
