@@ -171,6 +171,7 @@ jobs:
     
     permissions:
       contents: read
+      issues: write
       actions: write
     
     steps:
