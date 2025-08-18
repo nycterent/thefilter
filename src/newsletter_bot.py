@@ -218,6 +218,7 @@ def generate(ctx: click.Context, dry_run: bool, from_draft: str) -> None:
                 if len(newsletter.content) > 200
                 else newsletter.content
             )
+            
             logger.info(f"📝 Content preview: {content_preview}")
 
             if not dry_run:

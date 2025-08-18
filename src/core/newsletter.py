@@ -1270,7 +1270,10 @@ Write the intro:"""
                     category = doc.get("category", "article")
                     summary = doc.get("summary", "")
                     # Use source_url (actual article URL) instead of url (Readwise proxy URL)
-                    url = doc.get("source_url", "") or doc.get("url", "")
+                    source_url = doc.get("source_url", "")
+                    proxy_url = doc.get("url", "")
+                    url = source_url or proxy_url
+                    
                     site_name = doc.get(
                         "site_name", ""
                     )  # Direct source name from Readwise
@@ -1904,6 +1907,18 @@ Write the intro:"""
         # Pattern: "The Briefing: ..." indicates The Information
         if title.startswith("The Briefing:"):
             return "The Information"
+        
+        # Pattern: "GPT-5: ..." or similar titles often from One Useful Thing
+        if re.match(r"^GPT-?\d+:", title, re.IGNORECASE):
+            return "One Useful Thing"
+        
+        # Pattern: AI/ML focused titles that commonly come from One Useful Thing
+        if any(pattern in title.lower() for pattern in [
+            "gpt-", "claude", "ai does", "it just does", "useful thing"
+        ]):
+            # Check if URL contains oneusefulthing domain
+            if item.url and "oneusefulthing" in str(item.url).lower():
+                return "One Useful Thing"
         
         # Pattern: "From [Source]:" at start of title
         briefing_match = re.match(r"^From\s+([^:]+):", title)
