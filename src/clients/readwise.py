@@ -197,11 +197,11 @@ class ReadwiseClient:
             )
             return []
 
-    async def get_recent_reader_documents(self, days: int = 30) -> List[Dict[str, Any]]:
-        """Get curated documents from Readwise Reader (fully read or 'twiar' tagged).
+    async def get_recent_reader_documents(self, days: int = 7) -> List[Dict[str, Any]]:
+        """Get curated documents from Readwise Reader (only 'twiar' tagged articles).
 
         Args:
-            days: Number of days back to fetch documents (extended to 30 for better curation)
+            days: Number of days back to fetch documents (default 7 days)
 
         Returns:
             List of curated Reader document dictionaries
@@ -283,7 +283,7 @@ class ReadwiseClient:
     def _filter_curated_articles(
         self, documents: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
-        """Filter documents to only include curated articles (fully read or 'twiar' tagged).
+        """Filter documents to only include curated articles (only 'twiar' tagged).
 
         Args:
             documents: All documents from API
@@ -300,8 +300,8 @@ class ReadwiseClient:
             is_fully_read = reading_progress and reading_progress >= 1.0
             has_twiar_tag = self._has_twiar_tag(tags)
 
-            # Include if fully read OR has twiar tag
-            if is_fully_read or has_twiar_tag:
+            # Include ONLY articles with twiar tag (not just fully read)
+            if has_twiar_tag:
                 curated.append(doc)
 
         # Sort by reading progress (fully read first) then by date

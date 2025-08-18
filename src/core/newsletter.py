@@ -40,16 +40,14 @@ class NewsletterGenerator:
         """
         Generate 'The Filter' newsletter in strict markdown table format.
         """
-        # Categorize items
-        categories: dict[str, list[ContentItem]] = {
-            "technology": [],
-            "society": [],
-            "art": [],
-            "business": [],
-        }
+        # Categorize items dynamically - only create categories that have content
+        categories: dict[str, list[ContentItem]] = {}
+        
         for item in items:
             # Improved categorization using multiple signals
             category = await self._categorize_content(item)
+            if category not in categories:
+                categories[category] = []
             categories[category].append(item)
 
         # Ensure balanced distribution across categories
@@ -229,149 +227,156 @@ Write the intro:"""
 
         out.append("\n---\n")
 
-        # LEAD STORIES
-        out.append("## LEAD STORIES\n")
-        lead_tech = categories["technology"][0] if categories["technology"] else None
-        lead_other = categories["society"][0] if categories["society"] else None
-
-        # Dynamic headers based on actual content
-        tech_header = (
-            lead_tech.title[:30] + "..."
-            if lead_tech and len(lead_tech.title) > 30
-            else (lead_tech.title if lead_tech else "NO TECH STORY")
-        )
-        other_header = (
-            lead_other.title[:30] + "..."
-            if lead_other and len(lead_other.title) > 30
-            else (lead_other.title if lead_other else "NO SOCIETY STORY")
-        )
-
-        out.append(f"| **{tech_header.upper()}** | **{other_header.upper()}** |")
-        out.append(
-            "|:-----------------------------------|:---------------------------|"
-        )
-
-        async def lead_story(item, cat):
-            if not item:
-                return "| | |\n"
-            img_url, alt_text = await get_unsplash_image_with_alt(cat, item.title)
+        # LEAD STORIES - only include if we have content
+        available_categories = [cat for cat, items in categories.items() if items]
+        
+        if len(available_categories) >= 2:
+            out.append("## LEAD STORIES\n")
             
-            source_url, source_name = await self._get_source_attribution(item)
-            summary = item.content[:300].replace("\n", " ").strip()
+            # Use the first two available categories with content
+            lead_cat1, lead_cat2 = available_categories[:2]
+            lead_item1 = categories[lead_cat1][0]
+            lead_item2 = categories[lead_cat2][0]
 
-            # Create proper table row format matching Briefing 001
-            image_cell = f"![{alt_text}]({img_url})"
-            if source_url:
-                content_cell = f"**{item.title}** {summary} **[→ {source_name}]({source_url})**"
-            else:
-                content_cell = f"**{item.title}** {summary} **[→ {source_name}]**"
+            # Dynamic headers based on actual content
+            header1 = (
+                lead_item1.title[:30] + "..."
+                if len(lead_item1.title) > 30
+                else lead_item1.title
+            )
+            header2 = (
+                lead_item2.title[:30] + "..."
+                if len(lead_item2.title) > 30
+                else lead_item2.title
+            )
 
-            return f"| {image_cell} | {content_cell} |\n"
+            out.append(f"| **{header1.upper()}** | **{header2.upper()}** |")
+            out.append(
+                "|:-----------------------------------|:---------------------------|"
+            )
 
-        # Generate table rows properly
-        tech_row = await lead_story(lead_tech, "technology") if lead_tech else "| | |\n"
-        other_row = await lead_story(lead_other, "society") if lead_other else "| | |\n"
-
-        out.append(tech_row)
-        out.append(other_row)
-        out.append("\n---\n")
-
-        # TECHNOLOGY SPOTLIGHT
-        out.append("## 🔬 TECHNOLOGY\n")
-        tech_items = categories["technology"][2:5]  # Get 2-4 additional tech items
-
-        for i, item in enumerate(tech_items):
-            if item:
-                img_url, alt_text = await get_unsplash_image_with_alt(
-                    "technology", item.title
-                )
+            async def lead_story(item, cat):
+                if not item:
+                    return "| | |\n"
+                img_url, alt_text = await get_unsplash_image_with_alt(cat, item.title)
+                
                 source_url, source_name = await self._get_source_attribution(item)
-                summary = item.content[:150].replace("\n", " ")
+                summary = item.content[:300].replace("\n", " ").strip()
 
-                out.append(f"### {item.title}\n")
-                out.append(f"![{alt_text}]({img_url})\n")
-                out.append(f"{summary}\n")
+                # Create proper table row format matching Briefing 001
+                image_cell = f"![{alt_text}]({img_url})"
                 if source_url:
-                    out.append(f"*Source: [{source_name}]({source_url})*\n")
+                    content_cell = f"**{item.title}** {summary} **[→ {source_name}]({source_url})**"
                 else:
-                    out.append(f"*Source: {source_name}*\n")
-                if i < len(tech_items) - 1:  # Add separator except for last item
-                    out.append("---\n")
-        out.append("\n---\n")
+                    content_cell = f"**{item.title}** {summary} **[→ {source_name}]**"
 
-        # SOCIETY & CULTURE
-        out.append("## 🌍 SOCIETY & CULTURE\n")
-        soc_items = categories["society"][:3]  # Get up to 3 society items
+                return f"| {image_cell} | {content_cell} |\n"
 
-        for i, item in enumerate(soc_items):
-            if item:
-                img_url, alt_text = await get_unsplash_image_with_alt(
-                    "society", item.title
-                )
-                source_url, source_name = await self._get_source_attribution(item)
-                summary = item.content[:180].replace("\n", " ")
+            # Generate table rows for available categories
+            row1 = await lead_story(lead_item1, lead_cat1)
+            row2 = await lead_story(lead_item2, lead_cat2)
 
-                # Use bullet points for a more organic feel
-                out.append(f"**• {item.title}**\n")
-                if i == 0:  # Only show image for first item to avoid clutter
+            out.append(row1)
+            out.append(row2)
+            out.append("\n---\n")
+
+        # TECHNOLOGY SPOTLIGHT - only show if we have technology content
+        if "technology" in categories and len(categories["technology"]) > 2:
+            out.append("## 🔬 TECHNOLOGY\n")
+            tech_items = categories["technology"][2:5]  # Get 2-4 additional tech items
+
+            for i, item in enumerate(tech_items):
+                if item:
+                    img_url, alt_text = await get_unsplash_image_with_alt(
+                        "technology", item.title
+                    )
+                    source_url, source_name = await self._get_source_attribution(item)
+                    summary = item.content[:150].replace("\n", " ")
+
+                    out.append(f"### {item.title}\n")
                     out.append(f"![{alt_text}]({img_url})\n")
-                if source_url:
-                    out.append(f"{summary} *([{source_name}]({source_url}))*\n")
-                else:
-                    out.append(f"{summary} *({source_name})*\n")
+                    out.append(f"{summary}\n")
+                    if source_url:
+                        out.append(f"*Source: [{source_name}]({source_url})*\n")
+                    else:
+                        out.append(f"*Source: {source_name}*\n")
+                    if i < len(tech_items) - 1:  # Add separator except for last item
+                        out.append("---\n")
+            out.append("\n---\n")
 
-        out.append("\n---\n")
+        # SOCIETY & CULTURE - only show if we have society content
+        if "society" in categories and categories["society"]:
+            out.append("## 🌍 SOCIETY & CULTURE\n")
+            soc_items = categories["society"][:3]  # Get up to 3 society items
 
-        # ARTS & CULTURE
-        out.append("## 🎨 ARTS & CULTURE\n")
-        art_items = categories["art"][:2]  # Get up to 2 art items
+            for i, item in enumerate(soc_items):
+                if item:
+                    img_url, alt_text = await get_unsplash_image_with_alt(
+                        "society", item.title
+                    )
+                    source_url, source_name = await self._get_source_attribution(item)
+                    summary = item.content[:180].replace("\n", " ")
 
-        for item in art_items:
-            if item:
-                img_url, alt_text = await get_unsplash_image_with_alt("art", item.title)
-                source_url, source_name = await self._get_source_attribution(item)
-                summary = item.content[:150].replace("\n", " ")
+                    # Use bullet points for a more organic feel
+                    out.append(f"**• {item.title}**\n")
+                    if i == 0:  # Only show image for first item to avoid clutter
+                        out.append(f"![{alt_text}]({img_url})\n")
+                    if source_url:
+                        out.append(f"{summary} *([{source_name}]({source_url}))*\n")
+                    else:
+                        out.append(f"{summary} *({source_name})*\n")
 
-                out.append(f"**{item.title}**\n")
-                out.append(f"![{alt_text}]({img_url})\n")
-                if source_url:
-                    out.append(f"{summary} *([{source_name}]({source_url}))*\n\n")
-                else:
-                    out.append(f"{summary} *({source_name})*\n\n")
+            out.append("\n---\n")
 
-        if not art_items or all(item is None for item in art_items):
-            out.append("*No arts & culture stories this week.*\n\n")
+        # ARTS & CULTURE - only show if we have art content
+        if "art" in categories and categories["art"]:
+            out.append("## 🎨 ARTS & CULTURE\n")
+            art_items = categories["art"][:2]  # Get up to 2 art items
 
-        out.append("---\n")
+            for item in art_items:
+                if item:
+                    img_url, alt_text = await get_unsplash_image_with_alt("art", item.title)
+                    source_url, source_name = await self._get_source_attribution(item)
+                    summary = item.content[:150].replace("\n", " ")
 
-        # BUSINESS & ECONOMY
-        out.append("## 💼 BUSINESS & ECONOMY\n")
-        bus_items = categories["business"][:2]  # Get up to 2 business items
+                    out.append(f"**{item.title}**\n")
+                    out.append(f"![{alt_text}]({img_url})\n")
+                    if source_url:
+                        out.append(f"{summary} *([{source_name}]({source_url}))*\n\n")
+                    else:
+                        out.append(f"{summary} *({source_name})*\n\n")
 
-        for item in bus_items:
-            if item:
-                img_url, alt_text = await get_unsplash_image_with_alt(
-                    "business", item.title
-                )
-                source_url, source_name = await self._get_source_attribution(item)
-                summary = item.content[:150].replace("\n", " ")
+            out.append("---\n")
 
-                out.append(f"**{item.title}**\n")
-                out.append(f"![{alt_text}]({img_url})\n")
-                if source_url:
-                    out.append(f"{summary} *([{source_name}]({source_url}))*\n\n")
-                else:
-                    out.append(f"{summary} *({source_name})*\n\n")
+        # BUSINESS & ECONOMY - only show if we have business content
+        if "business" in categories and categories["business"]:
+            out.append("## 💼 BUSINESS & ECONOMY\n")
+            bus_items = categories["business"][:2]  # Get up to 2 business items
 
-        if not bus_items or all(item is None for item in bus_items):
-            out.append("*No business stories this week.*\n\n")
+            for item in bus_items:
+                if item:
+                    img_url, alt_text = await get_unsplash_image_with_alt(
+                        "business", item.title
+                    )
+                    source_url, source_name = await self._get_source_attribution(item)
+                    summary = item.content[:150].replace("\n", " ")
 
-        out.append("---\n")
+                    out.append(f"**{item.title}**\n")
+                    out.append(f"![{alt_text}]({img_url})\n")
+                    if source_url:
+                        out.append(f"{summary} *([{source_name}]({source_url}))*\n\n")
+                    else:
+                        out.append(f"{summary} *({source_name})*\n\n")
+
+            out.append("---\n")
 
         # SOURCES & ATTRIBUTION
         out.append("## SOURCES & ATTRIBUTION\n")
 
         def sources_line(cat):
+            # Skip if category doesn't exist in our dynamic categories
+            if cat not in categories or not categories[cat]:
+                return None
             # Collect unique sources to avoid repetition, but only include items with valid URLs and sources
             source_map = {}
             for item in categories[cat]:
@@ -450,10 +455,27 @@ Write the intro:"""
                 [f"[{src}]({url})" for src, url in source_map.items()][:5]
             )  # Limit to 5 sources per section
 
-        out.append(f"**Technology:** {sources_line('technology')}")
-        out.append(f"\n**Society:** {sources_line('society')}")
-        out.append(f"\n**Arts:** {sources_line('art')}")
-        out.append(f"\n**Business:** {sources_line('business')}")
+        # Only add source lines for categories that exist
+        source_lines = []
+        
+        tech_sources = sources_line('technology')
+        if tech_sources:
+            source_lines.append(f"**Technology:** {tech_sources}")
+            
+        society_sources = sources_line('society')  
+        if society_sources:
+            source_lines.append(f"**Society:** {society_sources}")
+            
+        art_sources = sources_line('art')
+        if art_sources:
+            source_lines.append(f"**Arts:** {art_sources}")
+            
+        business_sources = sources_line('business')
+        if business_sources:
+            source_lines.append(f"**Business:** {business_sources}")
+        
+        if source_lines:
+            out.append("\n".join(source_lines))
         out.append(
             "\n*The Filter curates and synthesizes from original reporting. All rights remain with original publishers.*\n"
         )
