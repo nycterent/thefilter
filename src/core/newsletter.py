@@ -42,7 +42,7 @@ class NewsletterGenerator:
         """
         # Categorize items dynamically - only create categories that have content
         categories: dict[str, list[ContentItem]] = {}
-        
+
         for item in items:
             # Improved categorization using multiple signals
             category = await self._categorize_content(item)
@@ -198,7 +198,9 @@ Write the intro:"""
             for category, item in top_stories[:3]:  # Top 3 stories
                 source_url, source_name = await self._get_source_attribution(item)
                 if source_url:
-                    intro_items.append(f"**{item.title}** from [{source_name}]({source_url})")
+                    intro_items.append(
+                        f"**{item.title}** from [{source_name}]({source_url})"
+                    )
                 else:
                     intro_items.append(f"**{item.title}** from {source_name}")
             out.append(f"\n*Today's highlights: {' • '.join(intro_items)}*\n")
@@ -214,10 +216,12 @@ Write the intro:"""
             for item in items[:2]:  # Top 2 from each category
                 # Clean up the title for headlines
                 clean_title = self._clean_headline_title(item.title)
-                
+
                 source_url, source_name = await self._get_source_attribution(item)
                 if source_url:
-                    all_headlines.append(f"• {clean_title} ([{source_name}]({source_url}))")
+                    all_headlines.append(
+                        f"• {clean_title} ([{source_name}]({source_url}))"
+                    )
                 else:
                     all_headlines.append(f"• {clean_title} ({source_name})")
 
@@ -229,10 +233,10 @@ Write the intro:"""
 
         # LEAD STORIES - only include if we have content
         available_categories = [cat for cat, items in categories.items() if items]
-        
+
         if len(available_categories) >= 2:
             out.append("## LEAD STORIES\n")
-            
+
             # Use the first two available categories with content
             lead_cat1, lead_cat2 = available_categories[:2]
             lead_item1 = categories[lead_cat1][0]
@@ -259,7 +263,7 @@ Write the intro:"""
                 if not item:
                     return "| | |\n"
                 img_url, alt_text = await get_unsplash_image_with_alt(cat, item.title)
-                
+
                 source_url, source_name = await self._get_source_attribution(item)
                 summary = item.content[:300].replace("\n", " ").strip()
 
@@ -335,7 +339,9 @@ Write the intro:"""
 
             for item in art_items:
                 if item:
-                    img_url, alt_text = await get_unsplash_image_with_alt("art", item.title)
+                    img_url, alt_text = await get_unsplash_image_with_alt(
+                        "art", item.title
+                    )
                     source_url, source_name = await self._get_source_attribution(item)
                     summary = item.content[:150].replace("\n", " ")
 
@@ -457,23 +463,23 @@ Write the intro:"""
 
         # Only add source lines for categories that exist
         source_lines = []
-        
-        tech_sources = sources_line('technology')
+
+        tech_sources = sources_line("technology")
         if tech_sources:
             source_lines.append(f"**Technology:** {tech_sources}")
-            
-        society_sources = sources_line('society')  
+
+        society_sources = sources_line("society")
         if society_sources:
             source_lines.append(f"**Society:** {society_sources}")
-            
-        art_sources = sources_line('art')
+
+        art_sources = sources_line("art")
         if art_sources:
             source_lines.append(f"**Arts:** {art_sources}")
-            
-        business_sources = sources_line('business')
+
+        business_sources = sources_line("business")
         if business_sources:
             source_lines.append(f"**Business:** {business_sources}")
-        
+
         if source_lines:
             out.append("\n".join(source_lines))
         out.append(
@@ -1295,7 +1301,7 @@ Write the intro:"""
                     source_url = doc.get("source_url", "")
                     proxy_url = doc.get("url", "")
                     url = source_url or proxy_url
-                    
+
                     site_name = doc.get(
                         "site_name", ""
                     )  # Direct source name from Readwise
@@ -1860,103 +1866,125 @@ Write the intro:"""
 
     def _clean_headline_title(self, title: str) -> str:
         """Clean and format a title for the Headlines at a Glance section.
-        
+
         Args:
             title: Raw title to clean
-            
+
         Returns:
             str: Cleaned title suitable for headlines
         """
         if not title:
             return "Untitled Article"
-            
+
         # Clean up the title
         clean_title = title.strip()
-        
+
         # Remove trailing ellipses and truncation indicators
-        clean_title = re.sub(r'\.{3,}$', '', clean_title)
-        clean_title = re.sub(r'\s*\.\.\.$', '', clean_title)
-        
+        clean_title = re.sub(r"\.{3,}$", "", clean_title)
+        clean_title = re.sub(r"\s*\.\.\.$", "", clean_title)
+
         # Remove weird trailing characters and artifacts
-        clean_title = re.sub(r'[_\-\|]+$', '', clean_title)
-        clean_title = re.sub(r'\s*-+\s*$', '', clean_title)
-        
+        clean_title = re.sub(r"[_\-\|]+$", "", clean_title)
+        clean_title = re.sub(r"\s*-+\s*$", "", clean_title)
+
         # Fix common formatting issues
-        clean_title = clean_title.replace('...', '').strip()
-        
+        clean_title = clean_title.replace("...", "").strip()
+
         # Handle titles that are too short after cleaning
         if len(clean_title) < 10:
             return "Article Summary"
-        
+
         # Improve capitalization for titles that are all lowercase or poorly formatted
-        if clean_title.islower() or (clean_title.count(' ') > 2 and not any(c.isupper() for c in clean_title[1:])):
+        if clean_title.islower() or (
+            clean_title.count(" ") > 2 and not any(c.isupper() for c in clean_title[1:])
+        ):
             # Use title case but preserve proper nouns and acronyms
             words = clean_title.split()
             title_words = []
             for i, word in enumerate(words):
                 # Keep common lowercase words lowercase if they're not at the start
-                if i > 0 and word.lower() in ['and', 'or', 'but', 'to', 'for', 'of', 'with', 'by', 'in', 'on', 'at', 'the', 'a', 'an']:
+                if i > 0 and word.lower() in [
+                    "and",
+                    "or",
+                    "but",
+                    "to",
+                    "for",
+                    "of",
+                    "with",
+                    "by",
+                    "in",
+                    "on",
+                    "at",
+                    "the",
+                    "a",
+                    "an",
+                ]:
                     title_words.append(word.lower())
                 else:
                     title_words.append(word.capitalize())
-            clean_title = ' '.join(title_words)
-            
+            clean_title = " ".join(title_words)
+
         # Truncate overly long titles for headlines (keep under 80 chars)
         if len(clean_title) > 80:
             # Try to truncate at word boundary
             words = clean_title[:77].split()
             if len(words) > 1:
-                clean_title = ' '.join(words[:-1]) + "..."
+                clean_title = " ".join(words[:-1]) + "..."
             else:
                 clean_title = clean_title[:77] + "..."
-        
+
         return clean_title
 
     def _extract_source_from_title_or_content(self, item: ContentItem) -> str:
         """Extract source name from title patterns or content metadata.
-        
+
         Args:
             item: Content item to analyze
-            
+
         Returns:
             str: Extracted source name, or empty string if none found
         """
         import re
-        
+
         # Check title for common patterns like "The Briefing: ..." from The Information
         title = item.title or ""
-        
+
         # Pattern: "The Briefing: ..." indicates The Information
         if title.startswith("The Briefing:"):
             return "The Information"
-        
+
         # Pattern: "GPT-5: ..." or similar titles often from One Useful Thing
         if re.match(r"^GPT-?\d+:", title, re.IGNORECASE):
             return "One Useful Thing"
-        
+
         # Pattern: AI/ML focused titles that commonly come from One Useful Thing
-        if any(pattern in title.lower() for pattern in [
-            "gpt-", "claude", "ai does", "it just does", "useful thing"
-        ]):
+        if any(
+            pattern in title.lower()
+            for pattern in ["gpt-", "claude", "ai does", "it just does", "useful thing"]
+        ):
             # Check if URL contains oneusefulthing domain
             if item.url and "oneusefulthing" in str(item.url).lower():
                 return "One Useful Thing"
-        
+
         # Pattern: "From [Source]:" at start of title
         briefing_match = re.match(r"^From\s+([^:]+):", title)
         if briefing_match:
             return briefing_match.group(1).strip()
-        
+
         # Check if content mentions the source explicitly
         content = item.content or ""
         if len(content) > 0:
             # Look for "Via [Source]" or "Source: [Source]" patterns
-            via_match = re.search(r"(?:Via|Source):\s*([A-Za-z\s&]+?)(?:\.|,|\n|$)", content)
+            via_match = re.search(
+                r"(?:Via|Source):\s*([A-Za-z\s&]+?)(?:\.|,|\n|$)", content
+            )
             if via_match:
                 source = via_match.group(1).strip()
-                if len(source) > 2 and len(source) < 50:  # Reasonable source name length
+                if (
+                    len(source) > 2 and len(source) < 50
+                ):  # Reasonable source name length
                     return source
-        
+
         # Check metadata for better source information
         if item.metadata:
             # Some RSS feeds put the real source in metadata
@@ -1964,7 +1992,7 @@ Write the intro:"""
                 return str(item.metadata["original_source"])
             if "publication" in item.metadata:
                 return str(item.metadata["publication"])
-        
+
         return ""
 
     async def _improve_source_attribution(self, item: ContentItem) -> dict:
@@ -2028,28 +2056,41 @@ Write the intro:"""
             # Skip Readwise Reader URLs - these are proxy URLs, not the actual source
             if "readwise.io" in domain:
                 return ""
-            
+
             # Handle private CDN URLs - these are content proxies that readers cannot access
-            if any(cdn in domain for cdn in [
-                "feedbinusercontent.com", 
-                "newsletters.feedbinusercontent.com",
-                "substackcdn.com"  # Substack CDN URLs like eotrx.substackcdn.com/open
-            ]):
+            if any(
+                cdn in domain
+                for cdn in [
+                    "feedbinusercontent.com",
+                    "newsletters.feedbinusercontent.com",
+                    "substackcdn.com",  # Substack CDN URLs like eotrx.substackcdn.com/open
+                ]
+            ):
                 return "PRIVATE_CDN"  # Special marker to indicate this is a private CDN URL
 
             # Handle tracking/redirect URLs - extract the real domain
             # Examples: url3396.theinformation.com -> theinformation, click.convertkit-mail.com -> convertkit
-            if re.match(r"^(url\d+|click|track|email|newsletter|redirect|link)\.", domain):
+            if re.match(
+                r"^(url\d+|click|track|email|newsletter|redirect|link)\.", domain
+            ):
                 # Extract the main domain part after the tracking subdomain
-                parts = domain.split('.')
+                parts = domain.split(".")
                 if len(parts) >= 2:
                     # Try to find the actual domain (skip tracking subdomains)
                     for i in range(1, len(parts)):
-                        potential_domain = '.'.join(parts[i:])
+                        potential_domain = ".".join(parts[i:])
                         # Remove common prefixes and suffixes from the potential domain
-                        clean_potential = re.sub(r"^(www\.|m\.|mobile\.)", "", potential_domain)
-                        clean_potential = re.sub(r"\.(com|org|net|edu|gov|io|co\.uk|ai)$", "", clean_potential)
-                        if clean_potential and len(clean_potential) > 2:  # Valid domain name
+                        clean_potential = re.sub(
+                            r"^(www\.|m\.|mobile\.)", "", potential_domain
+                        )
+                        clean_potential = re.sub(
+                            r"\.(com|org|net|edu|gov|io|co\.uk|ai)$",
+                            "",
+                            clean_potential,
+                        )
+                        if (
+                            clean_potential and len(clean_potential) > 2
+                        ):  # Valid domain name
                             domain = clean_potential
                             break
             else:
@@ -2794,61 +2835,67 @@ Write the intro:"""
 
     async def _resolve_tracking_url(self, tracking_url: str) -> str:
         """Attempt to resolve a tracking URL to get the real destination.
-        
+
         Args:
             tracking_url: The tracking/redirect URL to resolve
-            
+
         Returns:
             str: The resolved URL or empty string if resolution fails
         """
         try:
             import aiohttp
-            
+
             # Try to follow redirects to get the real URL
             timeout = aiohttp.ClientTimeout(total=10)
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 try:
                     # Use HEAD request to avoid downloading content
-                    async with session.head(tracking_url, allow_redirects=True) as response:
+                    async with session.head(
+                        tracking_url, allow_redirects=True
+                    ) as response:
                         if response.status < 400:
                             final_url = str(response.url)
                             if final_url != tracking_url:
-                                logger.info(f"Resolved tracking URL: {tracking_url} -> {final_url}")
+                                logger.info(
+                                    f"Resolved tracking URL: {tracking_url} -> {final_url}"
+                                )
                                 return final_url
                 except Exception as e:
                     logger.debug(f"Failed to resolve tracking URL {tracking_url}: {e}")
-                    
+
             return ""
-            
+
         except Exception as e:
             logger.debug(f"Error resolving tracking URL {tracking_url}: {e}")
             return ""
 
     async def _search_archive_org(self, title: str, domain: str = "") -> str:
         """Search archive.org for articles with similar title.
-        
+
         Args:
             title: Article title to search for
             domain: Optional domain to search within
-            
+
         Returns:
             str: Archive.org URL if found, empty string otherwise
         """
         try:
             import aiohttp
             from urllib.parse import quote
-            
+
             # Prepare search query
-            search_terms = title.replace('"', '').replace("'", "")  # Remove quotes
+            search_terms = title.replace('"', "").replace("'", "")  # Remove quotes
             search_query = quote(search_terms)
-            
+
             if domain:
                 # Search within specific domain
                 search_url = f"https://web.archive.org/cdx/search/cdx?url={domain}/*&output=json&fl=timestamp,original&filter=statuscode:200&limit=50"
             else:
                 # General search (less reliable)
-                search_url = f"https://web.archive.org/web/20231201000000*/{search_query}"
-            
+                search_url = (
+                    f"https://web.archive.org/web/20231201000000*/{search_query}"
+                )
+
             timeout = aiohttp.ClientTimeout(total=15)
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 try:
@@ -2857,183 +2904,256 @@ Write the intro:"""
                             if domain:
                                 # Parse CDX API response
                                 data = await response.json()
-                                if isinstance(data, list) and len(data) > 1:  # First row is headers
+                                if (
+                                    isinstance(data, list) and len(data) > 1
+                                ):  # First row is headers
                                     # Find most recent snapshot
                                     for row in data[1:]:  # Skip header row
                                         if len(row) >= 2:
                                             timestamp, original_url = row[0], row[1]
                                             archive_url = f"https://web.archive.org/web/{timestamp}/{original_url}"
-                                            logger.info(f"Found archive.org snapshot: {archive_url}")
+                                            logger.info(
+                                                f"Found archive.org snapshot: {archive_url}"
+                                            )
                                             return archive_url
                             else:
                                 # Check if archive.org has content
                                 final_url = str(response.url)
-                                if "web.archive.org/web/" in final_url and response.status == 200:
+                                if (
+                                    "web.archive.org/web/" in final_url
+                                    and response.status == 200
+                                ):
                                     logger.info(f"Found archive.org page: {final_url}")
                                     return final_url
                 except Exception as e:
                     logger.debug(f"Error searching archive.org: {e}")
-            
+
             return ""
-            
+
         except Exception as e:
             logger.debug(f"Error accessing archive.org for '{title}': {e}")
             return ""
 
     async def _search_group_lt(self, title: str) -> str:
         """Search s.group.lt for alternative articles about the same news.
-        
+
         Args:
             title: Article title to search for
-            
+
         Returns:
             str: URL to search results if found, empty string otherwise
         """
         try:
             import aiohttp
             from urllib.parse import quote
-            
+
             # Strategy 1: Try full title search first (most precise)
             # Clean up the title but keep it mostly intact
             clean_title = title.strip()
             # Remove special characters that might break search but keep quoted phrases
-            clean_title = clean_title.replace('"', '').replace("'", "").replace(':', ' ')
-            
+            clean_title = (
+                clean_title.replace('"', "").replace("'", "").replace(":", " ")
+            )
+
             # If title is reasonable length, use full title search
             if len(clean_title) > 10 and len(clean_title) < 150:
                 encoded_query = quote(clean_title)
                 search_url = f"https://s.group.lt/?q={encoded_query}"
-                
+
                 # Test the full title search
-                success = await self._test_search_url(search_url, f"full title: '{clean_title[:50]}...'")
+                success = await self._test_search_url(
+                    search_url, f"full title: '{clean_title[:50]}...'"
+                )
                 if success:
                     return search_url
-            
+
             # Strategy 2: Fallback to keyword extraction if full title search fails
             import re
+
             # Remove common words and punctuation, keep meaningful terms
-            search_terms = re.sub(r'[^\w\s]', ' ', title.lower())
+            search_terms = re.sub(r"[^\w\s]", " ", title.lower())
             words = search_terms.split()
             # Filter out common words
-            stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'says', 'said', 'new', 'how', 'what', 'why', 'when', 'where', 'from'}
+            stop_words = {
+                "the",
+                "a",
+                "an",
+                "and",
+                "or",
+                "but",
+                "in",
+                "on",
+                "at",
+                "to",
+                "for",
+                "of",
+                "with",
+                "by",
+                "says",
+                "said",
+                "new",
+                "how",
+                "what",
+                "why",
+                "when",
+                "where",
+                "from",
+            }
             meaningful_words = [w for w in words if len(w) > 3 and w not in stop_words]
-            
+
             if len(meaningful_words) >= 2:
                 # Create search query from meaningful terms (limit to first 4-5 terms)
-                search_query = ' '.join(meaningful_words[:5])
+                search_query = " ".join(meaningful_words[:5])
                 encoded_query = quote(search_query)
                 search_url = f"https://s.group.lt/?q={encoded_query}"
-                
-                success = await self._test_search_url(search_url, f"keywords: '{search_query}'")
+
+                success = await self._test_search_url(
+                    search_url, f"keywords: '{search_query}'"
+                )
                 if success:
                     return search_url
-            
+
             return ""
-            
+
         except Exception as e:
             logger.debug(f"Error searching s.group.lt for '{title}': {e}")
             return ""
 
     async def _test_search_url(self, search_url: str, description: str) -> bool:
         """Test if a search URL is accessible.
-        
+
         Args:
             search_url: The search URL to test
             description: Description for logging
-            
+
         Returns:
             bool: True if accessible, False otherwise
         """
         try:
             import aiohttp
-            
+
             # Test if the search service is available (follow redirects)
             timeout = aiohttp.ClientTimeout(total=10)
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 try:
-                    async with session.head(search_url, allow_redirects=True) as response:
+                    async with session.head(
+                        search_url, allow_redirects=True
+                    ) as response:
                         if response.status == 200:
-                            logger.debug(f"s.group.lt search successful with {description}")
+                            logger.debug(
+                                f"s.group.lt search successful with {description}"
+                            )
                             return True
                 except Exception as e:
-                    logger.debug(f"Error testing s.group.lt search with {description}: {e}")
-            
+                    logger.debug(
+                        f"Error testing s.group.lt search with {description}: {e}"
+                    )
+
             return False
-            
+
         except Exception as e:
             logger.debug(f"Error testing search URL: {e}")
             return False
 
-    async def _find_alternative_source(self, title: str, original_url: str) -> tuple[str, str]:
+    async def _find_alternative_source(
+        self, title: str, original_url: str
+    ) -> tuple[str, str]:
         """Find alternative source for the same news story.
-        
+
         Args:
             title: Article title to search for
             original_url: Original (possibly inaccessible) URL
-            
+
         Returns:
             tuple: (alternative_url, source_name) or ("", "") if no alternative found
         """
         if not title or len(title.strip()) < 10:
             return "", ""
-            
+
         try:
             # First, try to resolve the tracking URL to get the real destination
             resolved_url = await self._resolve_tracking_url(original_url)
             if resolved_url:
                 # Check if the resolved URL is accessible and not another tracking URL
                 from urllib.parse import urlparse
+
                 parsed = urlparse(resolved_url)
-                if parsed.netloc and not any(pattern in parsed.netloc.lower() for pattern in ['url', 'click', 'track', 'redirect']):
+                if parsed.netloc and not any(
+                    pattern in parsed.netloc.lower()
+                    for pattern in ["url", "click", "track", "redirect"]
+                ):
                     source_name = self._extract_source_from_url(resolved_url)
-                    logger.info(f"Successfully resolved tracking URL for '{title[:50]}...': {resolved_url}")
+                    logger.info(
+                        f"Successfully resolved tracking URL for '{title[:50]}...': {resolved_url}"
+                    )
                     return resolved_url, source_name
-            
+
             # If URL resolution fails, try to find alternatives
             source_name = self._extract_source_from_url(original_url)
-            
+
             # Try to find the article on archive.org
-            logger.debug(f"Searching archive.org for article: '{title[:50]}...' from {source_name}")
-            
+            logger.debug(
+                f"Searching archive.org for article: '{title[:50]}...' from {source_name}"
+            )
+
             # Extract domain from original URL for targeted archive.org search
             from urllib.parse import urlparse
+
             parsed = urlparse(original_url)
             if parsed.netloc:
                 # Clean domain to get the main site (remove tracking subdomains)
                 import re
+
                 domain = parsed.netloc.lower()
-                if re.match(r'^(url\d+|click|track|email|newsletter|redirect|link)\.', domain):
+                if re.match(
+                    r"^(url\d+|click|track|email|newsletter|redirect|link)\.", domain
+                ):
                     # Extract main domain from tracking subdomain
-                    parts = domain.split('.')
+                    parts = domain.split(".")
                     if len(parts) >= 2:
-                        domain = '.'.join(parts[1:])  # Skip tracking subdomain
-                
+                        domain = ".".join(parts[1:])  # Skip tracking subdomain
+
                 # Search archive.org for content from this domain
                 archive_url = await self._search_archive_org(title, domain)
                 if archive_url:
-                    logger.info(f"Found archive.org alternative for '{title[:50]}...': {archive_url}")
+                    logger.info(
+                        f"Found archive.org alternative for '{title[:50]}...': {archive_url}"
+                    )
                     # Provide a meaningful source name if extraction failed
                     final_source_name = source_name if source_name else "Source"
                     return archive_url, f"{final_source_name} (Archive)"
-            
+
             # If archive.org doesn't have results, try s.group.lt as fallback
-            logger.debug(f"Archive.org search failed, trying s.group.lt for '{title[:50]}...'")
+            logger.debug(
+                f"Archive.org search failed, trying s.group.lt for '{title[:50]}...'"
+            )
             search_url = await self._search_group_lt(title)
             if search_url:
-                logger.info(f"Found s.group.lt search alternative for '{title[:50]}...': {search_url}")
+                logger.info(
+                    f"Found s.group.lt search alternative for '{title[:50]}...': {search_url}"
+                )
                 return search_url, f"Search: {source_name}"
-            
+
             # For paywall/premium sites, still prefer text-only to avoid confusion
-            paywall_sources = {"The Information", "Wall Street Journal", "Financial Times", "New York Times"}
-            
+            paywall_sources = {
+                "The Information",
+                "Wall Street Journal",
+                "Financial Times",
+                "New York Times",
+            }
+
             if source_name in paywall_sources:
-                logger.debug(f"Detected paywall source '{source_name}', using text-only attribution")
+                logger.debug(
+                    f"Detected paywall source '{source_name}', using text-only attribution"
+                )
                 return "", source_name
-            
+
             # For other sources, return the source name but no URL (will show as text-only)
-            logger.warning(f"Could not resolve tracking URL or find archive for '{title[:50]}...', showing source name only")
+            logger.warning(
+                f"Could not resolve tracking URL or find archive for '{title[:50]}...', showing source name only"
+            )
             return "", source_name
-            
+
         except Exception as e:
             logger.debug(f"Error finding alternative source for '{title}': {e}")
             source_name = self._extract_source_from_url(original_url)
@@ -3041,7 +3161,7 @@ Write the intro:"""
 
     async def _get_source_attribution(self, item: ContentItem) -> tuple[str, str]:
         """Get clean source URL and name for attribution.
-        
+
         Returns:
             tuple: (source_url, source_name) where source_url is clean URL and source_name is display name
         """
@@ -3051,62 +3171,92 @@ Write the intro:"""
             source_url = item.metadata["source_url"]
         elif item.url:
             source_url = str(item.url)
-        
+
         if source_url:
             # Clean the URL of tracking parameters
             clean_url = self._clean_tracking_params(source_url)
-            
+
             # Check if this is a tracking URL that might be inaccessible
             import re
             from urllib.parse import urlparse
-            
+
             parsed = urlparse(clean_url)
             is_tracking_url = False
             if parsed.netloc:
                 domain = parsed.netloc.lower()
-                is_tracking_url = bool(re.match(r'^(url\d+|click|track|email|newsletter|redirect|link)\.', domain))
-            
+                is_tracking_url = bool(
+                    re.match(
+                        r"^(url\d+|click|track|email|newsletter|redirect|link)\.",
+                        domain,
+                    )
+                )
+
             # If it's a tracking URL, try to find an alternative source
             if is_tracking_url:
-                logger.debug(f"Detected tracking URL: {clean_url}, searching for alternative source")
-                alt_url, alt_source = await self._find_alternative_source(item.title, clean_url)
+                logger.debug(
+                    f"Detected tracking URL: {clean_url}, searching for alternative source"
+                )
+                alt_url, alt_source = await self._find_alternative_source(
+                    item.title, clean_url
+                )
                 if alt_url:
-                    logger.info(f"Found alternative source for '{item.title[:50]}...': {alt_url}")
+                    logger.info(
+                        f"Found alternative source for '{item.title[:50]}...': {alt_url}"
+                    )
                     return alt_url, alt_source
                 else:
                     # Use improved source name extraction for tracking URLs but no URL (to avoid broken links)
                     source_name = self._extract_source_from_url(clean_url)
                     if source_name and source_name not in ["Unknown", "Source"]:
-                        logger.warning(f"Tracking URL detected but no alternative found for '{item.title[:50]}...', showing source name only")
-                        return "", source_name  # Return empty URL to show text-only source
-            
+                        logger.warning(
+                            f"Tracking URL detected but no alternative found for '{item.title[:50]}...', showing source name only"
+                        )
+                        return (
+                            "",
+                            source_name,
+                        )  # Return empty URL to show text-only source
+
             # Extract domain or use source title - prioritize extracted domain over generic source titles
             extracted_source = self._extract_source_from_url(clean_url)
-            
+
             # Check if this is a private CDN URL that readers can't access
             if extracted_source == "PRIVATE_CDN":
-                logger.debug(f"Detected private CDN URL for '{item.title[:50]}...', generating search link")
+                logger.debug(
+                    f"Detected private CDN URL for '{item.title[:50]}...', generating search link"
+                )
                 # Private CDN URLs are inaccessible to readers, so provide a search link instead
                 search_url = await self._search_group_lt(item.title)
                 if search_url:
-                    logger.info(f"Generated search link for private CDN content '{item.title[:50]}...': {search_url}")
+                    logger.info(
+                        f"Generated search link for private CDN content '{item.title[:50]}...': {search_url}"
+                    )
                     return search_url, "Search"
                 else:
                     # Fallback: create a basic search URL manually
                     import urllib.parse
-                    clean_title = item.title.replace('"', '').replace("'", "")[:100]
+
+                    clean_title = item.title.replace('"', "").replace("'", "")[:100]
                     encoded_query = urllib.parse.quote(clean_title)
                     fallback_search = f"https://s.group.lt/?q={encoded_query}"
-                    logger.info(f"Created fallback search for private CDN content '{item.title[:50]}...': {fallback_search}")
+                    logger.info(
+                        f"Created fallback search for private CDN content '{item.title[:50]}...': {fallback_search}"
+                    )
                     return fallback_search, "Search"
-            
+
             # Try to extract a better source name from the title or content if available
             better_source = self._extract_source_from_title_or_content(item)
-            
+
             # Only use item.source_title/source if they're meaningful (not generic)
             source_from_item = item.source_title or item.source
-            generic_sources = {"Newsletters", "Newsletter", "Source", "Unknown", "RSS", "Feed"}
-            
+            generic_sources = {
+                "Newsletters",
+                "Newsletter",
+                "Source",
+                "Unknown",
+                "RSS",
+                "Feed",
+            }
+
             if better_source and better_source not in generic_sources:
                 source_name = better_source
             elif extracted_source and extracted_source not in generic_sources:
@@ -3117,13 +3267,20 @@ Write the intro:"""
                 source_name = extracted_source
             else:
                 source_name = "Source"
-                
+
             return clean_url, source_name
         else:
             # Fallback to text-only source if no URL available
             source_from_item = item.source_title or item.source
-            generic_sources = {"Newsletters", "Newsletter", "Source", "Unknown", "RSS", "Feed"}
-            
+            generic_sources = {
+                "Newsletters",
+                "Newsletter",
+                "Source",
+                "Unknown",
+                "RSS",
+                "Feed",
+            }
+
             if source_from_item and source_from_item not in generic_sources:
                 source_name = source_from_item
             else:

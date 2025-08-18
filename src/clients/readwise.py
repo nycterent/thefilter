@@ -297,7 +297,6 @@ class ReadwiseClient:
             reading_progress = doc.get("reading_progress", 0)
             tags = doc.get("tags", {})
 
-            is_fully_read = reading_progress and reading_progress >= 1.0
             has_twiar_tag = self._has_twiar_tag(tags)
 
             # Include ONLY articles with twiar tag (not just fully read)
