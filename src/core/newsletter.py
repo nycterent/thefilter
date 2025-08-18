@@ -1231,8 +1231,8 @@ Write the intro:"""
             f"{len(unique_content)} after deduplication"
         )
 
-        # Do not send newsletter if fewer than 7 items
-        if len(unique_content) < 7:
+        # Do not send newsletter if fewer than 3 items (reduced for testing with Readwise only)
+        if len(unique_content) < 3:
             logger.warning("Not enough new items to send newsletter. Aborting.")
             return []
 
@@ -1992,8 +1992,12 @@ Write the intro:"""
             if "readwise.io" in domain:
                 return ""
             
-            # Handle Feedbin CDN URLs - these are private newsletter content proxies
-            if "feedbinusercontent.com" in domain or "newsletters.feedbinusercontent.com" in domain:
+            # Handle private CDN URLs - these are content proxies that readers cannot access
+            if any(cdn in domain for cdn in [
+                "feedbinusercontent.com", 
+                "newsletters.feedbinusercontent.com",
+                "substackcdn.com"  # Substack CDN URLs like eotrx.substackcdn.com/open
+            ]):
                 return "PRIVATE_CDN"  # Special marker to indicate this is a private CDN URL
 
             # Handle tracking/redirect URLs - extract the real domain
