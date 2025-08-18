@@ -1,0 +1,227 @@
+name: Daily Content Check & Auto Newsletter
+
+on:
+  # Run daily at 9:00 AM UTC
+  schedule:
+    - cron: "0 9 * * *"
+  
+  # Manual trigger for testing
+  workflow_dispatch:
+    inputs:
+      force_generation:
+        description: "Force newsletter generation regardless of article count"
+        required: false
+        default: "false"
+        type: boolean
+      debug:
+        description: "Enable debug logging"
+        required: false
+        default: "false"
+        type: boolean
+
+jobs:
+  check-content:
+    runs-on: ubuntu-latest
+    environment: production
+    
+    permissions:
+      contents: read
+      issues: write
+      packages: read
+      actions: write  # Need this to trigger other workflows
+    
+    outputs:
+      article_count: ${{ steps.count_articles.outputs.count }}
+      should_generate: ${{ steps.count_articles.outputs.should_generate }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.11
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+      
+      - name: Check twiar article count
+        id: count_articles
+        run: |
+          echo "🔍 Checking twiar-tagged articles in last 7 days..."
+          
+          # Create a simple script to count articles
+          cat > count_twiar.py << 'EOF'
+          import asyncio
+          import sys
+          import os
+          from src.clients.readwise import ReadwiseClient
+          from src.models.settings import Settings
+          
+          async def count_twiar_articles():
+              try:
+                  settings = Settings()
+                  if not settings.readwise_api_key:
+                      print("❌ Readwise API key not found")
+                      return 0
+                  
+                  client = ReadwiseClient(settings.readwise_api_key)
+                  
+                  # Get recent documents (last 7 days)
+                  documents = await client.get_recent_reader_documents(days=7)
+                  
+                  count = len(documents)
+                  print(f"📊 Found {count} twiar-tagged articles in last 7 days")
+                  
+                  # Should generate if we have 7+ articles or force flag is set
+                  force = os.environ.get('FORCE_GENERATION', 'false').lower() == 'true'
+                  should_generate = count >= 7 or force
+                  
+                  print(f"🎯 Newsletter generation: {'✅ YES' if should_generate else '❌ NO'} (threshold: 7, force: {force})")
+                  
+                  # Set GitHub outputs
+                  with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                      f.write(f"count={count}\n")
+                      f.write(f"should_generate={str(should_generate).lower()}\n")
+                  
+                  return count
+                  
+              except Exception as e:
+                  print(f"❌ Error checking articles: {e}")
+                  with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                      f.write(f"count=0\n")
+                      f.write(f"should_generate=false\n")
+                  return 0
+          
+          if __name__ == "__main__":
+              count = asyncio.run(count_twiar_articles())
+              sys.exit(0 if count >= 0 else 1)
+          EOF
+          
+          # Run the count script
+          python count_twiar.py
+        env:
+          READWISE_API_KEY: ${{ secrets.READWISE_API_KEY }}
+          GLASP_API_KEY: ${{ secrets.GLASP_API_KEY }}
+          RSS_FEEDS: ${{ secrets.RSS_FEEDS }}
+          BUTTONDOWN_API_KEY: ${{ secrets.BUTTONDOWN_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          UNSPLASH_API_KEY: ${{ secrets.UNSPLASH_API_KEY }}
+          FORCE_GENERATION: ${{ inputs.force_generation }}
+      
+      - name: Create status issue
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const articleCount = '${{ steps.count_articles.outputs.count }}';
+            const shouldGenerate = '${{ steps.count_articles.outputs.should_generate }}';
+            const forceFlag = '${{ inputs.force_generation }}' === 'true';
+            
+            const statusIcon = shouldGenerate === 'true' ? '✅' : '📊';
+            const actionText = shouldGenerate === 'true' ? 'Newsletter will be generated!' : 'Waiting for more content...';
+            
+            const issueBody = `## ${statusIcon} Daily Content Check - ${new Date().toISOString().split('T')[0]}
+            
+            **Timestamp:** ${new Date().toISOString()}
+            **Workflow Run:** [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            
+            ### 📊 Content Status
+            - **Twiar articles found:** ${articleCount}
+            - **Threshold required:** 7
+            - **Force generation:** ${forceFlag ? 'Yes' : 'No'}
+            - **Action:** ${actionText}
+            
+            ### 📋 Next Steps
+            ${shouldGenerate === 'true' ? `
+            🚀 **Newsletter generation triggered!**
+            - The newsletter workflow will start automatically
+            - Check the [Newsletter Generation workflow](${{ github.server_url }}/${{ github.repository }}/actions/workflows/newsletter.yml) for progress
+            - You'll receive a separate issue when generation completes
+            ` : `
+            ⏳ **Waiting for more content**
+            - Need ${7 - parseInt(articleCount)} more twiar-tagged articles
+            - Check will run again tomorrow at 9:00 AM UTC
+            - You can manually trigger generation with the force flag if needed
+            `}
+            
+            ### 🔗 Quick Actions
+            - [🔄 Run Manual Check](${{ github.server_url }}/${{ github.repository }}/actions/workflows/daily-content-check.yml)
+            - [📧 Force Newsletter Generation](${{ github.server_url }}/${{ github.repository }}/actions/workflows/newsletter.yml)
+            - [📊 All Workflows](${{ github.server_url }}/${{ github.repository }}/actions)
+            
+            ---
+            *Automated content check • Next check: tomorrow at 9:00 AM UTC*`;
+            
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `${statusIcon} Content Check: ${articleCount} articles (${shouldGenerate === 'true' ? 'GENERATING' : 'waiting'}) - ${new Date().toISOString().split('T')[0]}`,
+              body: issueBody,
+              labels: ['newsletter', 'automated', 'content-check', shouldGenerate === 'true' ? 'generating' : 'waiting']
+            });
+
+  trigger-newsletter:
+    needs: check-content
+    if: needs.check-content.outputs.should_generate == 'true'
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: read
+      actions: write
+    
+    steps:
+      - name: Trigger Newsletter Generation
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            console.log('🚀 Triggering newsletter generation...');
+            
+            const response = await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'newsletter.yml',
+              ref: 'main',
+              inputs: {
+                dry_run: 'false',
+                debug: '${{ inputs.debug }}'
+              }
+            });
+            
+            console.log('✅ Newsletter generation workflow triggered successfully');
+            console.log(`📧 Check progress: ${{ github.server_url }}/${{ github.repository }}/actions/workflows/newsletter.yml`);
+      
+      - name: Add trigger comment to issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Find the most recent content check issue
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: 'content-check',
+              state: 'open',
+              sort: 'created',
+              direction: 'desc',
+              per_page: 1
+            });
+            
+            if (issues.data.length > 0) {
+              const issue = issues.data[0];
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: `🚀 **Newsletter generation triggered!**
+                
+                Workflow started at: ${new Date().toISOString()}
+                
+                📊 Monitor progress: [Newsletter Generation Workflow](${{ github.server_url }}/${{ github.repository }}/actions/workflows/newsletter.yml)
+                
+                You'll receive a separate notification when the newsletter is complete.`
+              });
+            }

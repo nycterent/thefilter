@@ -1,11 +1,7 @@
 name: Newsletter Generation
 
 on:
-  # Scheduled run - every Saturday at 9:00 AM UTC
-  schedule:
-    - cron: "0 9 * * 6"
-
-  # Manual trigger
+  # Manual trigger and automatic trigger from daily content check
   workflow_dispatch:
     inputs:
       dry_run:
@@ -65,6 +61,77 @@ jobs:
             echo "health_status=unhealthy" >> $GITHUB_OUTPUT
             echo "Health check failed"
             exit 1
+          fi
+        env:
+          READWISE_API_KEY: ${{ secrets.READWISE_API_KEY }}
+          GLASP_API_KEY: ${{ secrets.GLASP_API_KEY }}
+          RSS_FEEDS: ${{ secrets.RSS_FEEDS }}
+          BUTTONDOWN_API_KEY: ${{ secrets.BUTTONDOWN_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          UNSPLASH_API_KEY: ${{ secrets.UNSPLASH_API_KEY }}
+
+      - name: Validate content availability
+        id: content_check
+        run: |
+          echo "🔍 Checking content availability before generation..."
+          
+          # Create content validation script
+          cat > validate_content.py << 'EOF'
+          import asyncio
+          import sys
+          import os
+          from src.clients.readwise import ReadwiseClient
+          from src.models.settings import Settings
+          
+          async def validate_content():
+              try:
+                  settings = Settings()
+                  if not settings.readwise_api_key:
+                      print("❌ Readwise API key not found")
+                      return False
+                  
+                  client = ReadwiseClient(settings.readwise_api_key)
+                  
+                  # Get recent documents (last 7 days)
+                  documents = await client.get_recent_reader_documents(days=7)
+                  
+                  count = len(documents)
+                  required = 7
+                  
+                  print(f"📊 Found {count} twiar-tagged articles (required: {required})")
+                  
+                  if count >= required:
+                      print(f"✅ Sufficient content available for newsletter generation")
+                      with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                          f.write(f"content_status=sufficient\n")
+                          f.write(f"article_count={count}\n")
+                      return True
+                  else:
+                      print(f"❌ Insufficient content: need {required - count} more articles")
+                      with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                          f.write(f"content_status=insufficient\n")
+                          f.write(f"article_count={count}\n")
+                      return False
+                      
+              except Exception as e:
+                  print(f"❌ Error validating content: {e}")
+                  with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                      f.write(f"content_status=error\n")
+                      f.write(f"article_count=0\n")
+                  return False
+          
+          if __name__ == "__main__":
+              valid = asyncio.run(validate_content())
+              sys.exit(0 if valid else 1)
+          EOF
+          
+          # Run validation unless this is a manual dry-run
+          if [[ "${{ inputs.dry_run }}" == "true" ]]; then
+            echo "🔧 Dry-run mode: skipping content validation"
+            echo "content_status=dry_run_skip" >> $GITHUB_OUTPUT
+            echo "article_count=0" >> $GITHUB_OUTPUT
+          else
+            python validate_content.py
           fi
         env:
           READWISE_API_KEY: ${{ secrets.READWISE_API_KEY }}
@@ -260,6 +327,11 @@ EOF
             **Workflow Run:** [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
             **Dry Run:** ${{ inputs.dry_run }}
             **Debug Mode:** ${{ inputs.debug }}
+            
+            ### 📊 Content Validation
+            - **Articles found:** ${{ steps.content_check.outputs.article_count }} twiar-tagged articles
+            - **Content status:** ${{ steps.content_check.outputs.content_status }}
+            - **Threshold:** 7 articles minimum
 
             ### 📄 Newsletter Summary
             \`\`\`
@@ -317,6 +389,7 @@ EOF
             **Timestamp:** ${new Date().toISOString()}
             **Workflow Run:** [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
             **Health Check:** ${{ steps.health_check.outputs.health_status }}
+            **Content Check:** ${{ steps.content_check.outputs.content_status }} (${{ steps.content_check.outputs.article_count }} articles)
             **Generation Status:** ${{ steps.generate.outputs.generation_status }}
             **Dry Run:** ${{ inputs.dry_run }}
             **Debug Mode:** ${{ inputs.debug }}
