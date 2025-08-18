@@ -231,150 +231,76 @@ Write the intro:"""
 
         out.append("\n---\n")
 
-        # LEAD STORIES - only include if we have content
+        # FEATURED STORIES - show all stories in plain format without tables
         available_categories = [cat for cat, items in categories.items() if items]
 
-        if len(available_categories) >= 2:
-            out.append("## LEAD STORIES\n")
+        # Get all items for main stories section
+        all_stories = []
+        for category, items in categories.items():
+            for item in items:
+                all_stories.append((category, item))
 
-            # Use the first two available categories with content
-            lead_cat1, lead_cat2 = available_categories[:2]
-            lead_item1 = categories[lead_cat1][0]
-            lead_item2 = categories[lead_cat2][0]
+        if all_stories:
+            out.append("## FEATURED STORIES\n")
 
-            # Dynamic headers based on actual content
-            header1 = (
-                lead_item1.title[:30] + "..."
-                if len(lead_item1.title) > 30
-                else lead_item1.title
-            )
-            header2 = (
-                lead_item2.title[:30] + "..."
-                if len(lead_item2.title) > 30
-                else lead_item2.title
-            )
-
-            out.append(f"| **{header1.upper()}** | **{header2.upper()}** |")
-            out.append(
-                "|:-----------------------------------|:---------------------------|"
-            )
-
-            async def lead_story(item, cat):
-                if not item:
-                    return "| | |\n"
-                img_url, alt_text = await get_unsplash_image_with_alt(cat, item.title)
-
+            # Show up to 7 stories in plain format
+            for i, (category, item) in enumerate(all_stories[:7]):
+                img_url, alt_text = await get_unsplash_image_with_alt(
+                    category, item.title
+                )
                 source_url, source_name = await self._get_source_attribution(item)
-                summary = item.content[:300].replace("\n", " ").strip()
 
-                # Create proper table row format matching Briefing 001
-                image_cell = f"![{alt_text}]({img_url})"
-                if source_url:
-                    content_cell = f"**{item.title}** {summary} **[→ {source_name}]({source_url})**"
+                # Generate longer, more detailed summary (2-3 paragraphs)
+                if self.openrouter_client:
+                    try:
+                        expand_prompt = f"""Based on this content, write a detailed 2-3 paragraph summary that:
+1. Explains the key facts and context clearly 
+2. Analyzes the implications and significance
+3. Maintains journalistic tone without hype
+4. Stays under 400 words
+
+Original content: {item.content[:1000]}
+
+Title: {item.title}
+
+Write the expanded summary:"""
+
+                        expand_response = await self.openrouter_client._make_request(
+                            expand_prompt, max_tokens=500, temperature=0.3
+                        )
+                        if expand_response and "choices" in expand_response:
+                            detailed_summary = expand_response["choices"][0]["message"][
+                                "content"
+                            ].strip()
+                        else:
+                            # Fallback to original content
+                            detailed_summary = (
+                                item.content[:600].replace("\n", " ").strip()
+                            )
+                    except Exception as e:
+                        logger.debug(f"Error generating detailed summary: {e}")
+                        detailed_summary = item.content[:600].replace("\n", " ").strip()
                 else:
-                    content_cell = f"**{item.title}** {summary} **[→ {source_name}]**"
+                    # Longer summary when no LLM available
+                    detailed_summary = item.content[:600].replace("\n", " ").strip()
 
-                return f"| {image_cell} | {content_cell} |\n"
+                # Format as plain story
+                out.append(f"### {item.title}\n")
+                out.append(f"![{alt_text}]({img_url})\n")
+                out.append(f"{detailed_summary}\n")
+                if source_url:
+                    out.append(f"*Read more: [{source_name}]({source_url})*\n")
+                else:
+                    out.append(f"*Source: {source_name}*\n")
 
-            # Generate table rows for available categories
-            row1 = await lead_story(lead_item1, lead_cat1)
-            row2 = await lead_story(lead_item2, lead_cat2)
-
-            out.append(row1)
-            out.append(row2)
-            out.append("\n---\n")
-
-        # TECHNOLOGY SPOTLIGHT - only show if we have technology content
-        if "technology" in categories and len(categories["technology"]) > 2:
-            out.append("## 🔬 TECHNOLOGY\n")
-            tech_items = categories["technology"][2:5]  # Get 2-4 additional tech items
-
-            for i, item in enumerate(tech_items):
-                if item:
-                    img_url, alt_text = await get_unsplash_image_with_alt(
-                        "technology", item.title
-                    )
-                    source_url, source_name = await self._get_source_attribution(item)
-                    summary = item.content[:150].replace("\n", " ")
-
-                    out.append(f"### {item.title}\n")
-                    out.append(f"![{alt_text}]({img_url})\n")
-                    out.append(f"{summary}\n")
-                    if source_url:
-                        out.append(f"*Source: [{source_name}]({source_url})*\n")
-                    else:
-                        out.append(f"*Source: {source_name}*\n")
-                    if i < len(tech_items) - 1:  # Add separator except for last item
-                        out.append("---\n")
-            out.append("\n---\n")
-
-        # SOCIETY & CULTURE - only show if we have society content
-        if "society" in categories and categories["society"]:
-            out.append("## 🌍 SOCIETY & CULTURE\n")
-            soc_items = categories["society"][:3]  # Get up to 3 society items
-
-            for i, item in enumerate(soc_items):
-                if item:
-                    img_url, alt_text = await get_unsplash_image_with_alt(
-                        "society", item.title
-                    )
-                    source_url, source_name = await self._get_source_attribution(item)
-                    summary = item.content[:180].replace("\n", " ")
-
-                    # Use bullet points for a more organic feel
-                    out.append(f"**• {item.title}**\n")
-                    if i == 0:  # Only show image for first item to avoid clutter
-                        out.append(f"![{alt_text}]({img_url})\n")
-                    if source_url:
-                        out.append(f"{summary} *([{source_name}]({source_url}))*\n")
-                    else:
-                        out.append(f"{summary} *({source_name})*\n")
+                if i < len(all_stories[:7]) - 1:  # Add separator except for last story
+                    out.append("\n---\n")
 
             out.append("\n---\n")
 
-        # ARTS & CULTURE - only show if we have art content
-        if "art" in categories and categories["art"]:
-            out.append("## 🎨 ARTS & CULTURE\n")
-            art_items = categories["art"][:2]  # Get up to 2 art items
+        # All technology stories now included in FEATURED STORIES section above
 
-            for item in art_items:
-                if item:
-                    img_url, alt_text = await get_unsplash_image_with_alt(
-                        "art", item.title
-                    )
-                    source_url, source_name = await self._get_source_attribution(item)
-                    summary = item.content[:150].replace("\n", " ")
-
-                    out.append(f"**{item.title}**\n")
-                    out.append(f"![{alt_text}]({img_url})\n")
-                    if source_url:
-                        out.append(f"{summary} *([{source_name}]({source_url}))*\n\n")
-                    else:
-                        out.append(f"{summary} *({source_name})*\n\n")
-
-            out.append("---\n")
-
-        # BUSINESS & ECONOMY - only show if we have business content
-        if "business" in categories and categories["business"]:
-            out.append("## 💼 BUSINESS & ECONOMY\n")
-            bus_items = categories["business"][:2]  # Get up to 2 business items
-
-            for item in bus_items:
-                if item:
-                    img_url, alt_text = await get_unsplash_image_with_alt(
-                        "business", item.title
-                    )
-                    source_url, source_name = await self._get_source_attribution(item)
-                    summary = item.content[:150].replace("\n", " ")
-
-                    out.append(f"**{item.title}**\n")
-                    out.append(f"![{alt_text}]({img_url})\n")
-                    if source_url:
-                        out.append(f"{summary} *([{source_name}]({source_url}))*\n\n")
-                    else:
-                        out.append(f"{summary} *({source_name})*\n\n")
-
-            out.append("---\n")
+        # All stories from society, arts, and business categories now included in FEATURED STORIES section above
 
         # SOURCES & ATTRIBUTION
         out.append("## SOURCES & ATTRIBUTION\n")
@@ -1259,8 +1185,8 @@ Write the intro:"""
             f"{len(unique_content)} after deduplication"
         )
 
-        # Do not send newsletter if fewer than 3 items (reduced for testing with Readwise only)
-        if len(unique_content) < 3:
+        # Do not send newsletter if fewer than 7 items for quality content threshold
+        if len(unique_content) < 7:
             logger.warning("Not enough new items to send newsletter. Aborting.")
             return []
 
