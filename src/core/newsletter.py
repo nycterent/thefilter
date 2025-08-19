@@ -14,6 +14,7 @@ from src.clients.openrouter import OpenRouterClient
 from src.clients.readwise import ReadwiseClient
 from src.clients.rss import RSSClient
 from src.clients.unsplash import UnsplashClient
+from src.core.cache import ContentCache
 from src.core.qacheck import run_checks
 from src.core.sanitizer import ContentSanitizer
 from src.core.voice_manager import VoiceManager
@@ -679,15 +680,54 @@ Write the expanded summary in third person:"""
         return "\n".join(sections)
 
     async def _enrich_with_llm(self, items: List[ContentItem]) -> List[ContentItem]:
-        """Enrich content items with LLM-powered improvements."""
+        """Enrich content items with LLM-powered improvements, using cache when possible."""
         if not self.openrouter_client:
             logger.debug("No OpenRouter client available for LLM enrichment")
             return items
 
         enriched_items = []
+        cache_hits = 0
+        cache_misses = 0
 
         for item in items:
             try:
+                # Check cache first if caching is enabled
+                cached_content = None
+                if self.settings.cache_enabled:
+                    cached_content = await self.cache.get_cached_summary(item)
+                    if cached_content:
+                        cached_summary, cached_commentary = cached_content
+                        logger.debug(f"Cache HIT for '{item.title[:40]}...'")
+                        cache_hits += 1
+                        
+                        # Create enriched item from cache
+                        enriched_item = ContentItem(
+                            id=item.id,
+                            title=item.title,
+                            content=cached_summary,
+                            source=item.source,
+                            url=item.url,
+                            author=item.author,
+                            source_title=item.source_title,
+                            is_paywalled=item.is_paywalled,
+                            tags=item.tags,
+                            created_at=item.created_at,
+                            metadata=item.metadata,
+                        )
+                        
+                        # Add cached commentary if available
+                        if cached_commentary:
+                            if not enriched_item.metadata:
+                                enriched_item.metadata = {}
+                            enriched_item.metadata['commentary'] = cached_commentary
+                        
+                        enriched_items.append(enriched_item)
+                        continue
+                
+                # Cache miss - proceed with LLM enrichment
+                cache_misses += 1
+                logger.debug(f"Cache MISS for '{item.title[:40]}...' - generating new summary")
+                
                 # Skip if content is already high quality
                 if self._is_high_quality_content(item):
                     logger.debug(
@@ -749,6 +789,15 @@ Write the expanded summary in third person:"""
                             f"Content enhancement failed for '{item.title}': {e}"
                         )
 
+                # Cache the enriched content if caching is enabled
+                if self.settings.cache_enabled:
+                    await self.cache.cache_summary(
+                        item, 
+                        enriched_item.content,
+                        enriched_item.metadata.get('commentary') if enriched_item.metadata else None
+                    )
+                    logger.debug(f"Cached enriched content for '{item.title[:40]}...'")
+
                 enriched_items.append(enriched_item)
 
             except Exception as e:
@@ -759,6 +808,8 @@ Write the expanded summary in third person:"""
         logger.info(
             f"LLM enrichment completed: {len(enriched_items)}/{len(items)} items processed"
         )
+        if self.settings.cache_enabled:
+            logger.info(f"Cache stats: {cache_hits} hits, {cache_misses} misses")
         return enriched_items
 
     def _is_high_quality_content(self, item: ContentItem) -> bool:
@@ -839,6 +890,12 @@ Write the expanded summary in third person:"""
 
         # Initialize content sanitizer
         self.sanitizer = ContentSanitizer()
+
+        # Initialize caching system
+        self.cache = ContentCache(
+            cache_dir=getattr(settings, 'cache_dir', '.cache'),
+            max_age_days=getattr(settings, 'cache_max_age_days', 30)
+        )
 
         # Initialize voice system for commentary generation
         self.voice_manager = VoiceManager(default_voice=settings.default_voice)
@@ -1123,6 +1180,11 @@ Write the expanded summary in third person:"""
             logger.info(
                 "Newsletter generation completed (not published - dry run mode)"
             )
+
+        # Export cache for GitHub Actions persistence
+        if self.settings.cache_enabled and self.cache.is_github_actions:
+            self.cache.export_cache_for_github_actions()
+            logger.info("Cache exported for GitHub Actions persistence")
 
         return newsletter
 

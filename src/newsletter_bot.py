@@ -453,5 +453,69 @@ def add_voice(voice_file: str) -> None:
         raise
 
 
+@cli.command()
+@click.option("--clear", is_flag=True, help="Clear expired cache entries")
+@click.option("--export", is_flag=True, help="Export cache for GitHub Actions")
+def cache(clear: bool, export: bool) -> None:
+    """Manage content caching system."""
+    try:
+        from src.models.settings import Settings
+        from src.core.cache import ContentCache
+        
+        settings = Settings()
+        cache_system = ContentCache(
+            cache_dir=settings.cache_dir,
+            max_age_days=settings.cache_max_age_days
+        )
+        
+        if clear:
+            deleted = cache_system.cleanup_expired_entries()
+            click.echo(f"🧹 Cleaned up {deleted} expired cache entries")
+            return
+        
+        if export:
+            export_path = cache_system.export_cache_for_github_actions()
+            if export_path:
+                click.echo(f"📦 Cache exported to: {export_path}")
+            else:
+                click.echo("❌ Failed to export cache")
+            return
+        
+        # Show cache statistics
+        stats = cache_system.get_cache_stats()
+        
+        click.echo("\n📊 Cache Statistics")
+        click.echo("=" * 50)
+        click.echo(f"Total entries: {stats['total_entries']}")
+        click.echo(f"Total accesses: {stats['total_accesses']}")
+        click.echo(f"Average accesses per entry: {stats['average_accesses']}")
+        click.echo(f"Cache size: {stats['cache_size_bytes']:,} bytes")
+        click.echo(f"Cache directory: {stats['cache_dir']}")
+        click.echo(f"GitHub Actions mode: {stats['github_actions']}")
+        
+        if stats['oldest_entry']:
+            click.echo(f"Oldest entry: {stats['oldest_entry']}")
+        if stats['newest_entry']:
+            click.echo(f"Newest entry: {stats['newest_entry']}")
+        if stats['export_file']:
+            click.echo(f"Export file: {stats['export_file']}")
+        
+        # Show cache performance recommendation
+        if stats['total_entries'] > 0:
+            hit_rate = (stats['total_accesses'] - stats['total_entries']) / stats['total_accesses'] * 100
+            if hit_rate > 50:
+                click.echo(f"\n✅ Good cache performance: {hit_rate:.1f}% hit rate")
+            elif hit_rate > 20:
+                click.echo(f"\n⚠️  Moderate cache performance: {hit_rate:.1f}% hit rate")
+            else:
+                click.echo(f"\n❌ Low cache performance: {hit_rate:.1f}% hit rate")
+        else:
+            click.echo("\n💡 No cache entries yet - run newsletter generation to populate cache")
+        
+    except Exception as e:
+        click.echo(f"❌ Cache command failed: {e}")
+        raise
+
+
 if __name__ == "__main__":
     cli()

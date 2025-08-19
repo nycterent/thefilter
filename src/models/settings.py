@@ -61,6 +61,13 @@ class Settings(BaseSettings):
     buttondown_timeout: float = Field(
         15.0, ge=5.0, le=60.0, description="Buttondown API request timeout in seconds"
     )
+    
+    # Caching Settings
+    cache_dir: str = Field(".cache", description="Directory for caching system")
+    cache_max_age_days: int = Field(
+        30, ge=1, le=365, description="Maximum age for cache entries in days"
+    )
+    cache_enabled: bool = Field(True, description="Enable content caching system")
 
     # OpenRouter Rate Limiting Settings
     openrouter_min_request_interval: float = Field(
