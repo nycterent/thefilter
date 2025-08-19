@@ -197,12 +197,16 @@ Write the intro:"""
             intro_items = []
             for category, item in top_stories[:3]:  # Top 3 stories
                 source_url, source_name = await self._get_source_attribution(item)
+                
+                # Use actual article author if available, otherwise use source name
+                attribution = item.author if item.author and item.author.strip() else source_name
+                
                 if source_url:
                     intro_items.append(
-                        f"**{item.title}** from [{source_name}]({source_url})"
+                        f"**{item.title}** by {attribution} ([{source_name}]({source_url}))"
                     )
                 else:
-                    intro_items.append(f"**{item.title}** from {source_name}")
+                    intro_items.append(f"**{item.title}** by {attribution}")
             out.append(f"\n*Today's highlights: {' • '.join(intro_items)}*\n")
 
         out.append("\n---\n")
@@ -258,12 +262,15 @@ Write the intro:"""
 2. Analyzes the implications and significance
 3. Maintains journalistic tone without hype
 4. Stays under 400 words
+5. IMPORTANT: Write in third person - this article was written by someone else, not by you
+6. IMPORTANT: Never use first person (I, we, me, my) - describe what the author/article discusses
 
 Original content: {item.content[:1000]}
 
 Title: {item.title}
+Author: {item.author if item.author else 'Unknown'}
 
-Write the expanded summary:"""
+Write the expanded summary in third person:"""
 
                         expand_response = await self.openrouter_client._make_request(
                             expand_prompt, max_tokens=500, temperature=0.3
@@ -284,9 +291,15 @@ Write the expanded summary:"""
                     # Longer summary when no LLM available
                     detailed_summary = item.content[:600].replace("\n", " ").strip()
 
-                # Format as plain story
-                out.append(f"### {item.title}\n")
-                out.append(f"![{alt_text}]({img_url})\n")
+                # Format as story with improved image layout
+                out.append(f"### {item.title}\n\n")
+                
+                # Add image with better formatting and caption
+                out.append(f'<div align="center">\n')
+                out.append(f'<img src="{img_url}" alt="{alt_text}" style="max-width: 100%; height: auto; border-radius: 8px; margin: 16px 0;">\n')
+                out.append(f'<br><em style="color: #666; font-size: 0.9em;">Photo: {alt_text}</em>\n')
+                out.append(f'</div>\n\n')
+                
                 out.append(f"{detailed_summary}\n")
                 if source_url:
                     out.append(f"*Read more: [{source_name}]({source_url})*\n")

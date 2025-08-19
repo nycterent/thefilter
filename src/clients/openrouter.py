@@ -572,7 +572,7 @@ Choose the most appropriate category. Respond with ONLY ONE WORD: technology, so
 
         try:
             # Enhanced prompt to use user comments as editorial angles
-            prompt = f"""You are a skilled newsletter writer. The user has curated this article with their own perspective/commentary. Use their angle as the foundation for your commentary.
+            prompt = f"""You are a skilled newsletter writer. The user has curated this article with their own perspective/commentary. Write editorial commentary inspired by their insights.
 
 ARTICLE: {article_title}
 
@@ -581,18 +581,19 @@ CONTENT: {article_content[:2000]}
 USER'S EDITORIAL ANGLE/COMMENTARY: {user_highlights}
 
 TASK: Write a 2-3 paragraph commentary that:
-- Uses the user's perspective as your starting point and editorial angle
-- Transforms their raw thoughts into polished newsletter prose
-- Builds on their insights with additional analysis
-- Maintains their core message while making it engaging for readers
-- Treats their comments as the "hook" or central thesis
+- Uses the user's insights as inspiration for editorial analysis
+- Transforms their observations into polished newsletter prose
+- Builds on their perspective with additional analysis
+- IMPORTANT: Write in third person about the article/topic, never in first person
+- IMPORTANT: Never use "I", "we", "my" - describe what the article discusses or what experts think
+- Treats their comments as the editorial angle to explore
 - If user includes "HINT TO AI:" or similar guidance, use that as your editorial direction
 
 Examples:
-- "fuck, still need exercise" → write about how the real problem isn't the technology but our relationship with exercise itself
-- "HINT TO AI: focus on the privacy implications" → center your commentary on privacy concerns
+- "fuck, still need exercise" → write about how the real challenge isn't the technology but society's relationship with exercise
+- "HINT TO AI: focus on the privacy implications" → center commentary on privacy concerns experts raise
 
-Keep under 300 words with a conversational, editorial tone."""
+Keep under 300 words with a conversational, editorial tone in third person."""
 
             response = await self._make_request(prompt, max_tokens=200, temperature=0.7)
             if response and "choices" in response and len(response["choices"]) > 0:
@@ -745,11 +746,12 @@ STRUCTURE IMPROVEMENTS:
 - End with questions that encourage reader reflection
 
 CONTENT ENHANCEMENTS:
-- Use conversational tone with personal anecdotes where appropriate
+- Use conversational tone while staying in third person (never "I", "we", "my")
 - Challenge conventional thinking with unique perspectives
 - Include interactive elements or calls to action
 - Focus on WHY this matters to informed readers
-- {"Incorporate the user's perspective as your editorial angle" if has_user_context else "Develop a unique editorial angle"}
+- {"Draw editorial insights from the user's perspective but write in third person" if has_user_context else "Develop a unique editorial angle in third person"}
+- CRITICAL: Always write about articles/topics in third person, describing what authors/experts discuss
 
 Implement ALL editor suggestions. Make it engaging content that attracts and retains readership. Keep under 300 words."
 
