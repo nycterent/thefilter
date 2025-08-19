@@ -1312,7 +1312,7 @@ Write the expanded summary:"""
                             "reading_progress": reading_progress,
                             "reader_doc_id": doc.get("id"),
                             "source_url": source_url,  # Store original source URL from Readwise
-                            "site_name": site_name,   # Store original site name from Readwise
+                            "site_name": site_name,  # Store original site name from Readwise
                         },
                     )
                     content_items.append(item)
@@ -3154,25 +3154,35 @@ Write the expanded summary:"""
                 logger.debug(
                     f"Detected private CDN URL for '{item.title[:50]}...', checking for original source URL"
                 )
-                
+
                 # For Readwise items, check if we have the original source_url in metadata
-                if item.source in ["readwise", "readwise_reader"] and hasattr(item, 'metadata') and item.metadata:
-                    original_source_url = item.metadata.get('source_url') or item.metadata.get('url')
+                if (
+                    item.source in ["readwise", "readwise_reader"]
+                    and hasattr(item, "metadata")
+                    and item.metadata
+                ):
+                    original_source_url = item.metadata.get(
+                        "source_url"
+                    ) or item.metadata.get("url")
                     if original_source_url and original_source_url != clean_url:
                         # Use the original source URL from Readwise metadata
                         # Prefer site_name from Readwise metadata as it's most accurate
-                        source_name = item.metadata.get('site_name')
+                        source_name = item.metadata.get("site_name")
                         if not source_name:
-                            source_name = self._extract_source_from_url(original_source_url)
+                            source_name = self._extract_source_from_url(
+                                original_source_url
+                            )
                         if not source_name or source_name == "PRIVATE_CDN":
-                            source_name = self._extract_source_from_title_or_content(item)
+                            source_name = self._extract_source_from_title_or_content(
+                                item
+                            )
                         if not source_name:
                             source_name = "Source"
                         logger.info(
                             f"Using original source URL from Readwise metadata for '{item.title[:50]}...': {source_name}"
                         )
                         return original_source_url, source_name
-                
+
                 # If no original source URL available, fall back to search
                 search_url = await self._search_group_lt(item.title)
                 if search_url:
