@@ -61,7 +61,7 @@ class Settings(BaseSettings):
     buttondown_timeout: float = Field(
         15.0, ge=5.0, le=60.0, description="Buttondown API request timeout in seconds"
     )
-    
+
     # Caching Settings
     cache_dir: str = Field(".cache", description="Directory for caching system")
     cache_max_age_days: int = Field(

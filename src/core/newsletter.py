@@ -699,7 +699,7 @@ Write the expanded summary in third person:"""
                         cached_summary, cached_commentary = cached_content
                         logger.debug(f"Cache HIT for '{item.title[:40]}...'")
                         cache_hits += 1
-                        
+
                         # Create enriched item from cache
                         enriched_item = ContentItem(
                             id=item.id,
@@ -714,20 +714,22 @@ Write the expanded summary in third person:"""
                             created_at=item.created_at,
                             metadata=item.metadata,
                         )
-                        
+
                         # Add cached commentary if available
                         if cached_commentary:
                             if not enriched_item.metadata:
                                 enriched_item.metadata = {}
-                            enriched_item.metadata['commentary'] = cached_commentary
-                        
+                            enriched_item.metadata["commentary"] = cached_commentary
+
                         enriched_items.append(enriched_item)
                         continue
-                
+
                 # Cache miss - proceed with LLM enrichment
                 cache_misses += 1
-                logger.debug(f"Cache MISS for '{item.title[:40]}...' - generating new summary")
-                
+                logger.debug(
+                    f"Cache MISS for '{item.title[:40]}...' - generating new summary"
+                )
+
                 # Skip if content is already high quality
                 if self._is_high_quality_content(item):
                     logger.debug(
@@ -792,9 +794,13 @@ Write the expanded summary in third person:"""
                 # Cache the enriched content if caching is enabled
                 if self.settings.cache_enabled:
                     await self.cache.cache_summary(
-                        item, 
+                        item,
                         enriched_item.content,
-                        enriched_item.metadata.get('commentary') if enriched_item.metadata else None
+                        (
+                            enriched_item.metadata.get("commentary")
+                            if enriched_item.metadata
+                            else None
+                        ),
                     )
                     logger.debug(f"Cached enriched content for '{item.title[:40]}...'")
 
@@ -893,8 +899,8 @@ Write the expanded summary in third person:"""
 
         # Initialize caching system
         self.cache = ContentCache(
-            cache_dir=getattr(settings, 'cache_dir', '.cache'),
-            max_age_days=getattr(settings, 'cache_max_age_days', 30)
+            cache_dir=getattr(settings, "cache_dir", ".cache"),
+            max_age_days=getattr(settings, "cache_max_age_days", 30),
         )
 
         # Initialize voice system for commentary generation
@@ -3522,11 +3528,13 @@ Write the expanded summary in third person:"""
                         return False
 
                 # Draft created successfully - keeping as draft instead of publishing
-                logger.info(f"Newsletter saved as draft in Buttondown: {newsletter.title}")
+                logger.info(
+                    f"Newsletter saved as draft in Buttondown: {newsletter.title}"
+                )
                 logger.info(f"Draft ID: {newsletter.draft_id}")
                 logger.info("Newsletter is ready for manual review and publishing")
                 return True
-                
+
                 # NOTE: Publishing step removed to keep newsletters as drafts
                 # To publish manually, use the Buttondown web interface or API
 
