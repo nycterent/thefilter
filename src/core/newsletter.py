@@ -1113,11 +1113,11 @@ Write the expanded summary in third person:"""
 
         # Step 5: Publish (if not dry run and QA passed)
         if not dry_run and self.settings.buttondown_api_key:
-            published = await self._publish_newsletter(newsletter, dry_run=False)
-            if published:
-                logger.info("Newsletter published successfully")
+            draft_created = await self._publish_newsletter(newsletter, dry_run=False)
+            if draft_created:
+                logger.info("Newsletter draft created successfully in Buttondown")
             else:
-                logger.error("Newsletter publishing failed")
+                logger.error("Newsletter draft creation failed")
         else:
             await self._publish_newsletter(newsletter, dry_run=True)
             logger.info(
@@ -3364,14 +3364,14 @@ Write the expanded summary in third person:"""
     async def _publish_newsletter(
         self, newsletter: NewsletterDraft, dry_run: bool = False
     ) -> bool:
-        """Publish newsletter to Buttondown.
+        """Create newsletter draft in Buttondown (does not publish).
 
         Args:
-            newsletter: Newsletter draft to publish
-            dry_run: If True, skip QA checks and publishing
+            newsletter: Newsletter draft to create
+            dry_run: If True, skip QA checks and draft creation
 
         Returns:
-            True if published successfully or if dry run
+            True if draft created successfully or if dry run
         """
         import json
 
@@ -3422,9 +3422,9 @@ Write the expanded summary in third person:"""
                 logger.error(f"QA results written to {qa_file}")
                 return False
 
-            logger.info("QA checks passed - proceeding with publication")
+            logger.info("QA checks passed - proceeding with draft creation")
 
-            logger.info("Publishing newsletter to Buttondown...")
+            logger.info("Creating newsletter draft in Buttondown...")
             api_key = self.settings.buttondown_api_key
             if not api_key:
                 logger.error("No Buttondown API key provided.")
@@ -3459,21 +3459,14 @@ Write the expanded summary in third person:"""
                             logger.error(f"Buttondown error detail: {line}")
                         return False
 
-                # Step 2: publish draft so it appears in archive
-                publish_url = f"{url}/{newsletter.draft_id}/send"
-                async with session.post(publish_url, headers=headers) as publish_resp:
-                    if publish_resp.status in {200, 201, 202}:
-                        logger.info(
-                            f"Newsletter published to Buttondown: {newsletter.title}"
-                        )
-                        return True
-                    else:
-                        error_detail = await publish_resp.text()
-                        status_msg = f"Buttondown publish error {publish_resp.status}:"
-                        logger.error(status_msg)
-                        for line in str(error_detail).splitlines():
-                            logger.error(f"Buttondown publish error detail: {line}")
-                        return False
+                # Draft created successfully - keeping as draft instead of publishing
+                logger.info(f"Newsletter saved as draft in Buttondown: {newsletter.title}")
+                logger.info(f"Draft ID: {newsletter.draft_id}")
+                logger.info("Newsletter is ready for manual review and publishing")
+                return True
+                
+                # NOTE: Publishing step removed to keep newsletters as drafts
+                # To publish manually, use the Buttondown web interface or API
 
         except Exception as e:
             logger.error(f"Error publishing newsletter: {e}")
