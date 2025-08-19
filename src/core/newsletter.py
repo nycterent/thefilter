@@ -197,10 +197,12 @@ Write the intro:"""
             intro_items = []
             for category, item in top_stories[:3]:  # Top 3 stories
                 source_url, source_name = await self._get_source_attribution(item)
-                
+
                 # Use actual article author if available, otherwise use source name
-                attribution = item.author if item.author and item.author.strip() else source_name
-                
+                attribution = (
+                    item.author if item.author and item.author.strip() else source_name
+                )
+
                 if source_url:
                     intro_items.append(
                         f"**{item.title}** by {attribution} ([{source_name}]({source_url}))"
@@ -293,13 +295,17 @@ Write the expanded summary in third person:"""
 
                 # Format as story with improved image layout
                 out.append(f"### {item.title}\n\n")
-                
+
                 # Add image with better formatting and caption
                 out.append(f'<div align="center">\n')
-                out.append(f'<img src="{img_url}" alt="{alt_text}" style="max-width: 100%; height: auto; border-radius: 8px; margin: 16px 0;">\n')
-                out.append(f'<br><em style="color: #666; font-size: 0.9em;">Photo: {alt_text}</em>\n')
-                out.append(f'</div>\n\n')
-                
+                out.append(
+                    f'<img src="{img_url}" alt="{alt_text}" style="max-width: 100%; height: auto; border-radius: 8px; margin: 16px 0;">\n'
+                )
+                out.append(
+                    f'<br><em style="color: #666; font-size: 0.9em;">Photo: {alt_text}</em>\n'
+                )
+                out.append(f"</div>\n\n")
+
                 out.append(f"{detailed_summary}\n")
                 if source_url:
                     out.append(f"*Read more: [{source_name}]({source_url})*\n")
