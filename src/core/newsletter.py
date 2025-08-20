@@ -18,6 +18,7 @@ from src.core.cache import ContentCache
 from src.core.qacheck import run_checks
 from src.core.sanitizer import ContentSanitizer
 from src.core.voice_manager import VoiceManager
+from src.core.voice_config import clean_voice_manager
 from src.models.content import ContentItem, NewsletterDraft
 from src.models.settings import Settings
 
@@ -137,17 +138,22 @@ class NewsletterGenerator:
         if self.openrouter_client:
             try:
                 # Create engaging intro based on actual content
-                intro_prompt = f"""Create an engaging, thought-provoking introduction for a newsletter called "The Filter" that covers these topics:
+                intro_prompt = f"""Write a minimalist introduction for The Filter newsletter covering these topics:
 
 {chr(10).join([f"- {item.title[:100]}..." for item in items[:5]])}
 
-Requirements:
-- Start with a compelling hook that makes readers want to continue
-- Reference specific themes from the actual content above
-- Use your voice: skeptical, pragmatic, no hype
-- Be provocative and challenge conventional thinking
-- Keep it under 100 words
-- Make it feel personal and curated, not generic
+VOICE RULES:
+- Tone: minimalist, sharp, contemplative
+- Mix facts with light editorial bite
+- Occasional dry irony or existential framing
+- AVOID clichés: "Imagine a world...", "Welcome to...", "game-changer", "breakthrough"
+- Channel: signal over noise, clarity over hype, skeptical of easy narratives
+
+REQUIREMENTS:
+- Reference specific themes from actual content above
+- Keep under 80 words - every word must earn its place
+- Start direct - no throat-clearing
+- End with subtle tension or philosophical angle
 
 Write the intro:"""
 
@@ -160,32 +166,26 @@ Write the intro:"""
                     ].strip()
                     out.append(f"\n*{dynamic_intro}*\n")
                 else:
-                    # Fallback to generic but better intro
+                    # Fallback intro - minimalist, no clichés
                     out.append(
-                        "\n*This week's briefing cuts through the noise to surface what actually matters. "
-                        f"From {categories.get('technology', [])[:1][0].title if categories.get('technology') else 'tech'} to "
-                        f"{categories.get('society', [])[:1][0].title if categories.get('society') else 'society'}, "
-                        "each story reveals deeper patterns worth your attention.*\n"
+                        "\n*Signal over noise. This edition examines what shifts beneath obvious headlines.*\n"
                     )
             except (KeyError, IndexError, AttributeError) as e:
                 logger.warning(f"Data access error generating dynamic intro: {e}")
-                # Fallback to generic but better intro
+                # Fallback intro - minimalist
+                out.append(
+                    "\n*Signal over noise. This edition examines what shifts beneath obvious headlines.*\n"
+                )
             except Exception as e:
                 logger.warning(f"Unexpected error generating dynamic intro: {e}")
-                # Fallback to generic but better intro
+                # Fallback intro - minimalist
                 out.append(
-                    "\n*This week's briefing cuts through the noise to surface what actually matters. "
-                    f"From {categories.get('technology', [])[:1][0].title if categories.get('technology') else 'tech'} to "
-                    f"{categories.get('society', [])[:1][0].title if categories.get('society') else 'society'}, "
-                    "each story reveals deeper patterns worth your attention.*\n"
+                    "\n*Signal over noise. This edition examines what shifts beneath obvious headlines.*\n"
                 )
         else:
-            # Fallback when no LLM available
+            # Fallback when no LLM available - minimalist
             out.append(
-                "\n*This week's briefing cuts through the noise to surface what actually matters. "
-                f"From {categories.get('technology', [])[:1][0].title if categories.get('technology') else 'tech'} to "
-                f"{categories.get('society', [])[:1][0].title if categories.get('society') else 'society'}, "
-                "each story reveals deeper patterns worth your attention.*\n"
+                "\n*Signal over noise. This edition examines what shifts beneath obvious headlines.*\n"
             )
 
         # Dynamic intro based on top stories
@@ -260,20 +260,35 @@ Write the intro:"""
                 # Generate longer, more detailed summary (2-3 paragraphs)
                 if self.openrouter_client:
                     try:
-                        expand_prompt = f"""Based on this content, write a detailed 2-3 paragraph summary that:
-1. Explains the key facts and context clearly 
-2. Analyzes the implications and significance
-3. Maintains journalistic tone without hype
-4. Stays under 400 words
-5. IMPORTANT: Write in third person - this article was written by someone else, not by you
-6. IMPORTANT: Never use first person (I, we, me, my) - describe what the author/article discusses
+                        expand_prompt = f"""You are the editor of The Filter, a minimalist newspaper-style newsletter.
 
-Original content: {item.content[:1000]}
+TASK: Summarize this story faithfully, filtering through the lens of user highlights and voice.
 
+ARTICLE:
 Title: {item.title}
 Author: {item.author if item.author else 'Unknown'}
+Content: {item.content[:1000]}
 
-Write the expanded summary in third person:"""
+USER HIGHLIGHTS/PERSPECTIVE: {item.user_comments if hasattr(item, 'user_comments') and item.user_comments else "Signal over noise, clarity over hype, skeptical of easy narratives"}
+
+CRITICAL RULES:
+1. NEVER invent facts not in the original article
+2. NEVER exaggerate (organoids ≠ full organs, disagreements ≠ crises)
+3. NEVER use: "Imagine a world", "Picture this", "Welcome to", "game-changer", "breakthrough"
+4. SEPARATE facts from editorial spin
+
+VOICE:
+- Tone: minimalist, sharp, contemplative
+- Mix facts with light editorial bite
+- Occasional dry irony or existential framing
+- Channel: signal over noise, clarity over hype, skeptical of easy narratives
+
+STRUCTURE - THE FILTER FORMAT:
+Headline: punchy, specific, no fluff
+Summary (2-3 sentences): Start with factual core, pull in highlighted insights
+Why it matters (1 sentence): Significance from this perspective
+
+Write in this exact format:"""
 
                         expand_response = await self.openrouter_client._make_request(
                             expand_prompt, max_tokens=500, temperature=0.3
@@ -1692,6 +1707,10 @@ Write the expanded summary in third person:"""
         self, content_items: List[ContentItem]
     ) -> List[ContentItem]:
         """Enhance content quality by improving titles, sources, and filtering with AI when available."""
+
+        # First, process any archive URLs to extract original sources using pluggable detection
+        content_items = await self._process_source_detection(content_items)
+
         enhanced_items = []
 
         for item in content_items:
@@ -2173,6 +2192,123 @@ Write the expanded summary in third person:"""
             logger.debug(f"Error extracting source from URL {url}: {e}")
             return ""
 
+    async def _process_source_detection(
+        self, items: List[ContentItem]
+    ) -> List[ContentItem]:
+        """Process items using pluggable source detection to extract original sources."""
+        from source_detectors import detect_source
+        from models.detection import DetectionStatus
+
+        processed_items = []
+
+        for item in items:
+            # Check if URL is marked as needing source detection (e.g., Mailchimp archive)
+            if item.url and str(item.url).startswith("MAILCHIMP_ARCHIVE:"):
+                original_url = str(item.url).replace("MAILCHIMP_ARCHIVE:", "")
+
+                try:
+                    # Use the pluggable source detection system
+                    detection_result = await detect_source(original_url)
+
+                    if detection_result and detection_result.status in [
+                        DetectionStatus.SUCCESS,
+                        DetectionStatus.PARTIAL_SUCCESS,
+                    ]:
+                        # Successfully detected and extracted original source
+                        if (
+                            detection_result.attribution_found
+                            and detection_result.attribution
+                        ):
+                            # Use detected attribution info
+                            source_name = detection_result.attribution.publisher
+                            source_url = (
+                                detection_result.attribution.original_url
+                                or original_url
+                            )
+                        else:
+                            # Use extracted content URL
+                            source_url = original_url
+                            source_name = self._extract_source_from_url(source_url)
+
+                        # Update the item with better attribution
+                        updated_item = ContentItem(
+                            id=item.id,
+                            title=item.title,
+                            content=item.content,
+                            source=item.source,
+                            url=source_url,  # Use detected/extracted URL
+                            author=item.author,
+                            source_title=(
+                                source_name if source_name else item.source_title
+                            ),
+                            is_paywalled=item.is_paywalled,
+                            tags=item.tags,
+                            created_at=item.created_at,
+                            metadata={
+                                **(item.metadata or {}),
+                                "original_archive_url": original_url,
+                                "detected_provider": detection_result.provider,
+                                "detection_status": detection_result.status.value,
+                                "extracted_source": source_name,
+                            },
+                        )
+                        processed_items.append(updated_item)
+                        logger.info(
+                            f"✅ Enhanced source via {detection_result.provider}: {item.source_title} → {source_name}"
+                        )
+                    else:
+                        # Detection failed, keep original but clean up URL
+                        updated_item = ContentItem(
+                            id=item.id,
+                            title=item.title,
+                            content=item.content,
+                            source=item.source,
+                            url=original_url,  # Use clean URL
+                            author=item.author,
+                            source_title=item.source_title,
+                            is_paywalled=item.is_paywalled,
+                            tags=item.tags,
+                            created_at=item.created_at,
+                            metadata={
+                                **(item.metadata or {}),
+                                "original_archive_url": original_url,
+                                "detection_failed": True,
+                            },
+                        )
+                        processed_items.append(updated_item)
+                        logger.debug(
+                            f"⚠️ Could not detect source from archive: {original_url}"
+                        )
+
+                except Exception as e:
+                    logger.error(
+                        f"Error processing source detection for URL {original_url}: {e}"
+                    )
+                    # Fall back to original item with cleaned URL
+                    updated_item = ContentItem(
+                        id=item.id,
+                        title=item.title,
+                        content=item.content,
+                        source=item.source,
+                        url=original_url,
+                        author=item.author,
+                        source_title=item.source_title,
+                        is_paywalled=item.is_paywalled,
+                        tags=item.tags,
+                        created_at=item.created_at,
+                        metadata={
+                            **(item.metadata or {}),
+                            "original_archive_url": original_url,
+                            "detection_error": str(e),
+                        },
+                    )
+                    processed_items.append(updated_item)
+            else:
+                # No source detection needed
+                processed_items.append(item)
+
+        return processed_items
+
     def _clean_tracking_params(self, url: str) -> str:
         """Remove tracking parameters from URL."""
         try:
@@ -2543,34 +2679,7 @@ Write the expanded summary in third person:"""
             notes_for_voice = f"USER HIGHLIGHTS: {user_highlights}"
 
             try:
-                # Generate using voice system
-                voice_response = await self.voice_manager.generate_commentary(
-                    content=content_for_voice,
-                    notes=notes_for_voice,
-                    voice=self.settings.default_voice,
-                    language=self.settings.voice_languages.split(",")[0].strip(),
-                    target_words=self.settings.voice_target_words,
-                    image_subject=None,  # Could extract from title/content later
-                    llm_client=self.openrouter_client,
-                )
-
-                # Extract the story content
-                commentary = voice_response.get(
-                    "content", voice_response.get("story", "")
-                )
-
-                # Log voice metadata for debugging
-                if voice_response.get("voice_metadata"):
-                    metadata = voice_response["voice_metadata"]
-                    logger.debug(
-                        f"Voice generation: {metadata.get('voice')} in {metadata.get('language')}"
-                    )
-
-            except Exception as e:
-                logger.warning(
-                    f"Voice generation failed, falling back to simple commentary: {e}"
-                )
-                # Fallback to simple OpenRouter commentary
+                # Generate using clean OpenRouter commentary (bypassing contaminated voice templates)
                 commentary = await self.openrouter_client.generate_commentary(
                     (
                         article_content
@@ -2580,6 +2689,13 @@ Write the expanded summary in third person:"""
                     user_highlights,
                     title,
                 )
+
+                logger.debug(f"Generated clean commentary using OpenRouter client")
+
+            except Exception as e:
+                logger.warning(f"Commentary generation failed: {e}")
+                # Fallback to formatted highlights
+                commentary = self._format_user_insights(user_highlights, title)
 
             # Validate commentary quality - check for AI refusal patterns
             if commentary:
@@ -2602,10 +2718,22 @@ Write the expanded summary in third person:"""
                         commentary = None
                         break
 
+                # Phase 4: Contamination Prevention - validate against clean voice rules
+                if commentary:
+                    is_valid, error_msg = clean_voice_manager.validate_commentary(
+                        commentary, "saint_clean"
+                    )
+                    if not is_valid:
+                        logger.warning(f"Template contamination detected: {error_msg}")
+                        logger.info(
+                            f"Rejected contaminated commentary: {commentary[:100]}..."
+                        )
+                        commentary = None
+
             # Fallback only if AI generation completely fails or contains refusals
             if not commentary or commentary.strip() == user_highlights.strip():
                 logger.warning(
-                    "AI commentary generation failed or contained refusals, using formatted highlights as fallback"
+                    "AI commentary generation failed or contained refusals/contamination, using formatted highlights as fallback"
                 )
                 commentary = self._format_user_insights(user_highlights, title)
 
