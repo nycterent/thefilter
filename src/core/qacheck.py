@@ -130,12 +130,15 @@ def check_raw_urls(text: str) -> Dict[str, any]:
     # Find URLs in HTML links
     html_links = re.findall(r'<a[^>]+href=["\']([^"\']+)["\'][^>]*>', text)
 
+    # Find URLs in image src attributes (these are valid, not "raw URLs")
+    img_src_urls = re.findall(r'<img[^>]+src=["\']([^"\']+)["\'][^>]*>', text)
+
     # Find URLs in markdown links - extract the URL part
     markdown_links = re.findall(r"\[([^\]]+)\]\(([^)]+)\)", text)
     markdown_urls = [url for _, url in markdown_links]
 
-    # Raw URLs are those not in proper link format
-    linked_urls = set(html_links + markdown_urls)
+    # Raw URLs are those not in proper link format (excluding image sources)
+    linked_urls = set(html_links + markdown_urls + img_src_urls)
     raw_urls = []
 
     for url in all_urls:

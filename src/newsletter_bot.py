@@ -459,8 +459,8 @@ def add_voice(voice_file: str) -> None:
 def cache(clear: bool, export: bool) -> None:
     """Manage content caching system."""
     try:
-        from src.models.settings import Settings
         from src.core.cache import ContentCache
+        from src.models.settings import Settings
 
         settings = Settings()
         cache_system = ContentCache(

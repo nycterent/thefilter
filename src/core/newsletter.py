@@ -17,8 +17,8 @@ from src.clients.unsplash import UnsplashClient
 from src.core.cache import ContentCache
 from src.core.qacheck import run_checks
 from src.core.sanitizer import ContentSanitizer
-from src.core.voice_manager import VoiceManager
 from src.core.voice_config import clean_voice_manager
+from src.core.voice_manager import VoiceManager
 from src.models.content import ContentItem, NewsletterDraft
 from src.models.settings import Settings
 
@@ -2196,8 +2196,8 @@ Write in this exact format:"""
         self, items: List[ContentItem]
     ) -> List[ContentItem]:
         """Process items using pluggable source detection to extract original sources."""
-        from source_detectors import detect_source
         from models.detection import DetectionStatus
+        from source_detectors import detect_source
 
         processed_items = []
 

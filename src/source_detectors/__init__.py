@@ -1,8 +1,8 @@
 """Source detection system for newsletter content attribution."""
 
-from .orchestrator import SourceDetectionOrchestrator, get_orchestrator, detect_source
-from .interfaces import SourceDetector
 from .config import get_config, set_config
+from .interfaces import SourceDetector
+from .orchestrator import SourceDetectionOrchestrator, detect_source, get_orchestrator
 
 __version__ = "1.0.0"
 

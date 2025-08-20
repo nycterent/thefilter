@@ -1,12 +1,12 @@
 """Attribution strategies."""
 
 from .attribution import (
-    AttributionStrategy,
     AttributionAnalyzer,
+    AttributionStrategy,
+    DomainExtractionStrategy,
+    EmailFooterStrategy,
     FooterCopyrightStrategy,
     PoweredByLinkStrategy,
-    EmailFooterStrategy,
-    DomainExtractionStrategy,
 )
 
 __all__ = [

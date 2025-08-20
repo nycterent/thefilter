@@ -1,11 +1,11 @@
 """Attribution extraction strategies using the Strategy Pattern."""
 
-import re
 import logging
-from abc import ABC, abstractmethod
-from typing import Optional, List
+import re
 import sys
+from abc import ABC, abstractmethod
 from pathlib import Path
+from typing import List, Optional
 
 # Add parent directory to path for imports
 sys.path.append(str(Path(__file__).parent.parent.parent))

@@ -1,26 +1,27 @@
 """Mailchimp source detector implementation."""
 
-import time
 import asyncio
-import aiohttp
 import logging
-from typing import Optional
 import sys
+import time
 from pathlib import Path
+from typing import Optional
+
+import aiohttp
 
 # Add parent directory to path for imports
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
+from models.detection import AttributionInfo, DetectionStatus, SourceDetectionResult
+from source_detectors.config import get_config
 from source_detectors.interfaces import SourceDetector
-from models.detection import SourceDetectionResult, DetectionStatus, AttributionInfo
 from source_detectors.strategies.attribution import (
     AttributionAnalyzer,
+    DomainExtractionStrategy,
+    EmailFooterStrategy,
     FooterCopyrightStrategy,
     PoweredByLinkStrategy,
-    EmailFooterStrategy,
-    DomainExtractionStrategy,
 )
-from source_detectors.config import get_config
 
 logger = logging.getLogger(__name__)
 

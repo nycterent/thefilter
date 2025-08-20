@@ -34,9 +34,19 @@ class OpenRouterClient:
         # Use free models only - default to OpenRouter's Venice model
         import os
 
+        # Best free models prioritized by quality and reliability
+        self.model_fallbacks = [
+            "openai/gpt-4o-mini",  # Best overall free model
+            "google/gemini-flash-1.5-8b",  # Fast and capable
+            "meta-llama/llama-3.2-90b-vision-instruct:free",  # Strong reasoning
+            "meta-llama/llama-3.2-11b-vision-instruct:free",  # Good balance
+            "cognitivecomputations/dolphin-mistral-7b:free",  # Reliable fallback
+            "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",  # Original default
+        ]
+
         self.default_model = model or os.getenv(
             "OPENROUTER_MODEL",
-            "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
+            self.model_fallbacks[0],  # Use best model as default
         )
 
         # Rate limiting configuration - use settings if provided, fallback to defaults
@@ -360,25 +370,97 @@ Choose the most appropriate category. Respond with ONLY ONE WORD: technology, so
         self.last_request_time = time.time()
 
     async def _make_request(
-        self, prompt: str, max_tokens: int = 100, temperature: float = 0.3
+        self,
+        prompt: str,
+        max_tokens: int = 100,
+        temperature: float = 0.3,
+        model: str = None,
     ) -> Optional[Dict[str, Any]]:
-        """Make a request to OpenRouter API.
+        """Make a request to OpenRouter API with model fallback.
 
         Args:
             prompt: The prompt to send
             max_tokens: Maximum tokens to generate
             temperature: Sampling temperature
+            model: Specific model to use (overrides default)
 
         Returns:
             API response or None if failed
         """
-        payload = {
-            "model": self.default_model,
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": max_tokens,
-            "temperature": temperature,
-            "stream": False,
-        }
+        # Try models in order of preference
+        models_to_try = (
+            [model] if model else [self.default_model] + self.model_fallbacks
+        )
+
+        for attempt_model in models_to_try:
+            if (
+                attempt_model in [self.default_model] + self.model_fallbacks
+            ):  # Only try known good models
+                try:
+                    payload = {
+                        "model": attempt_model,
+                        "messages": [{"role": "user", "content": prompt}],
+                        "max_tokens": max_tokens,
+                        "temperature": temperature,
+                        "stream": False,
+                    }
+
+                    result = await self._make_single_request(payload)
+                    if result:
+                        if attempt_model != self.default_model:
+                            logger.info(f"Using fallback model: {attempt_model}")
+                        return result
+                except Exception as e:
+                    logger.warning(f"Model {attempt_model} failed: {e}")
+                    continue
+
+        logger.error("All models failed")
+        return None
+
+    async def make_parallel_requests(
+        self, requests: List[Dict[str, Any]]
+    ) -> List[Optional[Dict[str, Any]]]:
+        """Make multiple API requests in parallel for faster processing.
+
+        Args:
+            requests: List of request configs with keys: prompt, max_tokens, temperature
+
+        Returns:
+            List of responses in same order as requests (None for failed requests)
+        """
+        # Create semaphore to limit concurrent requests (avoid rate limits)
+        semaphore = asyncio.Semaphore(3)  # Max 3 concurrent requests
+
+        async def limited_request(request_config):
+            async with semaphore:
+                return await self._make_request(**request_config)
+
+        # Execute all requests in parallel
+        tasks = [limited_request(req) for req in requests]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Convert exceptions to None for consistent return type
+        processed_results = []
+        for result in results:
+            if isinstance(result, Exception):
+                logger.error(f"Parallel request failed: {result}")
+                processed_results.append(None)
+            else:
+                processed_results.append(result)
+
+        return processed_results
+
+    async def _make_single_request(
+        self, payload: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
+        """Make a single request to OpenRouter API.
+
+        Args:
+            payload: Request payload
+
+        Returns:
+            API response or None if failed
+        """
 
         try:
             # Rate limiting to avoid 429 errors
@@ -566,41 +648,103 @@ Choose the most appropriate category. Respond with ONLY ONE WORD: technology, so
     async def generate_commentary(
         self, article_content: str, user_highlights: str, article_title: str = ""
     ) -> str:
-        """Generate commentary on article using user highlights as editorial angle."""
+        """Generate commentary using three-phase AI workflow: fact extraction → content generation → validation."""
         if not self.api_key:
             return user_highlights  # Fallback to highlights
 
         try:
-            # Enhanced prompt to use user comments as editorial angles
-            prompt = f"""You are a skilled newsletter writer. The user has curated this article with their own perspective/commentary. Write editorial commentary inspired by their insights.
+            # Phase 1: Fact Extraction
+            facts_prompt = f"""Extract ONLY concrete, verifiable facts from this article. No interpretations, no editorial spin.
 
 ARTICLE: {article_title}
-
 CONTENT: {article_content[:2000]}
 
-USER'S EDITORIAL ANGLE/COMMENTARY: {user_highlights}
+Return facts as a bulleted list. Include specific numbers, names, dates, locations, survey results, drug names, etc.
+Example format:
+• Specific fact 1 (with number/name/date)
+• Specific fact 2 (with concrete detail)
+• Specific fact 3 (with precise information)
 
-TASK: Write a 2-3 paragraph commentary that:
-- Uses the user's insights as inspiration for editorial analysis
-- Transforms their observations into polished newsletter prose
-- Builds on their perspective with additional analysis
-- IMPORTANT: Write in third person about the article/topic, never in first person
-- IMPORTANT: Never use "I", "we", "my" - describe what the article discusses or what experts think
-- Treats their comments as the editorial angle to explore
-- If user includes "HINT TO AI:" or similar guidance, use that as your editorial direction
+CRITICAL: Only facts that appear in the source material. No summaries or interpretations."""
+
+            facts_response = await self._make_request(
+                facts_prompt, max_tokens=150, temperature=0.2
+            )
+            facts = ""
+            if (
+                facts_response
+                and "choices" in facts_response
+                and len(facts_response["choices"]) > 0
+            ):
+                facts = facts_response["choices"][0]["message"]["content"].strip()
+
+            # Phase 2: Content Generation
+            content_prompt = f"""You are the editor of The Filter, a minimalist newsletter. Write sharp editorial commentary.
+
+VERIFIED FACTS: {facts}
+
+USER HIGHLIGHTS: {user_highlights}
+
+VOICE RULES:
+- Tone: minimalist, sharp, contemplative
+- Mix facts with light editorial bite
+- Occasional dry irony or existential framing  
+- ABSOLUTELY AVOID: "Imagine a world...", "game-changer", "breakthrough", "protocol", "antifragility"
+- Channel: signal over noise, clarity over hype, skeptical of easy narratives
+
+TASK: Write 2-3 sentences that:
+- Start with factual core from verified facts
+- Filter through user highlights as "what matters most"  
+- End with significance (often skeptical, philosophical, systems-oriented)
+- IMPORTANT: Write in third person - never use "I", "we", "my"
 
 Examples:
-- "fuck, still need exercise" → write about how the real challenge isn't the technology but society's relationship with exercise
-- "HINT TO AI: focus on the privacy implications" → center commentary on privacy concerns experts raise
+- User highlight "still need exercise" → The FDA approved eye drops for near vision, but the real constraint isn't technology - it's that daily habits resist elegant solutions
+- User highlight "privacy nightmare" → Companies harvest behavioral data with surgical precision, yet privacy law moves like continental drift
 
 Keep under 300 words with a conversational, editorial tone in third person."""
 
-            response = await self._make_request(prompt, max_tokens=200, temperature=0.7)
-            if response and "choices" in response and len(response["choices"]) > 0:
-                commentary = response["choices"][0]["message"]["content"].strip()
-                return commentary
-            else:
-                return user_highlights  # Fallback
+            content_response = await self._make_request(
+                content_prompt, max_tokens=200, temperature=0.7
+            )
+            commentary = ""
+            if (
+                content_response
+                and "choices" in content_response
+                and len(content_response["choices"]) > 0
+            ):
+                commentary = content_response["choices"][0]["message"][
+                    "content"
+                ].strip()
+
+            # Phase 3: Validation
+            if commentary:
+                validation_prompt = f"""Review this commentary for template contamination and quality.
+
+COMMENTARY: {commentary}
+
+Check for:
+1. Contains forbidden phrases: "Imagine a world", "protocol", "antifragility", "game-changer"
+2. Uses first person (I, we, my) instead of third person
+3. Contains made-up facts not in original article
+4. Sounds generic/templated vs. specific to this article
+
+Return: APPROVED or REJECTED with brief reason."""
+
+                validation_response = await self._make_request(
+                    validation_prompt, max_tokens=50, temperature=0.1
+                )
+                if validation_response and "choices" in validation_response:
+                    validation = validation_response["choices"][0]["message"][
+                        "content"
+                    ].strip()
+                    if "REJECTED" in validation:
+                        logger.warning(
+                            f"Commentary rejected by validation: {validation}"
+                        )
+                        return user_highlights  # Fallback if validation fails
+
+            return commentary if commentary else user_highlights
 
         except (aiohttp.ClientError, asyncio.TimeoutError) as e:
             logger.error(f"Network error generating commentary: {e}")
@@ -727,29 +871,30 @@ Format: SCORE: X/10\nFEEDBACK: [comprehensive feedback with specific journalism 
                 else "USER CONTEXT: This is curated content from the user's RSS feed"
             )
 
-            prompt = f"""You are a skilled newsletter writer revising content using journalism best practices. Implement ALL editorial feedback to create engaging, thought-provoking content.
+            prompt = f"""You are the editor of The Filter, rewriting content to match the publication's voice. Apply editorial feedback precisely.
 
 ORIGINAL CONTENT:
 {original_content}
 
-EDITOR'S DETAILED FEEDBACK AND SUGGESTIONS:
+EDITOR'S FEEDBACK:
 {editor_feedback}
 
 ARTICLE CONTEXT: {article_content[:1000] if article_content else 'N/A'}
 {context_section}
 
-TASK: Completely rewrite using these journalism techniques:
+VOICE RULES:
+- Tone: minimalist, sharp, contemplative
+- Mix facts with light editorial bite
+- Occasional dry irony or existential framing
+- AVOID clichés: "Imagine a world...", "game-changer", "breakthrough" 
+- Channel: signal over noise, clarity over hype, skeptical of easy narratives
 
-STRUCTURE IMPROVEMENTS:
-- Start with a compelling hook or thought-provoking question
-- Build narrative flow with storytelling elements
-- End with questions that encourage reader reflection
-
-CONTENT ENHANCEMENTS:
-- Use conversational tone while staying in third person (never "I", "we", "my")
-- Challenge conventional thinking with unique perspectives
-- Include interactive elements or calls to action
-- Focus on WHY this matters to informed readers
+REWRITE GUIDELINES:
+- Start with factual core (no inventions)
+- Use concrete, specific language over abstract concepts
+- End with philosophical or systems-oriented significance
+- Cut filler - every word must earn its place
+- Write in third person about what the article/research reveals
 - {"Draw editorial insights from the user's perspective but write in third person" if has_user_context else "Develop a unique editorial angle in third person"}
 - CRITICAL: Always write about articles/topics in third person, describing what authors/experts discuss
 

@@ -81,6 +81,7 @@ class ContentSanitizer:
         "medium.com/_/stat",
         "mailchimp.com",
         "list-manage.com",
+        "campaign-archive.com",
         "us-east-1.amazonaws.com",
         "cloudfront.net",
         "wp.com",
@@ -96,6 +97,7 @@ class ContentSanitizer:
         "feedbinusercontent.com": "extract_from_feedbin",
         "substackcdn.com": "extract_from_substack",
         "list-manage.com": "extract_from_mailchimp",
+        "campaign-archive.com": "extract_from_mailchimp_archive",
         "track.click": "extract_from_query_param",
         "readwise.io": "extract_from_readwise",
     }
@@ -488,6 +490,11 @@ class ContentSanitizer:
 
         try:
             parsed_url = urlparse(proxy_url)
+
+            # Handle Mailchimp campaign archive URLs
+            if "campaign-archive.com" in proxy_domain:
+                # Mark for async processing - return special marker
+                return f"MAILCHIMP_ARCHIVE:{proxy_url}"
 
             # Feedbin proxy URLs - more aggressive extraction
             if "feedbinusercontent.com" in proxy_domain:
@@ -884,6 +891,84 @@ class ContentSanitizer:
             issues.append("Redundant top branding detected")
 
         return issues
+
+    async def extract_from_mailchimp_archive(self, url: str) -> str:
+        """Extract original source from Mailchimp campaign archive URLs.
+
+        Mailchimp campaign archive URLs like us7.campaign-archive.com contain
+        attribution to the original publisher in the email footer.
+
+        Args:
+            url: Mailchimp campaign archive URL
+
+        Returns:
+            Original source domain or cleaned URL
+        """
+        import re
+
+        import aiohttp
+
+        try:
+            async with aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=10)
+            ) as session:
+                async with session.get(url) as response:
+                    if response.status == 200:
+                        content = await response.text()
+
+                        # Look for attribution patterns in the email content
+                        attribution_patterns = [
+                            r"You are receiving this email because you signed up to receive updates from ([^.\n]+)\.(?:org|com|net|edu|gov)",
+                            r"unsubscribe from ([^.\n]+)\.(?:org|com|net|edu|gov)",
+                            r"This email was sent by ([^.\n]+)\.(?:org|com|net|edu|gov)",
+                            r"©.*?(\w+\.\w+)",  # Copyright with domain
+                            r"Visit us at ([^.\s]+\.\w+)",
+                            r"From the team at ([^.\n]+)\.(?:org|com|net|edu|gov)",
+                            r"Contact us at.*?([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})",
+                        ]
+
+                        for pattern in attribution_patterns:
+                            match = re.search(pattern, content, re.IGNORECASE)
+                            if match:
+                                original_source = match.group(1)
+                                # Clean up the source name
+                                if "." in original_source:
+                                    return f"https://{original_source}"
+                                else:
+                                    # Assume .org if no extension found
+                                    return f"https://{original_source}.org"
+
+                        # Look for domain names in the content (more specific patterns)
+                        domain_pattern = r"(?:https?://)?(?:www\.)?([a-zA-Z0-9-]+\.[a-zA-Z]{2,})(?:/[^\s]*)?"
+                        domains = re.findall(domain_pattern, content)
+
+                        # Filter out common tracking/social domains
+                        excluded_domains = {
+                            "mailchimp.com",
+                            "campaign-archive.com",
+                            "list-manage.com",
+                            "facebook.com",
+                            "twitter.com",
+                            "linkedin.com",
+                            "instagram.com",
+                            "youtube.com",
+                            "google.com",
+                            "tracking.com",
+                            "utm.com",
+                        }
+
+                        for domain in domains:
+                            domain_clean = domain.lower().strip()
+                            if (
+                                domain_clean not in excluded_domains
+                                and "." in domain_clean
+                            ):
+                                return f"https://{domain_clean}"
+
+        except Exception as e:
+            logger.debug(f"Failed to extract from Mailchimp archive {url}: {e}")
+
+        return url  # Fallback to original URL
 
     def fix_newsletter_formatting(self, newsletter_content: str) -> str:
         """Apply common formatting fixes to newsletter content."""
