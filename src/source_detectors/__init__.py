@@ -8,7 +8,7 @@ __version__ = "1.0.0"
 
 __all__ = [
     "SourceDetectionOrchestrator",
-    "SourceDetector", 
+    "SourceDetector",
     "get_orchestrator",
     "detect_source",
     "get_config",

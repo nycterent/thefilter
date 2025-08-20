@@ -11,7 +11,7 @@ from .attribution import (
 
 __all__ = [
     "AttributionStrategy",
-    "AttributionAnalyzer", 
+    "AttributionAnalyzer",
     "FooterCopyrightStrategy",
     "PoweredByLinkStrategy",
     "EmailFooterStrategy",
