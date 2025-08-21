@@ -2,20 +2,15 @@
 
 import asyncio
 import logging
-import sys
 import time
-from pathlib import Path
 from typing import Optional
 
 import aiohttp
 
-# Add parent directory to path for imports
-sys.path.append(str(Path(__file__).parent.parent.parent))
-
-from models.detection import AttributionInfo, DetectionStatus, SourceDetectionResult
-from source_detectors.config import get_config
-from source_detectors.interfaces import SourceDetector
-from source_detectors.strategies.attribution import (
+from src.models.detection import DetectionStatus, SourceDetectionResult
+from src.source_detectors.config import get_config
+from src.source_detectors.interfaces import SourceDetector
+from src.source_detectors.strategies.attribution import (
     AttributionAnalyzer,
     DomainExtractionStrategy,
     EmailFooterStrategy,
@@ -196,7 +191,7 @@ class MailchimpDetector(SourceDetector):
 
                         return content
 
-            except asyncio.TimeoutError as e:
+            except asyncio.TimeoutError:
                 last_error = f"Timeout after {self.timeout}s on attempt {attempt + 1}"
                 logger.warning(last_error)
             except aiohttp.ClientError as e:

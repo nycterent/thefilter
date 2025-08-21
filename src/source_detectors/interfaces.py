@@ -1,14 +1,9 @@
 """Interfaces for the pluggable source detection system."""
 
-import sys
 from abc import ABC, abstractmethod
-from pathlib import Path
 from typing import Optional
 
-# Add parent directory to path for imports
-sys.path.append(str(Path(__file__).parent.parent))
-
-from models.detection import SourceDetectionResult
+from src.models.detection import SourceDetectionResult
 
 
 class SourceDetector(ABC):

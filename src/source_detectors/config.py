@@ -47,7 +47,7 @@ class DetectionConfig:
                         value = float(value)
 
                     self._config[config_key] = value
-                except (ValueError, TypeError) as e:
+                except (ValueError, TypeError):
                     # If conversion fails, keep default value
                     pass
 

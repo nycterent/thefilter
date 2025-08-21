@@ -2,15 +2,10 @@
 
 import logging
 import re
-import sys
 from abc import ABC, abstractmethod
-from pathlib import Path
 from typing import List, Optional
 
-# Add parent directory to path for imports
-sys.path.append(str(Path(__file__).parent.parent.parent))
-
-from models.detection import AttributionInfo
+from src.models.detection import AttributionInfo
 
 logger = logging.getLogger(__name__)
 

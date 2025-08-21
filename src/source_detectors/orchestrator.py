@@ -1,16 +1,11 @@
 """Source detection orchestrator for managing multiple providers."""
 
 import logging
-import sys
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-# Add parent directory to path for imports
-sys.path.append(str(Path(__file__).parent.parent))
-
-from models.detection import DetectionStatus, SourceDetectionResult
-from source_detectors.interfaces import SourceDetector
-from source_detectors.providers.mailchimp import MailchimpDetector
+from src.models.detection import DetectionStatus, SourceDetectionResult
+from src.source_detectors.interfaces import SourceDetector
+from src.source_detectors.providers.mailchimp import MailchimpDetector
 
 logger = logging.getLogger(__name__)
 
