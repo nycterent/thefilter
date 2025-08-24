@@ -6,24 +6,24 @@ Uses existing Infisical integration and publishes static newsletter content.
 
 import sys
 import asyncio
+import aiohttp
 from pathlib import Path
 from src.models.settings import Settings
-from src.clients.buttondown import ButtondownClient
 
 async def publish_newsletter_direct(newsletter_file: str):
     """
-    Publish newsletter directly to Buttondown using Infisical-managed credentials.
+    Publish newsletter directly to Buttondown using API credentials.
     
     Args:
         newsletter_file: Path to the newsletter markdown file
     """
     try:
-        # Load settings with Infisical integration
-        print("🔑 Loading API credentials via Infisical...")
+        # Load settings with environment variables
+        print("🔑 Loading API credentials...")
         settings = Settings()
         
         if not settings.buttondown_api_key:
-            print("❌ Buttondown API key not found. Ensure Infisical is configured.")
+            print("❌ Buttondown API key not found. Check BUTTONDOWN_API_KEY environment variable.")
             return False
             
         # Read newsletter content
@@ -45,28 +45,34 @@ async def publish_newsletter_direct(newsletter_file: str):
         
         print(f"📧 Publishing newsletter: {title}")
         
-        # Initialize Buttondown client
-        buttondown = ButtondownClient(
-            api_key=settings.buttondown_api_key,
-            timeout=settings.buttondown_timeout
-        )
+        # Prepare Buttondown API request
+        url = "https://api.buttondown.email/v1/emails"
+        headers = {
+            "Authorization": f"Token {settings.buttondown_api_key}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "subject": title,
+            "body": content,
+        }
         
-        # Publish newsletter
-        result = await buttondown.publish_newsletter(
-            subject=title,
-            body=content,
-            newsletter_type="primary"
-        )
-        
-        if result.get('status') == 'success':
-            print("✅ Newsletter published successfully!")
-            print(f"🔗 Newsletter URL: {result.get('url', 'N/A')}")
-            print(f"📊 Subscribers notified: {result.get('subscribers', 'N/A')}")
-            return True
-        else:
-            print(f"❌ Publication failed: {result.get('error', 'Unknown error')}")
-            return False
-            
+        # Make API request
+        timeout = aiohttp.ClientTimeout(total=settings.buttondown_timeout)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.post(url, headers=headers, json=payload) as response:
+                if response.status in {200, 201}:
+                    data = await response.json()
+                    draft_id = data.get("id")
+                    print("✅ Newsletter draft created successfully in Buttondown!")
+                    print(f"📧 Draft ID: {draft_id}")
+                    print(f"🔗 View in Buttondown: https://buttondown.email/filter")
+                    return True
+                else:
+                    error_detail = await response.text()
+                    print(f"❌ Buttondown API error {response.status}:")
+                    print(error_detail)
+                    return False
+                    
     except Exception as e:
         print(f"❌ Error during publication: {str(e)}")
         import traceback
