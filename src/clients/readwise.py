@@ -199,6 +199,8 @@ class ReadwiseClient:
 
     async def get_recent_reader_documents(self, days: int = 30) -> List[Dict[str, Any]]:
         """Get curated documents from Readwise Reader (only 'twiar' tagged articles).
+        
+        Uses 1-hour caching to avoid rate limiting while respecting content policy.
 
         Args:
             days: Number of days back to fetch documents (default 30 days to capture all twiar articles)
@@ -212,7 +214,17 @@ class ReadwiseClient:
             )
             return []
 
+        # Try to get from cache first
+        from src.core.readwise_cache import get_readwise_cache
+        cache = get_readwise_cache()
+        
+        cached_documents = cache.get_cached_documents(days)
+        if cached_documents is not None:
+            return cached_documents
+
         try:
+            logger.info("📡 Fetching fresh Readwise documents (not in cache)...")
+            
             # For twiar-tagged articles, we want ALL articles regardless of date
             # to ensure we capture all curated content
             url = "https://readwise.io/api/v3/list/"
@@ -243,6 +255,10 @@ class ReadwiseClient:
                                 )
                             except Exception:
                                 pass
+                            
+                            # If rate limited and we have no cache, return empty
+                            if response.status == 429:
+                                logger.warning("⚠️ Readwise API rate limited - no cached data available")
                             break
 
                         data = await response.json()
@@ -264,8 +280,11 @@ class ReadwiseClient:
             # Filter for high-quality curated articles
             curated_documents = self._filter_curated_articles(all_documents)
 
+            # Cache the results for 1 hour
+            cache.cache_documents(curated_documents, days, cache_hours=1.0)
+
             logger.info(
-                f"Retrieved {len(curated_documents)} curated articles from {len(all_documents)} total documents"
+                f"Retrieved {len(curated_documents)} curated articles from {len(all_documents)} total documents (cached for 1h)"
             )
             return curated_documents
 

@@ -70,6 +70,19 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           UNSPLASH_API_KEY: ${{ secrets.UNSPLASH_API_KEY }}
 
+      - name: Warm Readwise cache
+        id: warm_cache
+        run: |
+          echo "🔥 Warming Readwise cache to avoid rate limiting..."
+          python warm_readwise_cache.py
+        env:
+          READWISE_API_KEY: ${{ secrets.READWISE_API_KEY }}
+          GLASP_API_KEY: ${{ secrets.GLASP_API_KEY }}
+          RSS_FEEDS: ${{ secrets.RSS_FEEDS }}
+          BUTTONDOWN_API_KEY: ${{ secrets.BUTTONDOWN_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          UNSPLASH_API_KEY: ${{ secrets.UNSPLASH_API_KEY }}
+
       - name: Validate content availability
         id: content_check
         run: |
