@@ -61,14 +61,18 @@ jobs:
           
           echo "✅ Newsletter file validated ($WORD_COUNT words)"
 
-      - name: Publish newsletter with Infisical
+      - name: Publish newsletter
         env:
           DEBUG_MODE: ${{ inputs.debug }}
+          READWISE_API_KEY: ${{ secrets.READWISE_API_KEY }}
+          GLASP_API_KEY: ${{ secrets.GLASP_API_KEY }}
+          RSS_FEEDS: ${{ secrets.RSS_FEEDS }}
+          BUTTONDOWN_API_KEY: ${{ secrets.BUTTONDOWN_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          UNSPLASH_API_KEY: ${{ secrets.UNSPLASH_API_KEY }}
         run: |
-          echo "🚀 Publishing newsletter via Infisical integration..."
-          
-          # Use the existing Infisical setup from other workflows
-          infisical run --env=prod --path=/ -- python publish_direct.py "${{ inputs.newsletter_file }}"
+          echo "🚀 Publishing newsletter with API credentials..."
+          python publish_direct.py "${{ inputs.newsletter_file }}"
 
       - name: Create success issue
         if: success()

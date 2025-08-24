@@ -4,10 +4,10 @@ import json
 import re
 import sys
 from pathlib import Path
-from typing import Dict
+from typing import Any, Dict
 
 
-def run_checks(text: str) -> Dict[str, any]:
+def run_checks(text: str) -> Dict[str, Any]:
     """Run all QA checks on newsletter content.
 
     Args:
@@ -73,7 +73,7 @@ def run_checks(text: str) -> Dict[str, any]:
     }
 
 
-def check_prompt_leakage(text: str) -> Dict[str, any]:
+def check_prompt_leakage(text: str) -> Dict[str, Any]:
     """Check for AI prompt leakage or guardrail refusals."""
     patterns = [
         r"as an ai",
@@ -119,7 +119,7 @@ def check_prompt_leakage(text: str) -> Dict[str, any]:
     }
 
 
-def check_raw_urls(text: str) -> Dict[str, any]:
+def check_raw_urls(text: str) -> Dict[str, Any]:
     """Check for raw URLs in content that should be properly linked."""
     # Look for URLs that aren't in HTML anchor tags or markdown links
     url_pattern = r'https?://[^\s<>"{}|\\^`\[\]]+'
@@ -172,7 +172,7 @@ def check_raw_urls(text: str) -> Dict[str, any]:
     }
 
 
-def check_canonical_links(text: str) -> Dict[str, any]:
+def check_canonical_links(text: str) -> Dict[str, Any]:
     """Check for non-canonical link hosts."""
     forbidden_hosts = [
         "feedbinusercontent",
@@ -206,7 +206,7 @@ def check_canonical_links(text: str) -> Dict[str, any]:
     }
 
 
-def check_generic_links(text: str) -> Dict[str, any]:
+def check_generic_links(text: str) -> Dict[str, Any]:
     """Check for generic or placeholder link text."""
     generic_patterns = [
         r"^link$",
@@ -266,7 +266,7 @@ def check_generic_links(text: str) -> Dict[str, any]:
     }
 
 
-def check_truncation(text: str) -> Dict[str, any]:
+def check_truncation(text: str) -> Dict[str, Any]:
     """Check for truncated content and unbalanced quotes/parentheses."""
     issues = []
 
@@ -353,7 +353,7 @@ def check_truncation(text: str) -> Dict[str, any]:
     }
 
 
-def check_markdown_formatting(text: str) -> Dict[str, any]:
+def check_markdown_formatting(text: str) -> Dict[str, Any]:
     """Check for markdown formatting issues."""
     issues = []
 
@@ -392,7 +392,7 @@ def check_markdown_formatting(text: str) -> Dict[str, any]:
     }
 
 
-def main():
+def main() -> None:
     """CLI interface for QA checks."""
     if len(sys.argv) < 2:
         print("Usage: python -m core.qacheck <file> [--json <output_file>]")

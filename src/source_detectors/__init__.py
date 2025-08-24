@@ -13,4 +13,12 @@ __all__ = [
     "detect_source",
     "get_config",
     "set_config",
+    "cleanup_resources",
 ]
+
+
+async def cleanup_resources():
+    """Clean up source detection resources including HTTP sessions."""
+    from .http_session import cleanup_http_resources
+
+    await cleanup_http_resources()

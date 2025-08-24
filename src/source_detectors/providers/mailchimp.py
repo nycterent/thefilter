@@ -7,6 +7,7 @@ from typing import Optional
 
 import aiohttp
 
+from ..http_session import get_http_session
 from src.models.detection import DetectionStatus, SourceDetectionResult
 from src.source_detectors.config import get_config
 from src.source_detectors.interfaces import SourceDetector
@@ -163,33 +164,27 @@ class MailchimpDetector(SourceDetector):
 
         for attempt in range(self.max_retries):
             try:
-                headers = {
-                    "User-Agent": self.user_agent,
-                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                    "Accept-Language": "en-US,en;q=0.5",
-                    "Accept-Encoding": "gzip, deflate",
-                    "Connection": "keep-alive",
-                }
+                # Get shared HTTP session with connection pooling
+                session = await get_http_session()
 
+                # Override timeout for this request if needed
                 timeout = aiohttp.ClientTimeout(total=self.timeout)
-                async with aiohttp.ClientSession(
-                    timeout=timeout, headers=headers
-                ) as session:
-                    async with session.get(url) as response:
-                        response.raise_for_status()
-                        content = await response.text()
 
-                        # Check content size
-                        max_size = get_config(
-                            "detection.max_content_size", 10 * 1024 * 1024
+                async with session.get(url, timeout=timeout) as response:
+                    response.raise_for_status()
+                    content = await response.text()
+
+                    # Check content size
+                    max_size = get_config(
+                        "detection.max_content_size", 10 * 1024 * 1024
+                    )
+                    if len(content) > max_size:
+                        logger.warning(
+                            f"Content size ({len(content)}) exceeds maximum ({max_size})"
                         )
-                        if len(content) > max_size:
-                            logger.warning(
-                                f"Content size ({len(content)}) exceeds maximum ({max_size})"
-                            )
-                            content = content[:max_size]
+                        content = content[:max_size]
 
-                        return content
+                    return content
 
             except asyncio.TimeoutError:
                 last_error = f"Timeout after {self.timeout}s on attempt {attempt + 1}"

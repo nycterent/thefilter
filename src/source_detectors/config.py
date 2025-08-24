@@ -7,9 +7,9 @@ from typing import Any, Dict
 class DetectionConfig:
     """Configuration manager for source detection settings."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize configuration with default values."""
-        self._config = {
+        self._config: Dict[str, Any] = {
             # Mailchimp settings
             "mailchimp.timeout": 30,
             "mailchimp.max_retries": 3,
@@ -25,7 +25,7 @@ class DetectionConfig:
         # Override with environment variables if available
         self._load_from_environment()
 
-    def _load_from_environment(self):
+    def _load_from_environment(self) -> None:
         """Load configuration from environment variables."""
         env_mappings = {
             "MAILCHIMP_TIMEOUT": "mailchimp.timeout",
@@ -38,15 +38,17 @@ class DetectionConfig:
             if env_var in os.environ:
                 try:
                     # Try to convert to appropriate type
-                    value = os.environ[env_var]
+                    env_value = os.environ[env_var]
                     if config_key.endswith(
                         (".timeout", ".max_retries", ".max_content_size")
                     ):
-                        value = int(value)
+                        parsed_value: Any = int(env_value)
                     elif config_key.endswith(".min_confidence"):
-                        value = float(value)
+                        parsed_value = float(env_value)
+                    else:
+                        parsed_value = env_value
 
-                    self._config[config_key] = value
+                    self._config[config_key] = parsed_value
                 except (ValueError, TypeError):
                     # If conversion fails, keep default value
                     pass
@@ -64,7 +66,7 @@ class DetectionConfig:
         """
         return self._config.get(key, default)
 
-    def set(self, key: str, value: Any):
+    def set(self, key: str, value: Any) -> None:
         """
         Set configuration value.
 
@@ -102,7 +104,7 @@ def get_config(key: str, default: Any = None) -> Any:
     return _config.get(key, default)
 
 
-def set_config(key: str, value: Any):
+def set_config(key: str, value: Any) -> None:
     """
     Set configuration value using global config instance.
 

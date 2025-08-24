@@ -3,7 +3,7 @@
 from enum import Enum
 from typing import Any, Dict, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class DetectionStatus(str, Enum):
@@ -51,7 +51,4 @@ class SourceDetectionResult(BaseModel):
         None, description="Time taken to process in seconds"
     )
 
-    class Config:
-        """Pydantic configuration."""
-
-        use_enum_values = True
+    model_config = ConfigDict(use_enum_values=True)
