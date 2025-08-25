@@ -68,6 +68,9 @@ class Settings(BaseSettings):
         30, ge=1, le=365, description="Maximum age for cache entries in days"
     )
     cache_enabled: bool = Field(True, description="Enable content caching system")
+    cache_hours: float = Field(
+        8.0, ge=0.5, le=24.0, description="Cache duration in hours for API responses"
+    )
 
     # OpenRouter Rate Limiting Settings
     openrouter_min_request_interval: float = Field(

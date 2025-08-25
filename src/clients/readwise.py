@@ -24,6 +24,7 @@ class ReadwiseClient:
             settings: Settings instance for configuration values
         """
         self.api_key = api_key
+        self.settings = settings
         self.base_url = "https://readwise.io/api/v2"
         self.headers = {
             "Authorization": f"Token {api_key}",
@@ -283,11 +284,12 @@ class ReadwiseClient:
             # Filter for high-quality curated articles
             curated_documents = self._filter_curated_articles(all_documents)
 
-            # Cache the results for 8 hours
-            cache.cache_documents(curated_documents, days, cache_hours=8.0)
+            # Cache the results for configured duration
+            cache_hours = self.settings.cache_hours if self.settings else 8.0
+            cache.cache_documents(curated_documents, days, cache_hours=cache_hours)
 
             logger.info(
-                f"Retrieved {len(curated_documents)} curated articles from {len(all_documents)} total documents (cached for 8h)"
+                f"Retrieved {len(curated_documents)} curated articles from {len(all_documents)} total documents (cached for {cache_hours}h)"
             )
             return curated_documents
 

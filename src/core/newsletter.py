@@ -1063,7 +1063,7 @@ SPECIFIC REQUIREMENTS:
             return None
 
         try:
-            return ReadwiseClient(settings.readwise_api_key.strip())
+            return ReadwiseClient(settings.readwise_api_key.strip(), settings)
         except Exception as e:
             logger.error(f"❌ Failed to initialize Readwise client: {e}")
             return None
