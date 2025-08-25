@@ -5,10 +5,11 @@ Simplified Source Resolver for Newsletter Integration
 Focused on practical source resolution for newsletter generation.
 """
 
-import re
 import logging
+import re
 from typing import Dict, List, Optional, Tuple
 from urllib.parse import urlparse
+
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry

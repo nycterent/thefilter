@@ -1,8 +1,9 @@
 import re
-from typing import List, Dict, Tuple
+from typing import Dict, List, Tuple
+
 import nltk
 from nltk.corpus import stopwords
-from textstat import flesch_reading_ease, flesch_kincaid_grade
+from textstat import flesch_kincaid_grade, flesch_reading_ease
 
 
 class TextDiagnostics:

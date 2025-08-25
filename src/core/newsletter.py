@@ -18,11 +18,11 @@ from src.core.cache import ContentCache
 from src.core.qacheck import run_checks
 from src.core.sanitizer import ContentSanitizer
 from src.core.source_resolver import NewsletterSourceResolver
-from src.quality_checks.anti_llm_validator import validate_newsletter_content
 from src.core.voice_config import clean_voice_manager
 from src.core.voice_manager import VoiceManager
 from src.models.content import ContentItem, NewsletterDraft
 from src.models.settings import Settings
+from src.quality_checks.anti_llm_validator import validate_newsletter_content
 
 logger = logging.getLogger(__name__)
 

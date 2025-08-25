@@ -7,9 +7,9 @@ Enforces specific editorial standards and structure requirements.
 """
 
 import re
-from typing import Dict, List, Set, Tuple
 from dataclasses import dataclass
 from enum import Enum
+from typing import Dict, List, Set, Tuple
 
 
 class ValidationLevel(Enum):

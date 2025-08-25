@@ -6,12 +6,13 @@ Identifies intermediary sources (newsletter archives, aggregators) and extracts
 original primary sources using pattern matching and web search.
 """
 
-import re
-import logging
-from typing import Dict, List, Optional, Tuple
-from dataclasses import dataclass
-from urllib.parse import urlparse
 import asyncio
+import logging
+import re
+from dataclasses import dataclass
+from typing import Dict, List, Optional, Tuple
+from urllib.parse import urlparse
+
 import aiohttp
 
 logger = logging.getLogger(__name__)

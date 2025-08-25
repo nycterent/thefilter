@@ -7,7 +7,6 @@ from typing import Optional
 
 import aiohttp
 
-from ..http_session import get_http_session
 from src.models.detection import DetectionStatus, SourceDetectionResult
 from src.source_detectors.config import get_config
 from src.source_detectors.interfaces import SourceDetector
@@ -18,6 +17,8 @@ from src.source_detectors.strategies.attribution import (
     FooterCopyrightStrategy,
     PoweredByLinkStrategy,
 )
+
+from ..http_session import get_http_session
 
 logger = logging.getLogger(__name__)
 
