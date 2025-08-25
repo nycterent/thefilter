@@ -48,14 +48,18 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
       
+      - name: Get current hour for cache key
+        id: date
+        run: echo "hour=$(date -u +%Y%m%d%H)" >> $GITHUB_OUTPUT
+
       # Restore cache from previous runs to avoid rate limiting
       - name: Restore Readwise cache
         uses: actions/cache@v4
         with:
           path: .cache/
-          key: readwise-cache-daily-${{ github.run_id }}
+          # Use same hourly key as newsletter workflow
+          key: readwise-cache-${{ steps.date.outputs.hour }}
           restore-keys: |
-            readwise-cache-daily-
             readwise-cache-
       
       - name: Check twiar article count with cache fallback

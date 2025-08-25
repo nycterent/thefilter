@@ -70,12 +70,17 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           UNSPLASH_API_KEY: ${{ secrets.UNSPLASH_API_KEY }}
 
+      - name: Get current hour for cache key
+        id: date
+        run: echo "hour=$(date -u +%Y%m%d%H)" >> $GITHUB_OUTPUT
+
       # Cache Readwise data across workflow runs to avoid rate limiting
       - name: Restore Readwise cache
         uses: actions/cache@v4
         with:
           path: .cache/
-          key: readwise-cache-${{ github.run_id }}
+          # Use hourly key to match 1-hour cache duration
+          key: readwise-cache-${{ steps.date.outputs.hour }}
           restore-keys: |
             readwise-cache-
 
