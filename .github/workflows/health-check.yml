@@ -1,0 +1,346 @@
+name: Fast Health Check
+
+on:
+  # Manual trigger
+  workflow_dispatch:
+    inputs:
+      debug:
+        description: "Enable debug logging"
+        required: false
+        default: "false"
+        type: boolean
+
+  # Called by other workflows
+  workflow_call:
+    outputs:
+      health_status:
+        description: "Overall health status"
+        value: ${{ jobs.health-check.outputs.health_status }}
+      article_count:
+        description: "Number of articles available"
+        value: ${{ jobs.health-check.outputs.article_count }}
+      data_source:
+        description: "Source of article data"
+        value: ${{ jobs.health-check.outputs.data_source }}
+      should_generate:
+        description: "Whether newsletter should be generated"
+        value: ${{ jobs.health-check.outputs.should_generate }}
+
+jobs:
+  health-check:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 3  # Fast timeout - if it takes longer, something's wrong
+    
+    permissions:
+      contents: read
+      issues: write
+      packages: read
+    
+    outputs:
+      health_status: ${{ steps.final_status.outputs.health_status }}
+      article_count: ${{ steps.content_check.outputs.article_count }}
+      data_source: ${{ steps.content_check.outputs.data_source }}
+      should_generate: ${{ steps.content_check.outputs.should_generate }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.11
+
+      - name: Install minimal dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # Only install what's needed for health checks - no AI processing deps
+          pip install pydantic pydantic-settings aiohttp python-dotenv
+
+      - name: API Connection Test
+        id: api_test
+        timeout-minutes: 1
+        run: |
+          echo "🔍 Testing API connections (fast check)..."
+          
+          cat > test_apis.py << 'EOF'
+          import asyncio
+          import aiohttp
+          import os
+          import sys
+          
+          async def test_readwise():
+              api_key = os.getenv('READWISE_API_KEY')
+              if not api_key:
+                  return False, "No API key"
+              
+              try:
+                  async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
+                      async with session.get(
+                          "https://readwise.io/api/v2/auth/", 
+                          headers={"Authorization": f"Token {api_key}"}
+                      ) as response:
+                          return response.status in [200, 204], f"Status: {response.status}"
+              except Exception as e:
+                  return False, str(e)
+          
+          async def test_buttondown():
+              api_key = os.getenv('BUTTONDOWN_API_KEY')
+              if not api_key:
+                  return False, "No API key"
+              
+              try:
+                  async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
+                      async with session.get(
+                          "https://api.buttondown.email/v1/emails",
+                          headers={"Authorization": f"Token {api_key}"},
+                          params={"limit": 1}
+                      ) as response:
+                          return response.status == 200, f"Status: {response.status}"
+              except Exception as e:
+                  return False, str(e)
+          
+          async def test_openrouter():
+              api_key = os.getenv('OPENROUTER_API_KEY')
+              if not api_key:
+                  return False, "No API key"
+              
+              try:
+                  async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
+                      async with session.get(
+                          "https://openrouter.ai/api/v1/models",
+                          headers={"Authorization": f"Bearer {api_key}"}
+                      ) as response:
+                          return response.status == 200, f"Status: {response.status}"
+              except Exception as e:
+                  return False, str(e)
+          
+          async def main():
+              print("🔬 Fast API health check...")
+              
+              results = {}
+              tests = [
+                  ("readwise", test_readwise()),
+                  ("buttondown", test_buttondown()),
+                  ("openrouter", test_openrouter())
+              ]
+              
+              for name, test in tests:
+                  success, message = await test
+                  status = "✅" if success else "❌"
+                  results[name] = success
+                  print(f"{status} {name.title()}: {message}")
+              
+              # Set outputs
+              with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                  f.write(f"readwise_status={'healthy' if results['readwise'] else 'unhealthy'}\n")
+                  f.write(f"buttondown_status={'healthy' if results['buttondown'] else 'unhealthy'}\n")
+                  f.write(f"openrouter_status={'healthy' if results['openrouter'] else 'unhealthy'}\n")
+                  
+                  # Overall status - require Readwise + Buttondown at minimum
+                  overall_healthy = results['readwise'] and results['buttondown']
+                  f.write(f"apis_status={'healthy' if overall_healthy else 'unhealthy'}\n")
+              
+              return 0 if overall_healthy else 1
+          
+          if __name__ == "__main__":
+              exit_code = asyncio.run(main())
+              sys.exit(exit_code)
+          EOF
+          
+          python test_apis.py
+        env:
+          READWISE_API_KEY: ${{ secrets.READWISE_API_KEY }}
+          BUTTONDOWN_API_KEY: ${{ secrets.BUTTONDOWN_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+
+      - name: Get current hour for cache key
+        id: date
+        run: echo "hour=$(date -u +%Y%m%d%H)" >> $GITHUB_OUTPUT
+
+      - name: Check cache and content availability
+        id: content_check
+        timeout-minutes: 1
+        run: |
+          echo "📊 Checking content availability (cache-first)..."
+          
+          # Create minimal cache check
+          mkdir -p .cache
+          
+          cat > check_content.py << 'EOF'
+          import os
+          import sys
+          import sqlite3
+          import json
+          from datetime import datetime, timedelta
+          
+          def check_content():
+              cache_path = ".cache/readwise_cache.db"
+              
+              # Check if cache exists and has recent data
+              if os.path.exists(cache_path):
+                  try:
+                      with sqlite3.connect(cache_path) as conn:
+                          conn.row_factory = sqlite3.Row
+                          
+                          # Check for recent cache entries (within last 8 hours)
+                          cutoff = datetime.now() - timedelta(hours=8)
+                          cursor = conn.execute(
+                              "SELECT documents, cached_at FROM readwise_documents WHERE cached_at > ? ORDER BY cached_at DESC LIMIT 1",
+                              (cutoff.isoformat(),)
+                          )
+                          row = cursor.fetchone()
+                          
+                          if row:
+                              docs = json.loads(row[0])
+                              article_count = len(docs)
+                              data_source = "fresh_cache"
+                              print(f"📊 Fresh cache found: {article_count} articles (cached: {row[1]})")
+                          else:
+                              # Check for any stale cache
+                              cursor = conn.execute(
+                                  "SELECT documents, cached_at FROM readwise_documents ORDER BY cached_at DESC LIMIT 1"
+                              )
+                              row = cursor.fetchone()
+                              
+                              if row:
+                                  docs = json.loads(row[0])
+                                  article_count = len(docs)
+                                  data_source = "stale_cache"
+                                  print(f"📊 Stale cache found: {article_count} articles (cached: {row[1]})")
+                              else:
+                                  article_count = 0
+                                  data_source = "no_cache"
+                                  print("📊 No cache data found")
+                      
+                  except Exception as e:
+                      print(f"❌ Cache check error: {e}")
+                      article_count = 0
+                      data_source = "cache_error"
+              else:
+                  article_count = 0
+                  data_source = "no_cache"
+                  print("📊 No cache file found")
+              
+              # Determine if we should generate
+              threshold = 7
+              should_generate = article_count >= threshold
+              
+              print(f"🎯 Content check: {article_count} articles (threshold: {threshold})")
+              print(f"🚀 Should generate: {'YES' if should_generate else 'NO'}")
+              
+              # Set outputs
+              with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                  f.write(f"article_count={article_count}\n")
+                  f.write(f"data_source={data_source}\n")
+                  f.write(f"should_generate={str(should_generate).lower()}\n")
+                  f.write(f"cache_status={'fresh' if data_source == 'fresh_cache' else 'stale' if data_source == 'stale_cache' else 'none'}\n")
+              
+              return 0
+          
+          if __name__ == "__main__":
+              try:
+                  check_content()
+              except Exception as e:
+                  print(f"❌ Content check failed: {e}")
+                  with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                      f.write(f"article_count=0\n")
+                      f.write(f"data_source=error\n")
+                      f.write(f"should_generate=false\n")
+                      f.write(f"cache_status=error\n")
+                  sys.exit(1)
+          EOF
+          
+          python check_content.py
+
+      - name: Restore cache for next steps
+        uses: actions/cache@v4
+        with:
+          path: .cache/
+          key: readwise-cache-${{ steps.date.outputs.hour }}
+          restore-keys: |
+            readwise-cache-
+
+      - name: Final health assessment
+        id: final_status
+        run: |
+          echo "🏥 Final health assessment..."
+          
+          # Check all components
+          apis_healthy="${{ steps.api_test.outputs.apis_status }}" == "healthy"
+          content_available="${{ steps.content_check.outputs.should_generate }}" == "true"
+          cache_status="${{ steps.content_check.outputs.cache_status }}"
+          
+          if [ "$apis_healthy" = "true" ] && [ "$content_available" = "true" ]; then
+            health_status="healthy"
+            echo "✅ System healthy - ready for newsletter generation"
+          elif [ "$apis_healthy" = "true" ] && [ "$cache_status" != "none" ]; then
+            health_status="degraded"
+            echo "⚠️ System degraded - APIs work but insufficient content"
+          else
+            health_status="unhealthy"
+            echo "❌ System unhealthy - API or cache issues"
+          fi
+          
+          echo "health_status=$health_status" >> $GITHUB_OUTPUT
+          
+          # Summary
+          echo "📋 Health Check Summary:"
+          echo "  APIs: ${{ steps.api_test.outputs.apis_status }}"
+          echo "  Content: ${{ steps.content_check.outputs.article_count }} articles"
+          echo "  Cache: ${{ steps.content_check.outputs.cache_status }}"
+          echo "  Overall: $health_status"
+
+      - name: Create health check issue
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const healthStatus = '${{ steps.final_status.outputs.health_status }}';
+            const articleCount = '${{ steps.content_check.outputs.article_count }}';
+            const dataSource = '${{ steps.content_check.outputs.data_source }}';
+            const shouldGenerate = '${{ steps.content_check.outputs.should_generate }}';
+            
+            const statusIcon = healthStatus === 'healthy' ? '✅' : healthStatus === 'degraded' ? '⚠️' : '❌';
+            
+            const issueBody = `## ${statusIcon} Health Check - ${new Date().toISOString().split('T')[0]}
+            
+            **Status:** ${healthStatus.toUpperCase()}  
+            **Duration:** < 2 minutes (fast check)  
+            **Workflow:** [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            
+            ### 🔬 API Status
+            - **Readwise:** ${{ steps.api_test.outputs.readwise_status }}
+            - **Buttondown:** ${{ steps.api_test.outputs.buttondown_status }}
+            - **OpenRouter:** ${{ steps.api_test.outputs.openrouter_status }}
+            
+            ### 📊 Content Status
+            - **Articles available:** ${articleCount}
+            - **Data source:** ${dataSource}
+            - **Cache status:** ${{ steps.content_check.outputs.cache_status }}
+            - **Ready for generation:** ${shouldGenerate === 'true' ? 'YES' : 'NO'}
+            
+            ### 🎯 Recommendation
+            ${healthStatus === 'healthy' 
+              ? '🚀 **System healthy** - Ready to generate newsletter'
+              : healthStatus === 'degraded'
+              ? '⚠️ **System degraded** - APIs work but need more content or cache refresh'
+              : '❌ **System unhealthy** - Fix API connections before generating'
+            }
+            
+            ### 🔗 Quick Actions
+            - [🔄 Run Full Health Check](${{ github.server_url }}/${{ github.repository }}/actions/workflows/health-check.yml)
+            - [📧 Generate Newsletter](${{ github.server_url }}/${{ github.repository }}/actions/workflows/newsletter.yml)
+            - [📊 All Workflows](${{ github.server_url }}/${{ github.repository }}/actions)
+            
+            ---
+            *Fast health check completed in < 2 minutes*`;
+            
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `${statusIcon} Health Check: ${healthStatus.toUpperCase()} - ${new Date().toISOString().split('T')[0]}`,
+              body: issueBody,
+              labels: ['health-check', 'automated', healthStatus]
+            });

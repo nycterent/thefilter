@@ -1,0 +1,386 @@
+name: Daily Newsletter Scheduler
+
+on:
+  # Run daily at 9:00 AM UTC (5:00 AM Eastern, 11:00 AM Central European)
+  schedule:
+    - cron: "0 9 * * *"
+  
+  # Manual trigger for testing
+  workflow_dispatch:
+    inputs:
+      force_generation:
+        description: "Force newsletter generation regardless of content/health"
+        required: false
+        default: "false"
+        type: boolean
+      debug:
+        description: "Enable debug logging"
+        required: false
+        default: "false"
+        type: boolean
+
+jobs:
+  # Step 1: Fast health check and content assessment (< 2 minutes)
+  health-and-content-check:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 3
+    
+    permissions:
+      contents: read
+      issues: write
+      packages: read
+    
+    outputs:
+      health_status: ${{ steps.assessment.outputs.health_status }}
+      should_generate: ${{ steps.assessment.outputs.should_generate }}
+      article_count: ${{ steps.assessment.outputs.article_count }}
+      data_source: ${{ steps.assessment.outputs.data_source }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.11
+
+      - name: Install minimal dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pydantic pydantic-settings aiohttp python-dotenv
+
+      - name: Get current hour for cache key
+        id: date
+        run: echo "hour=$(date -u +%Y%m%d%H)" >> $GITHUB_OUTPUT
+
+      - name: Restore cache
+        uses: actions/cache@v4
+        with:
+          path: .cache/
+          key: readwise-cache-${{ steps.date.outputs.hour }}
+          restore-keys: |
+            readwise-cache-
+
+      - name: Fast system assessment
+        id: assessment
+        timeout-minutes: 2
+        run: |
+          echo "🏥 Running fast health and content check..."
+          
+          cat > fast_assessment.py << 'EOF'
+          import asyncio
+          import aiohttp
+          import os
+          import sys
+          import sqlite3
+          import json
+          from datetime import datetime, timedelta
+          
+          async def test_apis():
+              """Quick API connectivity test"""
+              results = {}
+              
+              # Test Readwise
+              readwise_key = os.getenv('READWISE_API_KEY')
+              if readwise_key:
+                  try:
+                      async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
+                          async with session.get(
+                              "https://readwise.io/api/v2/auth/", 
+                              headers={"Authorization": f"Token {readwise_key}"}
+                          ) as response:
+                              results['readwise'] = response.status in [200, 204]
+                  except:
+                      results['readwise'] = False
+              else:
+                  results['readwise'] = False
+              
+              # Test Buttondown
+              buttondown_key = os.getenv('BUTTONDOWN_API_KEY')
+              if buttondown_key:
+                  try:
+                      async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
+                          async with session.get(
+                              "https://api.buttondown.email/v1/emails",
+                              headers={"Authorization": f"Token {buttondown_key}"},
+                              params={"limit": 1}
+                          ) as response:
+                              results['buttondown'] = response.status == 200
+                  except:
+                      results['buttondown'] = False
+              else:
+                  results['buttondown'] = False
+              
+              return results
+          
+          def check_cached_content():
+              """Check for cached content"""
+              cache_path = ".cache/readwise_cache.db"
+              
+              if not os.path.exists(cache_path):
+                  return 0, "no_cache"
+              
+              try:
+                  with sqlite3.connect(cache_path) as conn:
+                      conn.row_factory = sqlite3.Row
+                      
+                      # Check for recent cache (within 8 hours)
+                      cutoff = datetime.now() - timedelta(hours=8)
+                      cursor = conn.execute(
+                          "SELECT documents FROM readwise_documents WHERE cached_at > ? ORDER BY cached_at DESC LIMIT 1",
+                          (cutoff.isoformat(),)
+                      )
+                      row = cursor.fetchone()
+                      
+                      if row:
+                          docs = json.loads(row[0])
+                          return len(docs), "fresh_cache"
+                      
+                      # Check for any cache
+                      cursor = conn.execute(
+                          "SELECT documents FROM readwise_documents ORDER BY cached_at DESC LIMIT 1"
+                      )
+                      row = cursor.fetchone()
+                      
+                      if row:
+                          docs = json.loads(row[0])
+                          return len(docs), "stale_cache"
+                      
+                      return 0, "empty_cache"
+              except Exception as e:
+                  print(f"Cache check error: {e}")
+                  return 0, "cache_error"
+          
+          async def main():
+              # Test APIs
+              print("🔬 Testing API connectivity...")
+              api_results = await test_apis()
+              
+              readwise_ok = api_results.get('readwise', False)
+              buttondown_ok = api_results.get('buttondown', False)
+              
+              print(f"  Readwise: {'✅' if readwise_ok else '❌'}")
+              print(f"  Buttondown: {'✅' if buttondown_ok else '❌'}")
+              
+              # Check content
+              print("📊 Checking cached content...")
+              article_count, data_source = check_cached_content()
+              print(f"  Articles: {article_count} ({data_source})")
+              
+              # Determine health and generation readiness
+              apis_healthy = readwise_ok and buttondown_ok
+              sufficient_content = article_count >= 7
+              force_flag = os.getenv('FORCE_GENERATION', 'false').lower() == 'true'
+              
+              if apis_healthy and (sufficient_content or force_flag):
+                  health_status = "healthy"
+                  should_generate = True
+              elif apis_healthy and article_count > 0:
+                  health_status = "degraded"
+                  should_generate = False
+              else:
+                  health_status = "unhealthy"
+                  should_generate = False
+              
+              print(f"🎯 Assessment: {health_status} (generate: {should_generate})")
+              
+              # Set GitHub outputs
+              with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                  f.write(f"health_status={health_status}\n")
+                  f.write(f"should_generate={str(should_generate).lower()}\n")
+                  f.write(f"article_count={article_count}\n")
+                  f.write(f"data_source={data_source}\n")
+                  f.write(f"readwise_status={'healthy' if readwise_ok else 'unhealthy'}\n")
+                  f.write(f"buttondown_status={'healthy' if buttondown_ok else 'unhealthy'}\n")
+              
+              return 0
+          
+          if __name__ == "__main__":
+              try:
+                  exit_code = asyncio.run(main())
+                  sys.exit(exit_code)
+              except Exception as e:
+                  print(f"❌ Assessment failed: {e}")
+                  with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                      f.write(f"health_status=error\n")
+                      f.write(f"should_generate=false\n")
+                      f.write(f"article_count=0\n")
+                      f.write(f"data_source=error\n")
+                  sys.exit(1)
+          EOF
+          
+          python fast_assessment.py
+        env:
+          READWISE_API_KEY: ${{ secrets.READWISE_API_KEY }}
+          BUTTONDOWN_API_KEY: ${{ secrets.BUTTONDOWN_API_KEY }}
+          FORCE_GENERATION: ${{ inputs.force_generation }}
+  
+  # Step 2: Generate newsletter if healthy (20 minutes but actually publishes)
+  generate-newsletter:
+    needs: health-and-content-check
+    if: needs.health-and-content-check.outputs.health_status == 'healthy' || inputs.force_generation == 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    
+    permissions:
+      contents: read
+      issues: write
+      packages: read
+      actions: write
+    
+    steps:
+      - name: Trigger newsletter generation
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const healthStatus = '${{ needs.health-and-content-check.outputs.health_status }}';
+            const shouldGenerate = '${{ needs.health-and-content-check.outputs.should_generate }}';
+            const forceFlag = '${{ inputs.force_generation }}' === 'true';
+            
+            console.log('📊 Scheduling decision:');
+            console.log(`  Health status: ${healthStatus}`);
+            console.log(`  Should generate: ${shouldGenerate}`);
+            console.log(`  Force flag: ${forceFlag}`);
+            console.log(`  Articles: ${{ needs.health-and-content-check.outputs.article_count }}`);
+            
+            if (healthStatus === 'healthy' || forceFlag) {
+              console.log('🚀 Triggering newsletter generation...');
+              
+              const response = await github.rest.actions.createWorkflowDispatch({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                workflow_id: 'newsletter.yml',
+                ref: 'main',
+                inputs: {
+                  dry_run: 'false',  // Actually publish
+                  debug: '${{ inputs.debug }}'
+                }
+              });
+              
+              console.log('✅ Newsletter generation workflow triggered');
+              console.log('📧 Newsletter will be published to Buttondown');
+            } else {
+              console.log('⏳ Skipping generation - system not healthy enough');
+            }
+      
+      - name: Create scheduling summary
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const healthStatus = '${{ needs.health-and-content-check.outputs.health_status }}';
+            const articleCount = '${{ needs.health-and-content-check.outputs.article_count }}';
+            const dataSource = '${{ needs.health-and-content-check.outputs.data_source }}';
+            const forceFlag = '${{ inputs.force_generation }}' === 'true';
+            const wasTriggered = healthStatus === 'healthy' || forceFlag;
+            
+            const statusIcon = wasTriggered ? '🚀' : '⏳';
+            const actionText = wasTriggered ? 'Newsletter generation TRIGGERED' : 'Waiting for better conditions';
+            
+            const issueBody = `## ${statusIcon} Daily Scheduler - ${new Date().toISOString().split('T')[0]}
+            
+            **Timestamp:** ${new Date().toISOString()}
+            **Workflow Run:** [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            
+            ### 📊 System Status
+            - **Health check:** ${healthStatus} (< 2 min fast check)
+            - **Articles available:** ${articleCount}
+            - **Data source:** ${dataSource}
+            - **Force generation:** ${forceFlag ? 'Yes' : 'No'}
+            - **Decision:** ${actionText}
+            
+            ${wasTriggered ? `
+            ### 🚀 Newsletter Generation Started
+            - **Mode:** PRODUCTION (will publish to Buttondown)
+            - **Expected duration:** ~20 minutes
+            - **Monitor progress:** [Newsletter Generation Workflow](${{ github.server_url }}/${{ github.repository }}/actions/workflows/newsletter.yml)
+            - **You will receive another issue when generation completes**
+            ` : `
+            ### ⏳ Newsletter Generation Skipped
+            **Reasons:**
+            ${healthStatus !== 'healthy' ? '- System health check failed' : ''}
+            ${articleCount < 7 && !forceFlag ? '- Insufficient content (need 7+ articles)' : ''}
+            ${dataSource === 'error' ? '- Data source error' : ''}
+            
+            **Next steps:**
+            - System will check again tomorrow at 9:00 AM UTC
+            - You can run a manual generation if needed
+            - Use force flag if you want to generate with current content
+            `}
+            
+            ### 🔗 Quick Actions
+            - [🏥 Run Health Check](${{ github.server_url }}/${{ github.repository }}/actions/workflows/health-check.yml)
+            - [📧 Generate Newsletter (Manual)](${{ github.server_url }}/${{ github.repository }}/actions/workflows/newsletter.yml)
+            - [🔄 Force Schedule Now](${{ github.server_url }}/${{ github.repository }}/actions/workflows/daily-scheduler.yml)
+            
+            ---
+            *Automated daily scheduling • Next check: tomorrow at 9:00 AM UTC*`;
+            
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `${statusIcon} Daily Schedule: ${actionText} - ${new Date().toISOString().split('T')[0]}`,
+              body: issueBody,
+              labels: ['newsletter', 'automated', 'scheduler', wasTriggered ? 'generating' : 'waiting']
+            });
+
+  # Step 3: Handle unhealthy system
+  handle-unhealthy:
+    needs: health-and-content-check
+    if: needs.health-and-content-check.outputs.health_status != 'healthy' && inputs.force_generation != 'true'
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: read
+      issues: write
+    
+    steps:
+      - name: Create health alert
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const healthStatus = '${{ needs.health-and-content-check.outputs.health_status }}';
+            const articleCount = '${{ needs.health-and-content-check.outputs.article_count }}';
+            const dataSource = '${{ needs.health-and-content-check.outputs.data_source }}';
+            
+            const issueBody = `## ⚠️ Daily Schedule Skipped - System Unhealthy
+            
+            **Timestamp:** ${new Date().toISOString()}
+            **Health Status:** ${healthStatus.toUpperCase()}
+            **Workflow Run:** [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            
+            ### 🔍 System Issues Detected
+            - **Health status:** ${healthStatus}
+            - **Articles available:** ${articleCount}
+            - **Data source:** ${dataSource}
+            
+            ### 🛠️ Recommended Actions
+            ${healthStatus === 'degraded' 
+              ? `**System degraded** - APIs work but content issues:
+              - Check if enough articles are tagged with 'twiar' in Readwise
+              - Verify Readwise cache is fresh
+              - Consider manual content curation`
+              : `**System unhealthy** - Critical issues:
+              - Check API credentials in repository secrets
+              - Verify network connectivity to Readwise/Buttondown
+              - Check for service outages`
+            }
+            
+            ### 🔗 Troubleshooting Links
+            - [🏥 Run Health Check Again](${{ github.server_url }}/${{ github.repository }}/actions/workflows/health-check.yml)
+            - [🔧 Repository Secrets](${{ github.server_url }}/${{ github.repository }}/settings/secrets/actions)
+            - [📊 All Workflows](${{ github.server_url }}/${{ github.repository }}/actions)
+            - [📧 Force Generation Anyway](${{ github.server_url }}/${{ github.repository }}/actions/workflows/daily-scheduler.yml) *(use force flag)*
+            
+            ---
+            *System will retry automatically tomorrow at 9:00 AM UTC*`;
+            
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `⚠️ Schedule Skipped: System ${healthStatus.toUpperCase()} - ${new Date().toISOString().split('T')[0]}`,
+              body: issueBody,
+              labels: ['newsletter', 'automated', 'health-alert', 'priority-high']
+            });

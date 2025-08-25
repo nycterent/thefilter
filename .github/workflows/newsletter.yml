@@ -249,15 +249,22 @@ jobs:
         id: generate
         run: |
           echo "Starting newsletter generation..."
+          echo "📝 Input parameters:"
+          echo "  dry_run: '${{ inputs.dry_run }}'"
+          echo "  debug: '${{ inputs.debug }}'"
 
           # Build command with options
           CMD="python -m src.newsletter_bot"
           if [[ "${{ inputs.debug }}" == "true" ]]; then
             CMD="$CMD --debug"
+            echo "🐛 Debug mode enabled"
           fi
           CMD="$CMD generate"
           if [[ "${{ inputs.dry_run }}" == "true" ]]; then
             CMD="$CMD --dry-run"
+            echo "🧪 Dry-run mode enabled - will not publish"
+          else
+            echo "🚀 Publication mode enabled - will publish to Buttondown"
           fi
 
           echo "Running: $CMD"
@@ -456,7 +463,7 @@ jobs:
             - [📊 Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
 
             ### 📋 Next Steps
-            ${${{ inputs.dry_run }} ? `
+            ${${{ inputs.dry_run }} === 'true' ? `
             **This was a dry-run.** To publish:
             1. Review the newsletter preview above
             2. Download the artifact to see full content

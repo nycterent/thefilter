@@ -1,9 +1,9 @@
-name: Daily Content Check & Auto Newsletter
+name: Daily Content Check & Auto Newsletter [DEPRECATED - Use daily-scheduler.yml]
 
 on:
-  # Run daily at 9:00 AM UTC
-  schedule:
-    - cron: "0 9 * * *"
+  # DISABLED: Replaced by daily-scheduler.yml for better architecture
+  # schedule:
+  #   - cron: "0 9 * * *"
   
   # Manual trigger for testing
   workflow_dispatch:
