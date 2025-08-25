@@ -48,17 +48,28 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
       
-      - name: Check twiar article count
+      # Restore cache from previous runs to avoid rate limiting
+      - name: Restore Readwise cache
+        uses: actions/cache@v4
+        with:
+          path: .cache/
+          key: readwise-cache-daily-${{ github.run_id }}
+          restore-keys: |
+            readwise-cache-daily-
+            readwise-cache-
+      
+      - name: Check twiar article count with cache fallback
         id: count_articles
         run: |
-          echo "🔍 Checking twiar-tagged articles in last 7 days..."
+          echo "🔍 Checking twiar-tagged articles with cache fallback..."
           
-          # Create a simple script to count articles
+          # Create enhanced script with cache fallback and retry logic
           cat > count_twiar.py << 'EOF'
           import asyncio
           import sys
           import os
           from src.clients.readwise import ReadwiseClient
+          from src.core.readwise_cache import get_readwise_cache
           from src.models.settings import Settings
           
           async def count_twiar_articles():
@@ -68,32 +79,88 @@ jobs:
                       print("❌ Readwise API key not found")
                       return 0
                   
-                  client = ReadwiseClient(settings.readwise_api_key)
+                  # First, try to get from cache
+                  cache = get_readwise_cache()
+                  cached_docs = cache.get_cached_documents(days=30)
                   
-                  # Get recent documents (last 30 days to capture all twiar articles)
-                  documents = await client.get_recent_reader_documents(days=30)
-                  
-                  count = len(documents)
-                  print(f"📊 Found {count} twiar-tagged articles in last 30 days")
+                  if cached_docs is not None:
+                      count = len(cached_docs)
+                      print(f"📊 Using cached data: {count} twiar-tagged articles (cache hit)")
+                      data_source = "cache"
+                  else:
+                      # Try API with retry logic
+                      print("💾 Cache miss - fetching from Readwise API...")
+                      client = ReadwiseClient(settings.readwise_api_key)
+                      
+                      # Retry with exponential backoff
+                      max_retries = 2
+                      for attempt in range(max_retries):
+                          try:
+                              documents = await client.get_recent_reader_documents(days=30)
+                              count = len(documents)
+                              data_source = "api"
+                              print(f"📊 API success: {count} twiar-tagged articles (fresh data)")
+                              break
+                          except Exception as api_error:
+                              print(f"⚠️ API attempt {attempt + 1}/{max_retries} failed: {api_error}")
+                              if attempt == max_retries - 1:
+                                  # Last resort: check for any stale cache
+                                  cache_status = cache.get_cache_status()
+                                  if cache_status['total_entries'] > 0:
+                                      print("🔄 Using stale cache as fallback")
+                                      # Get stale data if available
+                                      try:
+                                          # Temporarily get expired cache
+                                          import sqlite3
+                                          from datetime import datetime
+                                          with sqlite3.connect(cache.db_path) as conn:
+                                              conn.row_factory = sqlite3.Row
+                                              cursor = conn.execute("SELECT documents FROM readwise_documents ORDER BY cached_at DESC LIMIT 1")
+                                              row = cursor.fetchone()
+                                              if row:
+                                                  import json
+                                                  stale_docs = json.loads(row[0])
+                                                  count = len(stale_docs)
+                                                  data_source = "stale_cache"
+                                                  print(f"📊 Using stale cache: {count} articles (degraded mode)")
+                                                  break
+                                      except Exception as cache_error:
+                                          print(f"Failed to retrieve stale cache: {cache_error}")
+                                  
+                                  # If all else fails, set to 0 but don't crash
+                                  print("💥 All data sources failed - defaulting to 0")
+                                  count = 0
+                                  data_source = "failed"
+                                  break
+                              else:
+                                  # Wait before retry
+                                  wait_time = (attempt + 1) * 15  # 15s, 30s
+                                  print(f"⏳ Waiting {wait_time}s before retry...")
+                                  await asyncio.sleep(wait_time)
                   
                   # Should generate if we have 7+ articles or force flag is set
                   force = os.environ.get('FORCE_GENERATION', 'false').lower() == 'true'
                   should_generate = count >= 7 or force
                   
                   print(f"🎯 Newsletter generation: {'✅ YES' if should_generate else '❌ NO'} (threshold: 7, force: {force})")
+                  print(f"📊 Data source: {data_source}")
                   
                   # Set GitHub outputs
                   with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
                       f.write(f"count={count}\n")
                       f.write(f"should_generate={str(should_generate).lower()}\n")
+                      f.write(f"data_source={data_source}\n")
                   
                   return count
                   
               except Exception as e:
-                  print(f"❌ Error checking articles: {e}")
+                  print(f"❌ Critical error checking articles: {e}")
+                  import traceback
+                  traceback.print_exc()
                   with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
                       f.write(f"count=0\n")
                       f.write(f"should_generate=false\n")
+                      f.write(f"data_source=error\n")
                   return 0
           
           if __name__ == "__main__":
@@ -101,7 +168,7 @@ jobs:
               sys.exit(0 if count >= 0 else 1)
           EOF
           
-          # Run the count script
+          # Run the enhanced count script
           python count_twiar.py
         env:
           READWISE_API_KEY: ${{ secrets.READWISE_API_KEY }}
@@ -131,6 +198,7 @@ jobs:
             
             ### 📊 Content Status
             - **Twiar articles found:** ${articleCount}
+            - **Data source:** ${{ steps.count_articles.outputs.data_source }}
             - **Threshold required:** 7
             - **Force generation:** ${forceFlag ? 'Yes' : 'No'}
             - **Action:** ${actionText}

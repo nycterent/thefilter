@@ -49,36 +49,60 @@ async def warm_readwise_cache():
         # Check if we already have valid cached data
         cached_docs = cache.get_cached_documents(days=30)
         if cached_docs is not None:
-            print(f"✅ Cache already contains {len(cached_docs)} twiar-tagged documents")
-            print("💡 Use this for newsletter generation without API calls")
+            print(f"✅ Cache already warm: {len(cached_docs)} twiar-tagged documents (valid for another hour)")
+            print("🚀 Skipping API call - using existing cache")
             return True
         
-        # Fetch fresh data
+        # Fetch fresh data with retry logic
         print("📡 Fetching fresh twiar-tagged documents from Readwise...")
-        documents = await readwise_client.get_recent_reader_documents(days=30)
         
-        if documents:
-            print(f"✅ Successfully cached {len(documents)} twiar-tagged documents for 1 hour")
-            
-            # Show some sample titles
-            print("\n📄 Sample cached articles:")
-            for i, doc in enumerate(documents[:5]):
-                title = doc.get('title', 'Untitled')[:60]
-                source = doc.get('source', 'Unknown')
-                print(f"  {i+1}. {title}... [{source}]")
-            
-            if len(documents) >= 7:
-                print(f"\n✅ Cache contains {len(documents)} articles (≥7 required for newsletter)")
-                print("🚀 Ready for newsletter generation!")
-            else:
-                print(f"\n⚠️ Only {len(documents)} articles cached (<7 required for newsletter)")
-                print("💡 Add more 'twiar' tags to articles in Readwise Reader")
-            
-            return True
-        else:
-            print("❌ No twiar-tagged documents found")
-            print("💡 Tag articles with 'twiar' in Readwise Reader first")
-            return False
+        max_retries = 2
+        for attempt in range(max_retries):
+            try:
+                documents = await readwise_client.get_recent_reader_documents(days=30)
+                
+                if documents:
+                    print(f"✅ Successfully cached {len(documents)} twiar-tagged documents for 1 hour")
+                    
+                    # Show some sample titles
+                    print("\n📄 Sample cached articles:")
+                    for i, doc in enumerate(documents[:5]):
+                        title = doc.get('title', 'Untitled')[:60]
+                        source = doc.get('source', 'Unknown')
+                        print(f"  {i+1}. {title}... [{source}]")
+                    
+                    if len(documents) >= 7:
+                        print(f"\n✅ Cache contains {len(documents)} articles (≥7 required for newsletter)")
+                        print("🚀 Ready for newsletter generation!")
+                    else:
+                        print(f"\n⚠️ Only {len(documents)} articles cached (<7 required for newsletter)")
+                        print("💡 Add more 'twiar' tags to articles in Readwise Reader")
+                    
+                    return True
+                else:
+                    print("❌ No twiar-tagged documents found")
+                    print("💡 Tag articles with 'twiar' in Readwise Reader first")
+                    return False
+                    
+            except Exception as fetch_error:
+                print(f"⚠️ Attempt {attempt + 1}/{max_retries} failed: {fetch_error}")
+                
+                if "429" in str(fetch_error) or "rate" in str(fetch_error).lower():
+                    print("🔄 Rate limited - checking for stale cache as fallback...")
+                    
+                    # Try to use stale cache if available
+                    cache_status = cache.get_cache_status()
+                    if cache_status['total_entries'] > 0:
+                        print("💡 Found stale cache - this might still work for newsletter generation")
+                        return True
+                
+                if attempt < max_retries - 1:
+                    wait_time = (attempt + 1) * 20  # 20s, 40s
+                    print(f"⏳ Waiting {wait_time}s before retry...")
+                    await asyncio.sleep(wait_time)
+                else:
+                    print("💥 All fetch attempts failed")
+                    raise fetch_error
             
     except Exception as e:
         print(f"❌ Error warming cache: {str(e)}")

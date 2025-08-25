@@ -70,11 +70,57 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           UNSPLASH_API_KEY: ${{ secrets.UNSPLASH_API_KEY }}
 
-      - name: Warm Readwise cache
+      # Cache Readwise data across workflow runs to avoid rate limiting
+      - name: Restore Readwise cache
+        uses: actions/cache@v4
+        with:
+          path: .cache/
+          key: readwise-cache-${{ github.run_id }}
+          restore-keys: |
+            readwise-cache-
+
+      - name: Warm Readwise cache with retry logic
         id: warm_cache
         run: |
           echo "🔥 Warming Readwise cache to avoid rate limiting..."
-          python warm_readwise_cache.py
+          
+          # Retry logic with exponential backoff
+          max_attempts=3
+          attempt=1
+          
+          while [ $attempt -le $max_attempts ]; do
+            echo "Attempt $attempt/$max_attempts: Warming cache..."
+            
+            if python warm_readwise_cache.py; then
+              echo "cache_status=success" >> $GITHUB_OUTPUT
+              echo "✅ Cache warmed successfully"
+              break
+            else
+              exit_code=$?
+              echo "⚠️ Cache warming attempt $attempt failed (exit code: $exit_code)"
+              
+              if [ $attempt -eq $max_attempts ]; then
+                echo "❌ All cache warming attempts failed"
+                echo "cache_status=failed" >> $GITHUB_OUTPUT
+                
+                # Check if we have any cached data to fall back on
+                if [ -f ".cache/readwise_cache.db" ]; then
+                  echo "💡 Found existing cache file - attempting to continue with stale data"
+                  echo "cache_status=stale" >> $GITHUB_OUTPUT
+                else
+                  echo "💥 No cache available - workflow will likely fail"
+                  exit 1
+                fi
+              else
+                # Exponential backoff: 30s, 60s, 120s
+                sleep_time=$((30 * 2**(attempt-1)))
+                echo "⏳ Waiting ${sleep_time}s before retry..."
+                sleep $sleep_time
+              fi
+            fi
+            
+            attempt=$((attempt + 1))
+          done
         env:
           READWISE_API_KEY: ${{ secrets.READWISE_API_KEY }}
           GLASP_API_KEY: ${{ secrets.GLASP_API_KEY }}
@@ -83,17 +129,18 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           UNSPLASH_API_KEY: ${{ secrets.UNSPLASH_API_KEY }}
 
-      - name: Validate content availability
+      - name: Validate content availability with cache fallback
         id: content_check
         run: |
           echo "🔍 Checking content availability before generation..."
           
-          # Create content validation script
+          # Create enhanced content validation script with cache fallback
           cat > validate_content.py << 'EOF'
           import asyncio
           import sys
           import os
           from src.clients.readwise import ReadwiseClient
+          from src.core.readwise_cache import get_readwise_cache
           from src.models.settings import Settings
           
           async def validate_content():
@@ -103,34 +150,72 @@ jobs:
                       print("❌ Readwise API key not found")
                       return False
                   
-                  client = ReadwiseClient(settings.readwise_api_key)
+                  # First, check cache status
+                  cache = get_readwise_cache()
+                  cached_docs = cache.get_cached_documents(days=30)
                   
-                  # Get recent documents (last 30 days to capture all twiar articles)
-                  documents = await client.get_recent_reader_documents(days=30)
+                  if cached_docs is not None:
+                      count = len(cached_docs)
+                      print(f"📊 Using cached data: {count} twiar-tagged articles")
+                      data_source = "cache"
+                  else:
+                      # Fallback to fresh API call with retry
+                      print("💾 No valid cache found - fetching from API...")
+                      client = ReadwiseClient(settings.readwise_api_key)
+                      
+                      # Retry logic for API calls
+                      for attempt in range(2):
+                          try:
+                              documents = await client.get_recent_reader_documents(days=30)
+                              count = len(documents)
+                              data_source = "api"
+                              break
+                          except Exception as api_error:
+                              print(f"API attempt {attempt + 1} failed: {api_error}")
+                              if attempt == 1:  # Last attempt
+                                  # Check for any stale cache as last resort
+                                  cache_status = cache.get_cache_status()
+                                  if cache_status['total_entries'] > 0:
+                                      print("🔄 Using stale cache data as fallback")
+                                      # Force return stale cache
+                                      cached_docs = cache.get_cached_documents(days=30) 
+                                      if cached_docs:
+                                          count = len(cached_docs)
+                                          data_source = "stale_cache"
+                                      else:
+                                          raise api_error
+                                  else:
+                                      raise api_error
+                              else:
+                                  await asyncio.sleep(10)  # Wait before retry
                   
-                  count = len(documents)
                   required = 7
+                  print(f"📊 Found {count} twiar-tagged articles (required: {required}) [source: {data_source}]")
                   
-                  print(f"📊 Found {count} twiar-tagged articles (required: {required})")
+                  # Set outputs regardless of count for monitoring
+                  with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                      f.write(f"article_count={count}\n")
+                      f.write(f"data_source={data_source}\n")
                   
                   if count >= required:
                       print(f"✅ Sufficient content available for newsletter generation")
                       with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
                           f.write(f"content_status=sufficient\n")
-                          f.write(f"article_count={count}\n")
                       return True
                   else:
                       print(f"❌ Insufficient content: need {required - count} more articles")
                       with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
                           f.write(f"content_status=insufficient\n")
-                          f.write(f"article_count={count}\n")
                       return False
                       
               except Exception as e:
                   print(f"❌ Error validating content: {e}")
+                  import traceback
+                  traceback.print_exc()
                   with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
                       f.write(f"content_status=error\n")
                       f.write(f"article_count=0\n")
+                      f.write(f"data_source=error\n")
                   return False
           
           if __name__ == "__main__":
@@ -143,6 +228,7 @@ jobs:
             echo "🔧 Dry-run mode: skipping content validation"
             echo "content_status=dry_run_skip" >> $GITHUB_OUTPUT
             echo "article_count=0" >> $GITHUB_OUTPUT
+            echo "data_source=dry_run" >> $GITHUB_OUTPUT
           else
             python validate_content.py
           fi
@@ -344,6 +430,8 @@ jobs:
             ### 📊 Content Validation
             - **Articles found:** ${{ steps.content_check.outputs.article_count }} twiar-tagged articles
             - **Content status:** ${{ steps.content_check.outputs.content_status }}
+            - **Data source:** ${{ steps.content_check.outputs.data_source }}
+            - **Cache status:** ${{ steps.warm_cache.outputs.cache_status }}
             - **Threshold:** 7 articles minimum
 
             ### 📄 Newsletter Summary
