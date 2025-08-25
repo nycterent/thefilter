@@ -146,16 +146,14 @@ class NewsletterGenerator:
                 "art": "Paint brushes and color palette on artist's workspace",
                 "business": "Glass office building with reflective windows",
             }
-            return category_descriptions.get(
-                category, "Abstract geometric pattern"
-            )
+            return category_descriptions.get(category, "Abstract geometric pattern")
 
         # Color mapping for literal descriptions
         category_colors = {
             "technology": "blue and green",
             "society": "warm orange",
-            "art": "vibrant multicolor", 
-            "business": "gray and blue"
+            "art": "vibrant multicolor",
+            "business": "gray and blue",
         }
 
         today = datetime.now(timezone.utc).strftime("%A, %B %d, %Y")
@@ -244,14 +242,18 @@ Write the intro:"""
         society_headlines = []
         arts_headlines = []
         business_headlines = []
-        
+
         for category, items in categories.items():
             for item in items[:2]:  # Top 2 from each category
                 clean_title = self._clean_headline_title(item.title)
                 source_url, source_name = await self._get_source_attribution(item)
-                
-                headline_text = f"{clean_title} **[{source_name}]**" if source_url else f"{clean_title} **({source_name})**"
-                
+
+                headline_text = (
+                    f"{clean_title} **[{source_name}]**"
+                    if source_url
+                    else f"{clean_title} **({source_name})**"
+                )
+
                 # Map categories to table columns
                 if category in ["technology", "tech"]:
                     tech_headlines.append(headline_text)
@@ -266,20 +268,28 @@ Write the intro:"""
                     tech_headlines.append(headline_text)
 
         # Build the required 4-column table
-        out.append("| **Technology** | **Society & Politics** | **Arts & Culture** | **Business & Economy** |")
+        out.append(
+            "| **Technology** | **Society & Politics** | **Arts & Culture** | **Business & Economy** |"
+        )
         out.append("|---|---|---|---|")
-        
+
         # Find max rows needed
-        max_rows = max(len(tech_headlines), len(society_headlines), len(arts_headlines), len(business_headlines), 1)
-        
+        max_rows = max(
+            len(tech_headlines),
+            len(society_headlines),
+            len(arts_headlines),
+            len(business_headlines),
+            1,
+        )
+
         for i in range(max_rows):
             tech = tech_headlines[i] if i < len(tech_headlines) else ""
             society = society_headlines[i] if i < len(society_headlines) else ""
             arts = arts_headlines[i] if i < len(arts_headlines) else ""
             business = business_headlines[i] if i < len(business_headlines) else ""
-            
+
             out.append(f"| {tech} | {society} | {arts} | {business} |")
-        
+
         out.append("")  # Empty line after table
 
         out.append("\n---\n")
@@ -292,34 +302,48 @@ Write the intro:"""
         for category, items in categories.items():
             for item in items[:1]:  # Take top item from each category
                 lead_stories.append((category, item))
-        
+
         # Limit to 2 lead stories for clean 2-column format
         lead_stories = lead_stories[:2]
 
         if lead_stories:
             out.append("## LEAD STORIES\n")
-            
+
             # Create 2-column table with images
             if len(lead_stories) >= 2:
                 story1_cat, story1 = lead_stories[0]
                 story2_cat, story2 = lead_stories[1]
-                
+
                 # Get images and attribution for both stories
-                img1_url, alt1_text = await get_unsplash_image_with_alt(story1_cat, story1.title)
-                img2_url, alt2_text = await get_unsplash_image_with_alt(story2_cat, story2.title)
-                
+                img1_url, alt1_text = await get_unsplash_image_with_alt(
+                    story1_cat, story1.title
+                )
+                img2_url, alt2_text = await get_unsplash_image_with_alt(
+                    story2_cat, story2.title
+                )
+
                 source1_url, source1_name = await self._get_source_attribution(story1)
                 source2_url, source2_name = await self._get_source_attribution(story2)
-                
+
                 # Build 2-column table
                 out.append(f"| **{story1.title}** | **{story2.title}** |")
                 out.append("|---|---|")
-                out.append(f"| ![{alt1_text}]({img1_url}) | ![{alt2_text}]({img2_url}) |")
-                
+                out.append(
+                    f"| ![{alt1_text}]({img1_url}) | ![{alt2_text}]({img2_url}) |"
+                )
+
                 # Generate concise summaries for both lead stories
-                summary1 = story1.content[:200].replace("\n", " ").strip() if story1.content else story1.title
-                summary2 = story2.content[:200].replace("\n", " ").strip() if story2.content else story2.title
-                
+                summary1 = (
+                    story1.content[:200].replace("\n", " ").strip()
+                    if story1.content
+                    else story1.title
+                )
+                summary2 = (
+                    story2.content[:200].replace("\n", " ").strip()
+                    if story2.content
+                    else story2.title
+                )
+
                 if self.openrouter_client:
                     # Generate summary for story 1
                     try:
@@ -338,10 +362,12 @@ SPECIFIC REQUIREMENTS:
                             expand_prompt1, max_tokens=150, temperature=0.3
                         )
                         if expand_response1 and "choices" in expand_response1:
-                            summary1 = expand_response1["choices"][0]["message"]["content"].strip()
+                            summary1 = expand_response1["choices"][0]["message"][
+                                "content"
+                            ].strip()
                     except Exception as e:
                         logger.debug(f"Error generating summary 1: {e}")
-                    
+
                     # Generate summary for story 2
                     try:
                         expand_prompt2 = f"""Write a concise 2-sentence summary for this story. Keep it factual and direct.
@@ -359,25 +385,35 @@ SPECIFIC REQUIREMENTS:
                             expand_prompt2, max_tokens=150, temperature=0.3
                         )
                         if expand_response2 and "choices" in expand_response2:
-                            summary2 = expand_response2["choices"][0]["message"]["content"].strip()
+                            summary2 = expand_response2["choices"][0]["message"][
+                                "content"
+                            ].strip()
                     except Exception as e:
                         logger.debug(f"Error generating summary 2: {e}")
-                
+
                 # Add summaries to table
                 out.append(f"| {summary1} | {summary2} |")
-                out.append(f"| *[{source1_name}]({source1_url})* | *[{source2_name}]({source2_url})* |")
-                
+                out.append(
+                    f"| *[{source1_name}]({source1_url})* | *[{source2_name}]({source2_url})* |"
+                )
+
                 out.append("")  # Empty line after table
             else:
                 # Handle single story case
                 story_cat, story = lead_stories[0]
-                img_url, alt_text = await get_unsplash_image_with_alt(story_cat, story.title)
+                img_url, alt_text = await get_unsplash_image_with_alt(
+                    story_cat, story.title
+                )
                 source_url, source_name = await self._get_source_attribution(story)
-                
+
                 out.append(f"### {story.title}\n")
                 out.append(f"![{alt_text}]({img_url})\n")
-                
-                summary = story.content[:300].replace("\n", " ").strip() if story.content else story.title
+
+                summary = (
+                    story.content[:300].replace("\n", " ").strip()
+                    if story.content
+                    else story.title
+                )
                 out.append(f"{summary}\n")
                 out.append(f"*[{source_name}]({source_url})*\n")
 
@@ -390,19 +426,27 @@ SPECIFIC REQUIREMENTS:
             for story in tech_stories:
                 out.append(f"**{story.title}**  \n")
                 source_url, source_name = await self._get_source_attribution(story)
-                summary = story.content[:150].replace("\n", " ").strip() if story.content else ""
+                summary = (
+                    story.content[:150].replace("\n", " ").strip()
+                    if story.content
+                    else ""
+                )
                 out.append(f"{summary}  \n")
                 out.append(f"*[{source_name}]({source_url})*\n\n")
             out.append("---\n")
 
-        # SOCIETY & POLITICS - Required section per anti-LLM validator  
+        # SOCIETY & POLITICS - Required section per anti-LLM validator
         society_stories = categories.get("society", [])[:3]  # Limit to 3 stories
         if society_stories:
             out.append("## SOCIETY & POLITICS\n")
             for story in society_stories:
                 out.append(f"**{story.title}**  \n")
                 source_url, source_name = await self._get_source_attribution(story)
-                summary = story.content[:150].replace("\n", " ").strip() if story.content else ""
+                summary = (
+                    story.content[:150].replace("\n", " ").strip()
+                    if story.content
+                    else ""
+                )
                 out.append(f"{summary}  \n")
                 out.append(f"*[{source_name}]({source_url})*\n\n")
             out.append("---\n")
@@ -516,13 +560,15 @@ SPECIFIC REQUIREMENTS:
         out.append(
             "\n*The Filter curates and synthesizes from original reporting. All rights remain with original publishers.*\n"
         )
-        
+
         # Join the content for final validation
         markdown_content = "\n".join(out)
-        
+
         # Run anti-LLM validation before returning
-        should_publish, validation_report = validate_newsletter_content(markdown_content)
-        
+        should_publish, validation_report = validate_newsletter_content(
+            markdown_content
+        )
+
         if not should_publish:
             logger.error("🚨 Newsletter BLOCKED by anti-LLM validation:")
             logger.error(validation_report)
@@ -530,11 +576,11 @@ SPECIFIC REQUIREMENTS:
             # For now, we'll log the errors but continue
         else:
             logger.info("✅ Newsletter passed anti-LLM validation")
-            
+
         # Always log the validation report for transparency
         logger.info("📋 Anti-LLM Validation Report:")
         logger.info(validation_report)
-        
+
         return markdown_content
 
     async def _categorize_content(self, item: ContentItem) -> str:
@@ -1254,8 +1300,10 @@ SPECIFIC REQUIREMENTS:
 
         # Step 4a: Run anti-LLM validation checks
         logger.info("Running anti-LLM editorial validation...")
-        should_publish, validation_report = validate_newsletter_content(newsletter.content)
-        
+        should_publish, validation_report = validate_newsletter_content(
+            newsletter.content
+        )
+
         # Write QA results to output directory
         out_dir = Path("out")
         out_dir.mkdir(exist_ok=True)
@@ -1263,7 +1311,7 @@ SPECIFIC REQUIREMENTS:
         qa_file.write_text(
             json.dumps(qa_results, ensure_ascii=False, indent=2), encoding="utf-8"
         )
-        
+
         # Write anti-LLM validation results
         validation_file = out_dir / "anti_llm_validation.txt"
         validation_file.write_text(validation_report, encoding="utf-8")
@@ -1272,7 +1320,7 @@ SPECIFIC REQUIREMENTS:
         # Check both QA and anti-LLM validation results
         qa_passed = qa_results["passed"]
         validation_passed = should_publish
-        
+
         if not qa_passed:
             critical_failed = qa_results["summary"].get("critical_failed", 0)
             warning_count = qa_results["summary"].get("warnings", 0)
@@ -1293,11 +1341,15 @@ SPECIFIC REQUIREMENTS:
                 logger.info(f"QA results with warnings written to {qa_file}")
         else:
             logger.info("QA checks passed - checking anti-LLM validation")
-            
+
         # Check anti-LLM validation results
         if not validation_passed:
-            logger.error("🚨 Newsletter BLOCKED by anti-LLM validation - publication stopped")
-            logger.error("Anti-LLM validation detected banned phrases or structural issues")
+            logger.error(
+                "🚨 Newsletter BLOCKED by anti-LLM validation - publication stopped"
+            )
+            logger.error(
+                "Anti-LLM validation detected banned phrases or structural issues"
+            )
             logger.error(f"Validation report written to {validation_file}")
             return newsletter  # Return the draft but don't publish
         else:
@@ -3438,7 +3490,7 @@ SPECIFIC REQUIREMENTS:
             # Use universal source resolver to check for intermediary sources (US7, etc.)
             content = item.content or ""
             resolution_result = self.source_resolver.resolve_source(clean_url, content)
-            
+
             if resolution_result["success"] and resolution_result["resolved_url"]:
                 resolved_url = resolution_result["resolved_url"]
                 logger.info(
@@ -3448,7 +3500,7 @@ SPECIFIC REQUIREMENTS:
                 # Extract source name from resolved URL
                 source_name = self._extract_source_from_url(resolved_url)
                 return resolved_url, source_name
-            
+
             elif resolution_result["is_intermediary"] and resolution_result["title"]:
                 # Found intermediary but couldn't resolve - show extracted title with warning
                 logger.warning(

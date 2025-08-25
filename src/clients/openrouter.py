@@ -227,7 +227,7 @@ Title: {title}
 Content: {content[:500]}
 {tags_text}
 
-ANTI-LLM RULES: 
+ANTI-LLM RULES:
 - Do NOT use any context or explanation
 - Do NOT say "This article falls under..." or "Based on the content..."
 - Do NOT hedge with "primarily" or "mainly"
@@ -693,13 +693,13 @@ USER HIGHLIGHTS: {user_highlights}
 VOICE RULES:
 - Tone: minimalist, sharp, contemplative
 - Mix facts with light editorial bite
-- Occasional dry irony or existential framing  
+- Occasional dry irony or existential framing
 - ABSOLUTELY AVOID: "Imagine a world...", "game-changer", "breakthrough", "protocol", "antifragility"
 - Channel: signal over noise, clarity over hype, skeptical of easy narratives
 
 TASK: Write 2-3 sentences that:
 - Start with factual core from verified facts
-- Filter through user highlights as "what matters most"  
+- Filter through user highlights as "what matters most"
 - End with significance (often skeptical, philosophical, systems-oriented)
 - IMPORTANT: Write in third person - never use "I", "we", "my"
 
@@ -891,7 +891,7 @@ VOICE RULES:
 - Tone: minimalist, sharp, contemplative
 - Mix facts with light editorial bite
 - Occasional dry irony or existential framing
-- AVOID clichés: "Imagine a world...", "game-changer", "breakthrough" 
+- AVOID clichés: "Imagine a world...", "game-changer", "breakthrough"
 - Channel: signal over noise, clarity over hype, skeptical of easy narratives
 
 REWRITE GUIDELINES:

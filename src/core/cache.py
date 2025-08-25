@@ -159,7 +159,7 @@ class ContentCache:
             conn.row_factory = sqlite3.Row
             cursor = conn.execute(
                 """
-                SELECT * FROM cache_entries 
+                SELECT * FROM cache_entries
                 WHERE content_hash = ?
                 ORDER BY cached_at DESC
                 LIMIT 1
@@ -184,7 +184,7 @@ class ContentCache:
             # Update access statistics
             conn.execute(
                 """
-                UPDATE cache_entries 
+                UPDATE cache_entries
                 SET access_count = access_count + 1, last_accessed = ?
                 WHERE id = ?
             """,
@@ -228,8 +228,8 @@ class ContentCache:
             # Use INSERT OR REPLACE to handle updates
             conn.execute(
                 """
-                INSERT OR REPLACE INTO cache_entries 
-                (content_hash, etag, last_modified, source_url, cached_summary, 
+                INSERT OR REPLACE INTO cache_entries
+                (content_hash, etag, last_modified, source_url, cached_summary,
                  cached_commentary, cached_at, readwise_updated_at, access_count, last_accessed)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
             """,
@@ -309,7 +309,7 @@ class ContentCache:
             cursor = conn.execute(
                 """
                 SELECT etag, last_modified, source_url, cached_at, readwise_updated_at
-                FROM cache_entries 
+                FROM cache_entries
                 WHERE content_hash = ?
                 ORDER BY cached_at DESC
                 LIMIT 1
@@ -381,8 +381,8 @@ class ContentCache:
                 for entry in cache_data.get("entries", []):
                     conn.execute(
                         """
-                        INSERT OR REPLACE INTO cache_entries 
-                        (content_hash, etag, last_modified, source_url, cached_summary, 
+                        INSERT OR REPLACE INTO cache_entries
+                        (content_hash, etag, last_modified, source_url, cached_summary,
                          cached_commentary, cached_at, readwise_updated_at, access_count, last_accessed)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
@@ -437,7 +437,7 @@ class ContentCache:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.execute(
                 """
-                SELECT 
+                SELECT
                     COUNT(*) as total_entries,
                     SUM(access_count) as total_accesses,
                     AVG(access_count) as avg_accesses,

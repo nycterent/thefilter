@@ -127,7 +127,7 @@ class ReadwiseCache:
                 # Replace existing cache entry
                 conn.execute(
                     """
-                    INSERT OR REPLACE INTO readwise_documents 
+                    INSERT OR REPLACE INTO readwise_documents
                     (cache_key, documents, cached_at, expires_at)
                     VALUES (?, ?, ?, ?)
                 """,
