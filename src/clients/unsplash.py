@@ -32,24 +32,24 @@ class UnsplashClient:
         # Curated fallback images (high quality)
         self.fallback_images = {
             "technology": [
-                "https://images.unsplash.com/photo-1518709268805-4e9042af2176?w=370&h=150&fit=crop&crop=entropy&auto=format&q=80",
-                "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=370&h=150&fit=crop&crop=entropy&auto=format&q=80",
-                "https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=370&h=150&fit=crop&crop=entropy&auto=format&q=80",
+                "https://images.unsplash.com/photo-1518709268805-4e9042af2176?w=500&h=200&fit=crop&crop=entropy&auto=format&q=80",
+                "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=500&h=200&fit=crop&crop=entropy&auto=format&q=80",
+                "https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=500&h=200&fit=crop&crop=entropy&auto=format&q=80",
             ],
             "society": [
-                "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=370&h=150&fit=crop&crop=entropy&auto=format&q=80",
-                "https://images.unsplash.com/photo-1566125882500-87e10f726cdc?w=370&h=150&fit=crop&crop=entropy&auto=format&q=80",
-                "https://images.unsplash.com/photo-1582213782179-e0d53f98f2ca?w=370&h=150&fit=crop&crop=entropy&auto=format&q=80",
+                "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=500&h=200&fit=crop&crop=entropy&auto=format&q=80",
+                "https://images.unsplash.com/photo-1566125882500-87e10f726cdc?w=500&h=200&fit=crop&crop=entropy&auto=format&q=80",
+                "https://images.unsplash.com/photo-1582213782179-e0d53f98f2ca?w=500&h=200&fit=crop&crop=entropy&auto=format&q=80",
             ],
             "art": [
-                "https://images.unsplash.com/photo-1541961017774-22349e4a1262?w=370&h=150&fit=crop&crop=entropy&auto=format&q=80",
-                "https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=370&h=150&fit=crop&crop=entropy&auto=format&q=80",
-                "https://images.unsplash.com/photo-1536924940846-227afb31e2a5?w=370&h=150&fit=crop&crop=entropy&auto=format&q=80",
+                "https://images.unsplash.com/photo-1541961017774-22349e4a1262?w=500&h=200&fit=crop&crop=entropy&auto=format&q=80",
+                "https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=500&h=200&fit=crop&crop=entropy&auto=format&q=80",
+                "https://images.unsplash.com/photo-1536924940846-227afb31e2a5?w=500&h=200&fit=crop&crop=entropy&auto=format&q=80",
             ],
             "business": [
-                "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=370&h=150&fit=crop&crop=entropy&auto=format&q=80",
-                "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=370&h=150&fit=crop&crop=entropy&auto=format&q=80",
-                "https://images.unsplash.com/photo-1664475111862-c4ba2cc60d60?w=370&h=150&fit=crop&crop=entropy&auto=format&q=80",
+                "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=500&h=200&fit=crop&crop=entropy&auto=format&q=80",
+                "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=500&h=200&fit=crop&crop=entropy&auto=format&q=80",
+                "https://images.unsplash.com/photo-1664475111862-c4ba2cc60d60?w=500&h=200&fit=crop&crop=entropy&auto=format&q=80",
             ],
         }
 
@@ -147,7 +147,7 @@ class UnsplashClient:
         base_url = image_data["urls"]["regular"]
 
         # Add parameters for newsletter optimization
-        params = "?w=370&h=150&fit=crop&crop=entropy&auto=format&q=80"
+        params = "?w=500&h=200&fit=crop&crop=entropy&auto=format&q=80"
 
         return f"{base_url}{params}"
 

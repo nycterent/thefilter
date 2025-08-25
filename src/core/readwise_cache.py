@@ -109,7 +109,7 @@ class ReadwiseCache:
             return None
 
     def cache_documents(
-        self, documents: List[Dict[str, Any]], days: int = 30, cache_hours: float = 1.0
+        self, documents: List[Dict[str, Any]], days: int = 30, cache_hours: float = 8.0
     ):
         """Cache Readwise documents for specified duration.
 

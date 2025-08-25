@@ -227,6 +227,11 @@ Title: {title}
 Content: {content[:500]}
 {tags_text}
 
+ANTI-LLM RULES: 
+- Do NOT use any context or explanation
+- Do NOT say "This article falls under..." or "Based on the content..."
+- Do NOT hedge with "primarily" or "mainly"
+
 Choose the most appropriate category. Respond with ONLY ONE WORD: technology, society, art, or business."""
 
             response = await self._make_request(prompt, max_tokens=10)

@@ -17,12 +17,32 @@ from src.clients.unsplash import UnsplashClient
 from src.core.cache import ContentCache
 from src.core.qacheck import run_checks
 from src.core.sanitizer import ContentSanitizer
+from src.core.source_resolver import NewsletterSourceResolver
+from src.quality_checks.anti_llm_validator import validate_newsletter_content
 from src.core.voice_config import clean_voice_manager
 from src.core.voice_manager import VoiceManager
 from src.models.content import ContentItem, NewsletterDraft
 from src.models.settings import Settings
 
 logger = logging.getLogger(__name__)
+
+# Centralized anti-LLM style guide enforcement
+ANTI_LLM_STYLE_GUIDE = """
+BANNED PHRASES (NEVER USE):
+- "as we navigate", "in a world where", "welcome to", "imagine a world", "picture this"
+- "promises to", "raises questions", "underscores", "reminds us", "invites debate"
+- "landscape", "paradigm", "realm", "fabric of reality", "complexities", "implications"
+- "only time will tell", "remains to be seen", "the jury is still out"
+- "what does it mean", "forces us to reconsider", "challenges our understanding"
+- "game-changer", "breakthrough", "revolution", "disruption"
+
+EDITORIAL STANDARDS:
+- Start with factual core, not scene-setting or throat-clearing
+- Use concrete actors + specific consequences, not vague generalities
+- No hedging language or philosophical padding
+- Channel: signal over noise, clarity over hype, skeptical of easy narratives
+- Tone: minimalist, sharp, contemplative with occasional dry irony
+"""
 
 
 class NewsletterGenerator:
@@ -73,22 +93,22 @@ class NewsletterGenerator:
                 except Exception as e:
                     logger.debug(f"Unexpected Unsplash API error, using fallback: {e}")
 
-            # Fallback to curated professional images with descriptive alt text
+            # Fallback to curated professional images with responsive sizing
             curated_images_with_alt = {
                 "technology": (
-                    "https://images.unsplash.com/photo-1518709268805-4e9042af2176?w=370&h=150&fit=crop&crop=entropy&auto=format&q=80",
+                    "https://images.unsplash.com/photo-1518709268805-4e9042af2176?w=500&h=200&fit=crop&crop=entropy&auto=format&q=80",
                     "Modern technology workspace with computer screens and digital interfaces",
                 ),
                 "society": (
-                    "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=370&h=150&fit=crop&crop=entropy&auto=format&q=80",
+                    "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=500&h=200&fit=crop&crop=entropy&auto=format&q=80",
                     "Diverse group of people in urban setting representing modern society",
                 ),
                 "art": (
-                    "https://images.unsplash.com/photo-1541961017774-22349e4a1262?w=370&h=150&fit=crop&crop=entropy&auto=format&q=80",
+                    "https://images.unsplash.com/photo-1541961017774-22349e4a1262?w=500&h=200&fit=crop&crop=entropy&auto=format&q=80",
                     "Abstract artistic composition with vibrant colors and creative elements",
                 ),
                 "business": (
-                    "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=370&h=150&fit=crop&crop=entropy&auto=format&q=80",
+                    "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=500&h=200&fit=crop&crop=entropy&auto=format&q=80",
                     "Professional business environment with modern office buildings",
                 ),
             }
@@ -97,38 +117,46 @@ class NewsletterGenerator:
             )
 
         def generate_image_alt_text(category: str, topic_hint: str = "") -> str:
-            """Generate descriptive alt text for images based on category and topic."""
+            """Generate literal, descriptive alt text for images based on category and topic."""
             if topic_hint:
-                # Extract key terms and create more specific, contextual descriptions
+                # Extract key terms for specific, literal descriptions
                 clean_topic = topic_hint[:50].replace("\n", " ").strip().lower()
 
-                # Create more specific alt text based on topic keywords
+                # Create literal alt text based on topic keywords
                 if "ai" in clean_topic or "artificial intelligence" in clean_topic:
-                    return "Artistic visualization of artificial intelligence and machine learning concepts"
+                    return "Computer screens showing code and neural network diagrams"
                 elif "climate" in clean_topic or "environment" in clean_topic:
-                    return "Environmental scene depicting climate change and sustainability themes"
+                    return "Wind turbines against cloudy sky"
                 elif "health" in clean_topic or "medical" in clean_topic:
-                    return "Healthcare and medical innovation visualization"
+                    return "Stethoscope and medical equipment on desk"
                 elif "crypto" in clean_topic or "blockchain" in clean_topic:
-                    return "Digital currency and blockchain technology representation"
+                    return "Digital circuit board with glowing connections"
                 elif "social" in clean_topic or "culture" in clean_topic:
-                    return "Social dynamics and cultural interaction imagery"
+                    return "People sitting around conference table"
                 elif "work" in clean_topic or "employment" in clean_topic:
-                    return "Modern workplace and professional environment"
+                    return "Open office with desks and laptops"
                 else:
-                    # More specific fallback based on category and topic
-                    return f"Professional illustration depicting {clean_topic[:30]} in {category} context"
+                    # Literal fallback based on category
+                    return f"Abstract geometric shapes in {category_colors.get(category, 'blue')} tones"
 
-            # Enhanced fallback alt text based on category
+            # Literal alt text based on category - what's actually in the image
             category_descriptions = {
-                "technology": "Modern digital workspace with screens, code, and innovative tech elements",
-                "society": "Diverse people interacting in contemporary urban and social settings",
-                "art": "Creative composition with artistic elements, colors, and cultural expressions",
-                "business": "Professional business environment with modern architecture and corporate elements",
+                "technology": "Circuit board with microchips and electronic components",
+                "society": "People walking through busy city street",
+                "art": "Paint brushes and color palette on artist's workspace",
+                "business": "Glass office building with reflective windows",
             }
             return category_descriptions.get(
-                category, "Professional editorial illustration"
+                category, "Abstract geometric pattern"
             )
+
+        # Color mapping for literal descriptions
+        category_colors = {
+            "technology": "blue and green",
+            "society": "warm orange",
+            "art": "vibrant multicolor", 
+            "business": "gray and blue"
+        }
 
         today = datetime.now(timezone.utc).strftime("%A, %B %d, %Y")
         out = []
@@ -142,17 +170,11 @@ class NewsletterGenerator:
 
 {chr(10).join([f"- {item.title[:100]}..." for item in items[:5]])}
 
-VOICE RULES:
-- Tone: minimalist, sharp, contemplative
-- Mix facts with light editorial bite
-- Occasional dry irony or existential framing
-- AVOID clichés: "Imagine a world...", "Welcome to...", "game-changer", "breakthrough"
-- Channel: signal over noise, clarity over hype, skeptical of easy narratives
+{ANTI_LLM_STYLE_GUIDE}
 
-REQUIREMENTS:
+SPECIFIC REQUIREMENTS:
 - Reference specific themes from actual content above
 - Keep under 80 words - every word must earn its place
-- Start direct - no throat-clearing
 - End with subtle tension or philosophical angle
 
 Write the intro:"""
@@ -214,128 +236,176 @@ Write the intro:"""
 
         out.append("\n---\n")
 
-        # Add Headlines at a Glance section (required for structure parity)
+        # Add Headlines at a Glance section - MUST be 4-column table
         out.append("\n## HEADLINES AT A GLANCE\n")
 
-        # Generate quick headline list from all categories
-        all_headlines = []
+        # Categorize headlines into 4 columns: Tech, Society, Arts, Business
+        tech_headlines = []
+        society_headlines = []
+        arts_headlines = []
+        business_headlines = []
+        
         for category, items in categories.items():
             for item in items[:2]:  # Top 2 from each category
-                # Clean up the title for headlines
                 clean_title = self._clean_headline_title(item.title)
-
                 source_url, source_name = await self._get_source_attribution(item)
-                if source_url:
-                    all_headlines.append(
-                        f"• {clean_title} ([{source_name}]({source_url}))"
-                    )
+                
+                headline_text = f"{clean_title} **[{source_name}]**" if source_url else f"{clean_title} **({source_name})**"
+                
+                # Map categories to table columns
+                if category in ["technology", "tech"]:
+                    tech_headlines.append(headline_text)
+                elif category in ["society", "politics", "environment"]:
+                    society_headlines.append(headline_text)
+                elif category in ["art", "arts", "culture", "media"]:
+                    arts_headlines.append(headline_text)
+                elif category in ["business", "economy", "finance"]:
+                    business_headlines.append(headline_text)
                 else:
-                    all_headlines.append(f"• {clean_title} ({source_name})")
+                    # Default fallback - assign to tech
+                    tech_headlines.append(headline_text)
 
-        if all_headlines:
-            out.append("\n".join(all_headlines[:8]))  # Limit to 8 headlines
-            out.append("\n")
+        # Build the required 4-column table
+        out.append("| **Technology** | **Society & Politics** | **Arts & Culture** | **Business & Economy** |")
+        out.append("|---|---|---|---|")
+        
+        # Find max rows needed
+        max_rows = max(len(tech_headlines), len(society_headlines), len(arts_headlines), len(business_headlines), 1)
+        
+        for i in range(max_rows):
+            tech = tech_headlines[i] if i < len(tech_headlines) else ""
+            society = society_headlines[i] if i < len(society_headlines) else ""
+            arts = arts_headlines[i] if i < len(arts_headlines) else ""
+            business = business_headlines[i] if i < len(business_headlines) else ""
+            
+            out.append(f"| {tech} | {society} | {arts} | {business} |")
+        
+        out.append("")  # Empty line after table
 
         out.append("\n---\n")
 
-        # FEATURED STORIES - show all stories in plain format without tables
+        # LEAD STORIES - MUST be 2-column table format
         available_categories = [cat for cat, items in categories.items() if items]
 
-        # Get all items for main stories section
-        all_stories = []
+        # Get top stories for lead section (limit to 2 for side-by-side)
+        lead_stories = []
         for category, items in categories.items():
-            for item in items:
-                all_stories.append((category, item))
+            for item in items[:1]:  # Take top item from each category
+                lead_stories.append((category, item))
+        
+        # Limit to 2 lead stories for clean 2-column format
+        lead_stories = lead_stories[:2]
 
-        if all_stories:
-            out.append("## FEATURED STORIES\n")
-
-            # Show up to 7 stories in plain format
-            for i, (category, item) in enumerate(all_stories[:7]):
-                img_url, alt_text = await get_unsplash_image_with_alt(
-                    category, item.title
-                )
-                source_url, source_name = await self._get_source_attribution(item)
-
-                # Generate longer, more detailed summary (2-3 paragraphs)
+        if lead_stories:
+            out.append("## LEAD STORIES\n")
+            
+            # Create 2-column table with images
+            if len(lead_stories) >= 2:
+                story1_cat, story1 = lead_stories[0]
+                story2_cat, story2 = lead_stories[1]
+                
+                # Get images and attribution for both stories
+                img1_url, alt1_text = await get_unsplash_image_with_alt(story1_cat, story1.title)
+                img2_url, alt2_text = await get_unsplash_image_with_alt(story2_cat, story2.title)
+                
+                source1_url, source1_name = await self._get_source_attribution(story1)
+                source2_url, source2_name = await self._get_source_attribution(story2)
+                
+                # Build 2-column table
+                out.append(f"| **{story1.title}** | **{story2.title}** |")
+                out.append("|---|---|")
+                out.append(f"| ![{alt1_text}]({img1_url}) | ![{alt2_text}]({img2_url}) |")
+                
+                # Generate concise summaries for both lead stories
+                summary1 = story1.content[:200].replace("\n", " ").strip() if story1.content else story1.title
+                summary2 = story2.content[:200].replace("\n", " ").strip() if story2.content else story2.title
+                
                 if self.openrouter_client:
+                    # Generate summary for story 1
                     try:
-                        expand_prompt = f"""You are the editor of The Filter, a minimalist newspaper-style newsletter.
+                        expand_prompt1 = f"""Write a concise 2-sentence summary for this story. Keep it factual and direct.
 
-TASK: Summarize this story faithfully, filtering through the lens of user highlights and voice.
+Title: {story1.title}
+Content: {story1.content[:500]}
 
-ARTICLE:
-Title: {item.title}
-Author: {item.author if item.author else 'Unknown'}
-Content: {item.content[:1000]}
+{ANTI_LLM_STYLE_GUIDE}
 
-USER HIGHLIGHTS/PERSPECTIVE: {item.user_comments if hasattr(item, 'user_comments') and item.user_comments else "Signal over noise, clarity over hype, skeptical of easy narratives"}
+SPECIFIC REQUIREMENTS:
+- Maximum 2 sentences, direct impact focus
+- Lead with the core finding or development"""
 
-CRITICAL RULES:
-1. NEVER invent facts not in the original article
-2. NEVER exaggerate (organoids ≠ full organs, disagreements ≠ crises)
-3. NEVER use: "Imagine a world", "Picture this", "Welcome to", "game-changer", "breakthrough"
-4. SEPARATE facts from editorial spin
-
-VOICE:
-- Tone: minimalist, sharp, contemplative
-- Mix facts with light editorial bite
-- Occasional dry irony or existential framing
-- Channel: signal over noise, clarity over hype, skeptical of easy narratives
-
-STRUCTURE - THE FILTER FORMAT:
-Headline: punchy, specific, no fluff
-Summary (2-3 sentences): Start with factual core, pull in highlighted insights
-Why it matters (1 sentence): Significance from this perspective
-
-Write in this exact format:"""
-
-                        expand_response = await self.openrouter_client._make_request(
-                            expand_prompt, max_tokens=500, temperature=0.3
+                        expand_response1 = await self.openrouter_client._make_request(
+                            expand_prompt1, max_tokens=150, temperature=0.3
                         )
-                        if expand_response and "choices" in expand_response:
-                            detailed_summary = expand_response["choices"][0]["message"][
-                                "content"
-                            ].strip()
-                        else:
-                            # Fallback to original content
-                            detailed_summary = (
-                                item.content[:600].replace("\n", " ").strip()
-                            )
+                        if expand_response1 and "choices" in expand_response1:
+                            summary1 = expand_response1["choices"][0]["message"]["content"].strip()
                     except Exception as e:
-                        logger.debug(f"Error generating detailed summary: {e}")
-                        detailed_summary = item.content[:600].replace("\n", " ").strip()
-                else:
-                    # Longer summary when no LLM available
-                    detailed_summary = item.content[:600].replace("\n", " ").strip()
+                        logger.debug(f"Error generating summary 1: {e}")
+                    
+                    # Generate summary for story 2
+                    try:
+                        expand_prompt2 = f"""Write a concise 2-sentence summary for this story. Keep it factual and direct.
 
-                # Format as story with improved image layout
-                out.append(f"### {item.title}\n\n")
+Title: {story2.title}
+Content: {story2.content[:500]}
 
-                # Add image with better formatting and caption
-                out.append(f'<div align="center">\n')
-                out.append(
-                    f'<img src="{img_url}" alt="{alt_text}" style="max-width: 100%; height: auto; border-radius: 8px; margin: 16px 0;">\n'
-                )
-                out.append(
-                    f'<br><em style="color: #666; font-size: 0.9em;">Photo: {alt_text}</em>\n'
-                )
-                out.append(f"</div>\n\n")
+{ANTI_LLM_STYLE_GUIDE}
 
-                out.append(f"{detailed_summary}\n")
-                if source_url:
-                    out.append(f"*Read more: [{source_name}]({source_url})*\n")
-                else:
-                    out.append(f"*Source: {source_name}*\n")
+SPECIFIC REQUIREMENTS:
+- Maximum 2 sentences, direct impact focus
+- Lead with the core finding or development"""
 
-                if i < len(all_stories[:7]) - 1:  # Add separator except for last story
-                    out.append("\n---\n")
+                        expand_response2 = await self.openrouter_client._make_request(
+                            expand_prompt2, max_tokens=150, temperature=0.3
+                        )
+                        if expand_response2 and "choices" in expand_response2:
+                            summary2 = expand_response2["choices"][0]["message"]["content"].strip()
+                    except Exception as e:
+                        logger.debug(f"Error generating summary 2: {e}")
+                
+                # Add summaries to table
+                out.append(f"| {summary1} | {summary2} |")
+                out.append(f"| *[{source1_name}]({source1_url})* | *[{source2_name}]({source2_url})* |")
+                
+                out.append("")  # Empty line after table
+            else:
+                # Handle single story case
+                story_cat, story = lead_stories[0]
+                img_url, alt_text = await get_unsplash_image_with_alt(story_cat, story.title)
+                source_url, source_name = await self._get_source_attribution(story)
+                
+                out.append(f"### {story.title}\n")
+                out.append(f"![{alt_text}]({img_url})\n")
+                
+                summary = story.content[:300].replace("\n", " ").strip() if story.content else story.title
+                out.append(f"{summary}\n")
+                out.append(f"*[{source_name}]({source_url})*\n")
 
-            out.append("\n---\n")
+        out.append("\n---\n")
 
-        # All technology stories now included in FEATURED STORIES section above
+        # TECHNOLOGY DESK - Required section per anti-LLM validator
+        tech_stories = categories.get("technology", [])[:3]  # Limit to 3 stories
+        if tech_stories:
+            out.append("## TECHNOLOGY DESK\n")
+            for story in tech_stories:
+                out.append(f"**{story.title}**  \n")
+                source_url, source_name = await self._get_source_attribution(story)
+                summary = story.content[:150].replace("\n", " ").strip() if story.content else ""
+                out.append(f"{summary}  \n")
+                out.append(f"*[{source_name}]({source_url})*\n\n")
+            out.append("---\n")
 
-        # All stories from society, arts, and business categories now included in FEATURED STORIES section above
+        # SOCIETY & POLITICS - Required section per anti-LLM validator  
+        society_stories = categories.get("society", [])[:3]  # Limit to 3 stories
+        if society_stories:
+            out.append("## SOCIETY & POLITICS\n")
+            for story in society_stories:
+                out.append(f"**{story.title}**  \n")
+                source_url, source_name = await self._get_source_attribution(story)
+                summary = story.content[:150].replace("\n", " ").strip() if story.content else ""
+                out.append(f"{summary}  \n")
+                out.append(f"*[{source_name}]({source_url})*\n\n")
+            out.append("---\n")
 
         # SOURCES & ATTRIBUTION
         out.append("## SOURCES & ATTRIBUTION\n")
@@ -446,7 +516,26 @@ Write in this exact format:"""
         out.append(
             "\n*The Filter curates and synthesizes from original reporting. All rights remain with original publishers.*\n"
         )
-        return "\n".join(out)
+        
+        # Join the content for final validation
+        markdown_content = "\n".join(out)
+        
+        # Run anti-LLM validation before returning
+        should_publish, validation_report = validate_newsletter_content(markdown_content)
+        
+        if not should_publish:
+            logger.error("🚨 Newsletter BLOCKED by anti-LLM validation:")
+            logger.error(validation_report)
+            # In production, this would stop the pipeline
+            # For now, we'll log the errors but continue
+        else:
+            logger.info("✅ Newsletter passed anti-LLM validation")
+            
+        # Always log the validation report for transparency
+        logger.info("📋 Anti-LLM Validation Report:")
+        logger.info(validation_report)
+        
+        return markdown_content
 
     async def _categorize_content(self, item: ContentItem) -> str:
         """Intelligently categorize content using AI when available, fallback to keywords."""
@@ -912,6 +1001,9 @@ Write in this exact format:"""
         # Initialize content sanitizer
         self.sanitizer = ContentSanitizer()
 
+        # Initialize source resolver for newsletter intermediaries (US7, etc.)
+        self.source_resolver = NewsletterSourceResolver()
+
         # Initialize caching system
         self.cache = ContentCache(
             cache_dir=getattr(settings, "cache_dir", ".cache"),
@@ -1160,6 +1252,10 @@ Write in this exact format:"""
         logger.info("Running final QA checks on newsletter content...")
         qa_results = run_checks(newsletter.content)
 
+        # Step 4a: Run anti-LLM validation checks
+        logger.info("Running anti-LLM editorial validation...")
+        should_publish, validation_report = validate_newsletter_content(newsletter.content)
+        
         # Write QA results to output directory
         out_dir = Path("out")
         out_dir.mkdir(exist_ok=True)
@@ -1167,8 +1263,17 @@ Write in this exact format:"""
         qa_file.write_text(
             json.dumps(qa_results, ensure_ascii=False, indent=2), encoding="utf-8"
         )
+        
+        # Write anti-LLM validation results
+        validation_file = out_dir / "anti_llm_validation.txt"
+        validation_file.write_text(validation_report, encoding="utf-8")
+        logger.info(f"Anti-LLM validation results written to {validation_file}")
 
-        if not qa_results["passed"]:
+        # Check both QA and anti-LLM validation results
+        qa_passed = qa_results["passed"]
+        validation_passed = should_publish
+        
+        if not qa_passed:
             critical_failed = qa_results["summary"].get("critical_failed", 0)
             warning_count = qa_results["summary"].get("warnings", 0)
 
@@ -1183,11 +1288,20 @@ Write in this exact format:"""
                 return newsletter  # Return the draft but don't publish
             else:
                 logger.warning(
-                    f"QA checks found {warning_count} warnings but no critical issues - proceeding with publication"
+                    f"QA checks found {warning_count} warnings but no critical issues - will check anti-LLM validation"
                 )
                 logger.info(f"QA results with warnings written to {qa_file}")
         else:
-            logger.info("QA checks passed - proceeding with publication")
+            logger.info("QA checks passed - checking anti-LLM validation")
+            
+        # Check anti-LLM validation results
+        if not validation_passed:
+            logger.error("🚨 Newsletter BLOCKED by anti-LLM validation - publication stopped")
+            logger.error("Anti-LLM validation detected banned phrases or structural issues")
+            logger.error(f"Validation report written to {validation_file}")
+            return newsletter  # Return the draft but don't publish
+        else:
+            logger.info("✅ Anti-LLM validation passed - proceeding with publication")
 
         # Step 5: Publish (if not dry run and QA passed)
         if not dry_run and self.settings.buttondown_api_key:
@@ -3305,7 +3419,7 @@ Write in this exact format:"""
             return "", source_name
 
     async def _get_source_attribution(self, item: ContentItem) -> tuple[str, str]:
-        """Get clean source URL and name for attribution.
+        """Get clean source URL and name for attribution using universal source resolution.
 
         Returns:
             tuple: (source_url, source_name) where source_url is clean URL and source_name is display name
@@ -3321,7 +3435,30 @@ Write in this exact format:"""
             # Clean the URL of tracking parameters
             clean_url = self._clean_tracking_params(source_url)
 
-            # Check if this is a tracking URL that might be inaccessible
+            # Use universal source resolver to check for intermediary sources (US7, etc.)
+            content = item.content or ""
+            resolution_result = self.source_resolver.resolve_source(clean_url, content)
+            
+            if resolution_result["success"] and resolution_result["resolved_url"]:
+                resolved_url = resolution_result["resolved_url"]
+                logger.info(
+                    f"✅ Resolved intermediary source: {clean_url} -> {resolved_url} "
+                    f"(method: {resolution_result['method']})"
+                )
+                # Extract source name from resolved URL
+                source_name = self._extract_source_from_url(resolved_url)
+                return resolved_url, source_name
+            
+            elif resolution_result["is_intermediary"] and resolution_result["title"]:
+                # Found intermediary but couldn't resolve - show extracted title with warning
+                logger.warning(
+                    f"⚠️ Intermediary source detected but resolution failed: {clean_url} "
+                    f"(title: {resolution_result['title']})"
+                )
+                source_name = self._extract_source_from_url(clean_url)
+                return "", source_name  # Return empty URL to avoid broken links
+
+            # Fallback to legacy tracking URL detection for other cases
             import re
             from urllib.parse import urlparse
 

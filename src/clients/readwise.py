@@ -283,11 +283,11 @@ class ReadwiseClient:
             # Filter for high-quality curated articles
             curated_documents = self._filter_curated_articles(all_documents)
 
-            # Cache the results for 1 hour
-            cache.cache_documents(curated_documents, days, cache_hours=1.0)
+            # Cache the results for 8 hours
+            cache.cache_documents(curated_documents, days, cache_hours=8.0)
 
             logger.info(
-                f"Retrieved {len(curated_documents)} curated articles from {len(all_documents)} total documents (cached for 1h)"
+                f"Retrieved {len(curated_documents)} curated articles from {len(all_documents)} total documents (cached for 8h)"
             )
             return curated_documents
 
