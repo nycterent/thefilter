@@ -354,10 +354,12 @@ jobs:
 
           if [ -z "$SECONDARY_ID" ] || [ "$SECONDARY_ID" = "null" ]; then
             echo "❌ No published newsletter email found or secondary_id is null" > validation_output.log
-            echo "This might indicate the newsletter generation didn't complete successfully" >> validation_output.log
+            echo "This indicates the newsletter publication failed." >> validation_output.log
+            echo "Check Buttondown API response: $EMAIL_RESPONSE" >> validation_output.log
             echo "validation_status=failed" >> $GITHUB_OUTPUT
             cat validation_output.log
-            # Don't exit here, continue to create issue with results
+            echo "::error::Newsletter publication validation failed - no published email found"
+            exit 1
           else
             LATEST_URL="https://buttondown.com/filter/archive/$SECONDARY_ID"
             echo "Latest newsletter URL: $LATEST_URL"
@@ -366,11 +368,13 @@ jobs:
             if python scripts/check_briefing.py "$LATEST_URL" --verbose > validation_output.log 2>&1; then
               echo "validation_status=passed" >> $GITHUB_OUTPUT
               echo "✅ Newsletter validation passed!"
+              echo "published_url=$LATEST_URL" >> $GITHUB_OUTPUT
             else
               echo "validation_status=failed" >> $GITHUB_OUTPUT
               echo "❌ Newsletter validation failed! Issues detected."
               cat validation_output.log
-              # Don't exit 1 here so we can still create the issue with results
+              echo "::error::Newsletter content validation failed"
+              exit 1
             fi
           fi
         env:
@@ -389,7 +393,7 @@ jobs:
           retention-days: 30
 
       - name: Create success issue
-        if: steps.generate.outputs.generation_status == 'success' && (inputs.dry_run == 'true' || steps.validate.outputs.validation_status == 'passed')
+        if: steps.generate.outputs.generation_status == 'success' && (inputs.dry_run == 'true' || (steps.validate.outputs.validation_status == 'passed' && steps.validate.outputs.validation_status != ''))
         uses: actions/github-script@v7
         with:
           script: |
@@ -469,8 +473,14 @@ jobs:
             2. Download the artifact to see full content
             3. Run the [Publish Newsletter workflow](${{ github.server_url }}/${{ github.repository }}/actions/workflows/publish-newsletter.yml)
             4. Or run a new generation with \`dry_run=false\`
+            ` : '${{ steps.validate.outputs.validation_status }}' === 'passed' ? `
+            **Newsletter was successfully published and validated online.** ✅
+            
+            📧 [View published newsletter](${{ steps.validate.outputs.published_url }})
             ` : `
-            **Newsletter was published and validated online.** ✅
+            **Newsletter was generated but validation failed.** ⚠️
+            
+            Please check the validation output above and verify the publication manually.
             `}
 
             ---
@@ -485,7 +495,7 @@ jobs:
             });
 
       - name: Create failure issue
-        if: failure() || steps.generate.outputs.generation_status == 'failed' || steps.health_check.outputs.health_status == 'unhealthy' || (inputs.dry_run != 'true' && steps.validate.outputs.validation_status == 'failed')
+        if: failure() || steps.generate.outputs.generation_status == 'failed' || steps.health_check.outputs.health_status == 'unhealthy' || (inputs.dry_run != 'true' && (steps.validate.outputs.validation_status == 'failed' || steps.validate.outputs.validation_status == ''))
         uses: actions/github-script@v7
         with:
           script: |
