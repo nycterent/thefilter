@@ -5,9 +5,7 @@ Caches 'twiar-tagged' documents for 1 hour to avoid repeated API calls.
 
 import json
 import logging
-import os
 import sqlite3
-import time
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional

@@ -317,7 +317,6 @@ class ReadwiseClient:
         curated = []
 
         for doc in documents:
-            reading_progress = doc.get("reading_progress", 0)
             tags = doc.get("tags", {})
 
             has_twiar_tag = self._has_twiar_tag(tags)

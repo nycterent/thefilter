@@ -295,7 +295,6 @@ Write the intro:"""
         out.append("\n---\n")
 
         # LEAD STORIES - MUST be 2-column table format
-        available_categories = [cat for cat, items in categories.items() if items]
 
         # Get top stories for lead section (limit to 2 for side-by-side)
         lead_stories = []
@@ -2836,14 +2835,15 @@ SPECIFIC REQUIREMENTS:
                     logger.warning(f"Failed to fetch article content for: {item.url}")
 
             # Step 2: Generate voice-based commentary using article + user highlights
+            voice_name = self.settings.default_voice.title()
+            preview_title = title[:50]
             logger.info(
-                f"🎭 {self.settings.default_voice.title()} voice: generating commentary for '{title[:50]}...'"
+                "🎭 %s voice: generating commentary for '%s...'",
+                voice_name,
+                preview_title,
             )
 
             # Prepare content for voice generation
-            content_for_voice = f"TITLE: {title}\n\nCONTENT: {article_content if article_content else 'Article content not available'}"
-            notes_for_voice = f"USER HIGHLIGHTS: {user_highlights}"
-
             try:
                 # Generate using clean OpenRouter commentary (bypassing contaminated voice templates)
                 commentary = await self.openrouter_client.generate_commentary(
@@ -2856,7 +2856,7 @@ SPECIFIC REQUIREMENTS:
                     title,
                 )
 
-                logger.debug(f"Generated clean commentary using OpenRouter client")
+                logger.debug("Generated clean commentary using OpenRouter client")
 
             except Exception as e:
                 logger.warning(f"Commentary generation failed: {e}")
@@ -3256,8 +3256,6 @@ SPECIFIC REQUIREMENTS:
         try:
             from urllib.parse import quote
 
-            import aiohttp
-
             # Strategy 1: Try full title search first (most precise)
             # Clean up the title but keep it mostly intact
             clean_title = title.strip()
@@ -3279,8 +3277,6 @@ SPECIFIC REQUIREMENTS:
                     return search_url
 
             # Strategy 2: Fallback to keyword extraction if full title search fails
-            import re
-
             # Remove common words and punctuation, keep meaningful terms
             search_terms = re.sub(r"[^\w\s]", " ", title.lower())
             words = search_terms.split()
