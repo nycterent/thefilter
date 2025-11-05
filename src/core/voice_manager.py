@@ -1,11 +1,9 @@
 """Voice management system for newsletter commentary generation."""
 
-import json
 import logging
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from .voices import AVAILABLE_VOICES, get_voice, list_voices
+from .voices import get_voice, list_voices
 from .voices.base import SaintVoiceGenerator, VoiceConfig, VoiceGenerator
 
 logger = logging.getLogger(__name__)

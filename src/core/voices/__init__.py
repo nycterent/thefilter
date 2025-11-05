@@ -1,6 +1,5 @@
 """Voice system for newsletter commentary generation."""
 
-from .base import VoiceConfig, VoiceGenerator
 from .saint import SAINT_CONFIG, SAINT_PROMPT_TEMPLATE
 
 # Voice registry

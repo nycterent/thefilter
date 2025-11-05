@@ -314,7 +314,6 @@ async def resolve_newsletter_sources(
 
 # Example usage and testing
 if __name__ == "__main__":
-    import asyncio
 
     async def test_extractor():
         """Test the source extractor with known examples."""

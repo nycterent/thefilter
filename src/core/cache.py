@@ -12,20 +12,12 @@ import json
 import logging
 import os
 import sqlite3
-import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import aiohttp
 from pydantic import BaseModel
-
-try:
-    import redis.asyncio as redis
-
-    REDIS_AVAILABLE = True
-except ImportError:
-    REDIS_AVAILABLE = False
 
 from ..models.content import ContentItem
 
