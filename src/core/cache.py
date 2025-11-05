@@ -19,7 +19,6 @@ from typing import Any, Dict, Optional, Tuple
 import aiohttp
 from pydantic import BaseModel
 
-
 from ..models.content import ContentItem
 
 logger = logging.getLogger(__name__)
